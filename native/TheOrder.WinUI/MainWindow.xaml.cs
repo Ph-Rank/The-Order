@@ -130,11 +130,12 @@ public sealed partial class MainWindow : Window
             InstallUpdate = package => App.Instance?.RequestUpgradeAsync(package) ?? Task.FromResult(false) };
         settingsPage.CredentialSaved = async () =>
         {
-            libraryPage.ShowApiReminder(!online.CanAccessCatalog);
+            libraryPage.ShowCatalogReminder(online.CatalogReminder);
             if (online.CanAccessCatalog && recognition.UseOnline) _ = ResumeRecognitionAsync(retryPending: true);
             await Task.CompletedTask;
         };
-        online.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(OnlineViewModel.HasCredential)) libraryPage.ShowApiReminder(!online.CanAccessCatalog); };
+        online.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(OnlineViewModel.CatalogReminder)) libraryPage.ShowCatalogReminder(online.CatalogReminder); };
+        nextMoeSettings.Access.Changed += OnNextMoeAccessChanged;
         nextMoeSettings.IdentityChanged = async () => { await online.CheckCredentialAsync(); if (settingsPage.CredentialSaved is { } ready) await ready(); };
         var personalSyncTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         personalSyncTimer.Tick += async (_, _) => { if (nextMoeSettings.Automatic) await nextMoeSettings.AutomaticAsync(); };
@@ -194,7 +195,7 @@ public sealed partial class MainWindow : Window
                     throw new IOException("Startup library unavailable");
                 await LoadMaterialPreferencesAsync(); await LoadRecognitionPreferencesAsync(); await browsingSettings.InitializeAsync();
                 await online.CheckCredentialAsync(); await updates.ReadReceiptAsync(); await nextMoeSettings.InitializeAsync(); await bangumiSettings.InitializeAsync();
-                libraryPage.ShowApiReminder(!online.CanAccessCatalog);
+                libraryPage.ShowCatalogReminder(online.CatalogReminder);
             }, () => libraryPage.WaitForInitialArtworkAsync(), NextStartupFrameAsync);
             StartupRing.IsActive = false; StartupSurface.Visibility = Visibility.Collapsed;
             Navigation.Opacity = 1; Navigation.IsHitTestVisible = true;
@@ -379,9 +380,15 @@ public sealed partial class MainWindow : Window
         if (startupReady && Sessions.Ready && !Sessions.Closing && !commandsBlocked)
             _ = ViewModel.SynchronizeSessionLibraryAsync(Sessions.Library);
     }
+    private void OnNextMoeAccessChanged(object? sender, EventArgs e) => DispatcherQueue.TryEnqueue(() =>
+    {
+        if (Sessions.Closing) return;
+        online.RefreshAccessState(); nextMoeSettings.RefreshAccessState();
+    });
     private void OnBangumiAccessChanged() => DispatcherQueue.TryEnqueue(() => { bangumiSettings.RefreshState(); detailsPage?.InvalidateBangumiAccess(); onlinePage?.InvalidateBangumiAccess(); });
     public async ValueTask StopAsync()
     {
+        nextMoeSettings.Access.Changed -= OnNextMoeAccessChanged;
         bangumiSettings.Access.Changed -= OnBangumiAccessChanged; bangumiSettings.Dispose();
         detailsPage?.DisposeBangumi();
         onlinePage?.DisposeRelated();

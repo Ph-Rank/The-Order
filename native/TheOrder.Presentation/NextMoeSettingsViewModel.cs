@@ -19,7 +19,10 @@ public sealed class SyncRowView : ObservableState
 }
 public sealed class NextMoeSettingsViewModel(NextMoeAuthentication auth, PersonalSyncCoordinator sync, IPersonalSyncLibrary library) : ObservableState, IDisposable, IAsyncDisposable
 {
-    public NextMoeAuthStatus? Status { get; private set; }
+    public NextMoeAuthentication Access => auth;
+    public NextMoeAuthStatus? Status => auth.CurrentStatus;
+    // Called on the UI dispatcher after authentication changes, including failed background refreshes.
+    public void RefreshAccessState() { if (disposed) return; if (Status is not null) CanRecover = false; Notify(); }
     public int AccessMode => (int)(Status?.Mode ?? NextMoeAccessMode.Anonymous);
     public string AccountName => Status?.Account?.Name ?? "尚未登录 NextMoe";
     public bool IsAccount => Status?.Mode == NextMoeAccessMode.Account;
@@ -61,7 +64,6 @@ public sealed class NextMoeSettingsViewModel(NextMoeAuthentication auth, Persona
             var current = status.Mode == NextMoeAccessMode.Account ? await sync.CurrentAsync(stop.Token) : null;
             auth.AuthContext.Accept(fence, () => { stop.Token.ThrowIfCancellationRequested();
             if (current is not null && current.AccountId != status.Account?.Id) throw new OperationCanceledException();
-            Status = status;
             CanRecover = false;
             if (IsAccount)
             {

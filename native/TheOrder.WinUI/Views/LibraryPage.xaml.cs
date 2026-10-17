@@ -42,7 +42,8 @@ public sealed partial class LibraryPage : Page, IImageHost
         UpdateNoticeRegion();
     }
     private void OnCancelRecognition(object sender, RoutedEventArgs e) => recognition?.CancelAll();
-    internal void ShowApiReminder(bool show) { ApiReminder.IsOpen = show; UpdateNoticeRegion(); }
+    internal void ShowCatalogReminder(CatalogAccessNotice? notice)
+    { ApiReminder.Title = notice?.Title ?? ""; ApiReminder.Message = notice?.Message ?? ""; ApiReminder.IsOpen = notice is not null; UpdateNoticeRegion(); }
     private async void OnApiSettings(object sender, RoutedEventArgs e) { if (OpenSettings is { } open) await open(); }
     private void UpdateNoticeRegion()
     {

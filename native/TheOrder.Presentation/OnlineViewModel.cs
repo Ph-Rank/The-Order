@@ -5,6 +5,7 @@ namespace TheOrder.Presentation;
 
 public enum OnlineState { Idle, Loading, Loaded, Empty, Offline, Unauthorized, RateLimited, Error, Refreshing, CredentialCorrupt }
 public sealed record OnlineCard(string Id, string Title, string? CoverKey, string Subtitle);
+public sealed record CatalogAccessNotice(string Title, string Message);
 public sealed class OnlineViewModel(IOnlineCatalog catalog, ICredentialSettings credentials, IRemoteCoverRegistry covers, OnlineLibraryClient library, WorkspaceViewModel workspace) : ObservableState, IAsyncDisposable
 {
     private string query = "";
@@ -32,7 +33,35 @@ public sealed class OnlineViewModel(IOnlineCatalog catalog, ICredentialSettings 
     public bool DetailBusy => DetailState is OnlineState.Loading or OnlineState.Refreshing;
     public bool CanLoadMore => !SearchBusy && cursor is not null && Items.Count < 2000;
     public bool HasCredential { get; private set; }
-    public bool CanAccessCatalog => credentials is NextMoeAuthentication next ? next.CatalogAvailable : HasCredential;
+    private bool credentialChecked;
+    public bool CanAccessCatalog => credentials is NextMoeAuthentication next
+        ? next.CatalogAvailable && (next.CurrentStatus?.Mode != NextMoeAccessMode.ApiKey || HasCredential) : HasCredential;
+    public CatalogAccessNotice? CatalogReminder
+    {
+        get
+        {
+            if (CanAccessCatalog) return null;
+            if (credentials is NextMoeAuthentication next)
+            {
+                if (next.CurrentStatus?.Mode == NextMoeAccessMode.Account)
+                    return new(UiText.Get("NextMoe 登录需要恢复"), UiText.Get("请前往设置重新登录 NextMoe 后继续在线识别，本地书架仍可使用。"));
+                if (!credentialChecked) return null;
+                if (next.CurrentStatus?.Mode != NextMoeAccessMode.ApiKey)
+                    return new(UiText.Get("NextMoe 访问状态暂不可用"), UiText.Get("请前往设置检查当前访问方式。本地书架仍可使用，不会自动更换账号或移除登录资料。"));
+            }
+            return credentialChecked ? new(UiText.Get("请检查当前 API Key"),
+                UiText.Get("当前选择了自定义 API Key。请在设置中检查密钥，或改用 NextMoe 账号、匿名访问。")) : null;
+        }
+    }
+    private long accessGeneration;
+    public void RefreshAccessState()
+    {
+        if (disposed) return;
+        if (accessGeneration != AuthGeneration && CanAccessCatalog && ConnectionState == OnlineState.Unauthorized)
+        { ConnectionState = OnlineState.Idle; ConnectionMessage = UiText.Get("访问方式已更新，请测试当前连接。"); Changed(nameof(ConnectionState)); Changed(nameof(ConnectionMessage)); }
+        accessGeneration = AuthGeneration;
+        Changed(nameof(CanAccessCatalog)); Changed(nameof(CatalogReminder));
+    }
     public long AuthGeneration => (credentials as IOnlineAuthContextSource)?.AuthContext.Generation ?? credentialGeneration;
     public bool SettingsBusy => credentialOperations > 0 || ConnectionState == OnlineState.Loading;
     public string DetailTitle => Details is { } d ? CatalogLanguage.Title(d) : UiText.Get("作品详情");
@@ -124,12 +153,12 @@ public sealed class OnlineViewModel(IOnlineCatalog catalog, ICredentialSettings 
         {
             var present = await credentials.HasCredentialAsync(lifetime.Token);
             if (disposed || generation != credentialGeneration) return;
-            HasCredential = present; CredentialMessage = present ? UiText.Get("已保存隔离开发密钥。") : UiText.Get("尚未保存隔离开发密钥。");
+            credentialChecked = true; HasCredential = present; CredentialMessage = present ? UiText.Get("已保存隔离开发密钥。") : UiText.Get("尚未保存隔离开发密钥。");
         }
         catch (OperationCanceledException) { }
         catch (OnlineException e) { if (generation == credentialGeneration) { CredentialMessage = e.Message; ConnectionState = State(e); ConnectionMessage = e.Message; } }
         catch (Exception) { if (generation == credentialGeneration) CredentialMessage = UiText.Get("凭据状态检查未完成，请重试。"); }
-        finally { if (!disposed && generation == credentialGeneration) Notify(); }
+        finally { if (!disposed && generation == credentialGeneration) { credentialChecked = true; Notify(); } }
     });
     public Task<bool> SaveCredentialAsync(string secret)
     {
@@ -149,7 +178,7 @@ public sealed class OnlineViewModel(IOnlineCatalog catalog, ICredentialSettings 
         {
             if (secret is null) await credentials.ClearAsync(lifetime.Token); else await credentials.SaveAsync(secret, lifetime.Token);
             if (disposed || generation != credentialGeneration) return false;
-            HasCredential = secret is not null;
+            credentialChecked = true; HasCredential = secret is not null;
             CredentialMessage = HasCredential ? UiText.Get("密钥已使用 Windows 账户保护保存。") : UiText.Get("隔离开发密钥已移除。");
             ConnectionState = OnlineState.Idle;
             ConnectionMessage = HasCredential ? UiText.Get("密钥已更改，请测试连接。") : UiText.Get("尚未保存密钥，无法测试连接。");
@@ -183,9 +212,9 @@ public sealed class OnlineViewModel(IOnlineCatalog catalog, ICredentialSettings 
         finally { if (ReferenceEquals(connectionStop, stop)) connectionStop = null; if (!disposed && generation == connectionGeneration) Notify(); }
     });
     private static OnlineState State(OnlineException e) => e.Failure switch { OnlineFailure.Offline => OnlineState.Offline,
-        OnlineFailure.NoCredential or OnlineFailure.InvalidCredential or OnlineFailure.Unauthorized or OnlineFailure.Forbidden => OnlineState.Unauthorized,
+        OnlineFailure.NoCredential or OnlineFailure.InvalidCredential or OnlineFailure.Unauthorized or OnlineFailure.Forbidden or OnlineFailure.LoginRequired => OnlineState.Unauthorized,
         OnlineFailure.RateLimited => OnlineState.RateLimited, OnlineFailure.CredentialStorageCorrupt => OnlineState.CredentialCorrupt, _ => OnlineState.Error };
-    private void Notify() { foreach (var property in new[] { nameof(Items), nameof(SearchState), nameof(SearchMessage), nameof(SearchBusy), nameof(CanLoadMore), nameof(Details), nameof(DetailCoverKey), nameof(DetailState), nameof(DetailMessage), nameof(DetailTitle), nameof(DetailDescription), nameof(DetailFacts), nameof(DetailBusy), nameof(CredentialMessage), nameof(HasCredential), nameof(ConnectionMessage), nameof(ConnectionState), nameof(SettingsBusy) }) Changed(property); }
+    private void Notify() { foreach (var property in new[] { nameof(Items), nameof(SearchState), nameof(SearchMessage), nameof(SearchBusy), nameof(CanLoadMore), nameof(Details), nameof(DetailCoverKey), nameof(DetailState), nameof(DetailMessage), nameof(DetailTitle), nameof(DetailDescription), nameof(DetailFacts), nameof(DetailBusy), nameof(CredentialMessage), nameof(HasCredential), nameof(CanAccessCatalog), nameof(CatalogReminder), nameof(ConnectionMessage), nameof(ConnectionState), nameof(SettingsBusy) }) Changed(property); }
     public async ValueTask DisposeAsync()
     {
         if (disposed) return; disposed = true; Leave(); lifetime.Cancel(); workspace.CancelPendingOperation();

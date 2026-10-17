@@ -65,7 +65,11 @@ public sealed class NextMoeAuthentication(ICredentialSettings keys, ICredentialP
     private OAuthTokens? access;
     private bool refreshFailed;
     private bool unavailable;
-    public bool CatalogAvailable => !unavailable && (current?.Mode != NextMoeAccessMode.Account || !refreshFailed && !string.IsNullOrEmpty(current.RefreshToken));
+    // Display-only committed identity; never reads or exposes tokens, and never refreshes a session.
+    public NextMoeAuthStatus? CurrentStatus => current is { } record ? new(record.Mode, record.Account,
+        record.Mode == NextMoeAccessMode.Account && (refreshFailed || string.IsNullOrEmpty(record.RefreshToken)), [.. record.Scopes]) : null;
+    public bool CatalogAvailable => !unavailable && current is { } record
+        && (record.Mode != NextMoeAccessMode.Account || !refreshFailed && !string.IsNullOrEmpty(record.RefreshToken));
     public event EventHandler? Changed;
     private DateTimeOffset Now => (clock ?? TimeProvider.System).GetUtcNow();
     private async Task Initialize(CancellationToken cancellation)
@@ -110,8 +114,7 @@ public sealed class NextMoeAuthentication(ICredentialSettings keys, ICredentialP
     public async Task<NextMoeAuthStatus> StatusAsync(CancellationToken cancellation)
     {
         await serial.WaitAsync(cancellation).ConfigureAwait(false);
-        try { await Initialize(cancellation).ConfigureAwait(false); return new(current!.Mode, current.Account,
-            current.Mode == NextMoeAccessMode.Account && (refreshFailed || string.IsNullOrEmpty(current.RefreshToken)), [.. current.Scopes]); }
+        try { await Initialize(cancellation).ConfigureAwait(false); return CurrentStatus!; }
         finally { serial.Release(); }
     }
     public async Task<string?> ReadAsync(CancellationToken cancellation)
