@@ -14,7 +14,11 @@ v1.2.0 已在 Ph-Rank/The-Order 正式发布，draft=false、prerelease=false、
 
 稳定main与ACGN历史已在942da21保留双亲整合；核对稳定启动/通道修复后正常快进推送。源码归档逐文件对照冻结Git内容通过，15项仅Windows checkout与Git archive的UTF-8行尾差异。原始Windows构建清单不可直接当Git归档字节清单，详见source-archive-proof.json。
 
-音乐入口第一轮239项定向回归通过（是子集，不与4176相加）；实现与安全边界见 docs/music-listening-v1.md。当前全套回归、最终开发包和真实音乐UI仍在验证，不能把定向通过写成音乐功能已公开发布。证据根 .artifacts/music-listening-20261018，原始失败与重试结果保留。
+音乐开发最终完整回归4224 passed / 0 failed / 0 skipped（含本地合成Worker契约）；251项定向是重叠子集，不相加。实际WinUI发现并修复发行版browse缺media、旧group缓存遮蔽数字版的问题；两项反例修复前失败、修复后通过。既有group缓存保留，新列表使用group-v2键，主库与人工映射无schema迁移。实现与边界见 docs/music-listening-v1.md。
+
+最终音乐应用代码为8edaa7207b1f668410b58d6ee086c3d1e8bd20fb，后续提交仅验收测试与文档；publish-dev-qualified/package-dev-qualified为载荷。实际无缓存重新联网找到魔法使之夜数字发行版；清音乐缓存、重启后CLANNAD人工商店选择仍在，原有5份书架/身份文件哈希不变。普通无诊断入口也完成鼠标导航/展开/滚轮浏览，没有打开平台或播放。
+
+独立试用：.artifacts/music-listening-20261018/Start-Music-Samples.cmd仅打开本轮合成Test书架；The-Order-Music-Dev-8edaa72-x64.zip无需SDK、首次为空Test书架，资料在解压目录相邻profile，不附带测试Profile。旧4b69c9d包保留为失败证据，不作为交付。证据与源码提交索引以该目录completion.json/report.md为准。音乐结果仅开发试用GO，尚未第二次公开发布、推送或替换日用程序。
 
 ## NextMoe 访问状态提示修复（2026-10-16，待下次发布）
 

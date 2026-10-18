@@ -302,6 +302,13 @@ public sealed class MusicListeningPersistenceTests
             var saved = await service.ChangeAppleChoiceAsync(OutletData.Ref(), candidate, candidate.Target, 0, default);
             Assert.Single(saved.Items); Assert.Equal(MediaUserLinkState.Related, saved.Items[0].State);
             await service.LoadOutletsAsync(OutletData.Ref(), false, default);
+            var legacyGroupKey="group:"+MusicTestData.Group;
+            await cache.WriteAsync(new(legacyGroupKey,OutletData.Now,Search:new([MusicTestData.Candidate(MusicTestData.Other) with{MediaFormats=[]}],1,false,null,null)),default);
+            provider.Editions=new([MusicTestData.Candidate(MusicTestData.Other) with{MediaFormats=["Digital Media"]}],1,false,null,null);
+            provider.Data=reference=>OutletData.Snapshot(reference.Id) with{Formats=["Digital Media"]};
+            Assert.Single((await service.LoadDigitalOutletsAsync(OutletData.Snapshot(),default)).Editions);
+            Assert.Equal("Digital Media",Assert.Single((await cache.ReadAsync(MusicBrainzService.EditionCachePrefix+MusicTestData.Group,default))!.Search!.Candidates[0].MediaFormats));
+            Assert.Empty((await cache.ReadAsync(legacyGroupKey,default))!.Search!.Candidates[0].MediaFormats);
             var catalog = await service.SearchAppleAsync(OutletData.Snapshot(), "JP", false, default);
             Assert.Single(catalog.Candidates); Assert.Equal(1, apple.Calls);
             var cacheReader = new MusicBrainzService(provider, cache, () => OutletData.Now, store, apple);
