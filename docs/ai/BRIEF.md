@@ -1,5 +1,11 @@
 # The Order：当前实现与评审交接
 
+## 1.2.1 Beta 1 公开交付与首页（2026-10-19）
+
+`v1.2.1-beta.1` 已公开为 Pre-release，Tag 与应用源码固定为 `f5b7ca4fc61d0355c9ee27e70b09ae100843148e`；完整客户端回归4443/0/0。原日用目录也已用同一安装包替换，653份载荷及3份入口附件核对一致，空Test启动并正常退出0；未打开或迁移Production。实际发布、说明修订、安装和程序回退凭据以 `.artifacts/release-1.2.1-beta-20261019/completion.json`、`report.md` 为准。
+
+用户要求同步GitHub首页：README改用1.2.1-beta.1徽章、安装包与说明链接，标注Beta影像和音乐/书籍平台入口，并更新对应版本文档。默认main仅同步README，不合入Beta应用实现，不改稳定1.2.0或已发布Tag/附件；首页回执在同目录 `homepage-revision-1/`。此文档后续提交不是安装包源码基线，不能据新HEAD重新标注既有构建。
+
 ## 1.2.1 Beta 1 发布候选（2026-10-19）
 
 维护分支 codex/public-beta-1.2.1-20261019。已将接手时未提交、但已在日用版验收的音乐/书籍增量单独提交为ccd15ee；未混入reports或research_notes。版本按现有更新器协议采用1.2.1-beta.1（数字1.2.1.1），GitHub必须Pre-release，不修改稳定latest及旧附件。
