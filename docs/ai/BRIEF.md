@@ -1,14 +1,14 @@
 # The Order：当前实现与评审交接
 
-## IGDB 公开使用准备（2026-10-18，未部署）
+## IGDB 公网服务已验收（2026-10-19）
 
-当前分支 codex/igdb-production-readiness-20261018，从532a940及全部继承修改继续。独立服务新增公开配置wrangler.production.jsonc，SQLite迁移及唯一single-app-quota-v1不变；没有改动生产Bangumi Worker、Production资料、日用安装、版本或GitHub。推荐the-order-igdb-game-videos.zyx2251721565.workers.dev，按现有账户域提出，须由首次禁用部署实际返回的地址核对，不能称已上线。
+用户批准后，按已冻结29e8ef4执行独立the-order-igdb-game-videos的关闭部署、核对域名、Cloudflare Secrets及启用。实际地址https://the-order-igdb-game-videos.zyx2251721565.workers.dev/，与客户端内置值一致。已登录Workers面板显示每天100000次限额及Upgrade，与官方Free档一致；没有升级、付费资源或Bangumi部署。SQLite与single-app-quota-v1保持唯一，所有本地直接凭据服务已关闭。
 
-补齐匿名边缘IP限流、全局持久预算（每日10000次准入、1000次games派发、1000次token grant，每分钟60次games）、275ms共享节流、去重合并、12秒排队期限、认证/网络熔断及缓存故障隔离。token只在内存，预算支持冷启动，不能假设每天仅24次续期。Free支持SQLite DO；账户套餐尚需上线前确认，且免费调用额度与账户其他Worker共用，不能保证分布式攻击下不影响OAuth额度。普通客户端没有共享固定令牌或Twitch凭据。Production/Beta默认使用内置HTTPS；Test/Development不自动使用生产地址，只有Test允许显式HTTP回环。
+公网16项协议/身份/缓存/并发一致性/安全检查通过；停用返回503，重新启用后200，同一协调器命名空间和缓存时间戳保留。WinUI候选先移走远程缓存，使用同一真实HTTPS服务取得CLANNAD与魔法使之夜重制版；用户各点击一次YouTube播放，应用探针均为playing。收起/返回释放，服务停用后保留9段缓存与重试提示，恢复后重试成功。再次清远程缓存及重启，人工确认/默认恢复，4份决定与主库5文件哈希不变，两个Test进程退出0。
 
-完整客户端4428 passed / 0 failed / 0 skipped；服务35/35；真实workerd/SQLite契约7/7；Release x64候选client-candidate-v1通过。当前候选WinUI实际播放CLANNAD与魔法使之夜重制版，收起/返回释放；关闭IGDB测试服务后保留缓存资料；移走远程缓存并重启，人工确认及默认视频恢复，4份决定与主库共5文件哈希不变。真实API、合成书架/NextMoe和模拟故障分别留证。本轮不重复36部覆盖统计。
+冻结代码回归仍为完整客户端4428/0/0、Node35/35、workerd/SQLite7/7及Release x64；本次未改产品代码，不重算36部覆盖。线上缓存/首次读取抽样9个Worker及DO事件均ok，无异常、无日志，CPU1–6ms；不代表压力或长期验收。浏览器账单导航和桌面工具连接发生故障，未完成DO每日行数/存储面板核查，未取得新的有效桌面截图；应用内RenderTargetBitmap不含WebView2/完整文字，已排除。不能把上一阶段回环截图称为公网证据。
 
-首次公开部署、设置生产Secrets和启用仍等待用户最终批准。部署前还需确认现有账户Workers Free；部署后必须完成实际公共HTTPS与WinUI端到端、免费CPU/用量观测，不能用本地上游HTTPS成功代替。完整运营/关闭/回退步骤在services/igdb-game-videos/README.md，证据与冻结门禁在.artifacts/igdb-production-ready-20261018/。开发准备GO，公开可用待部署验收；所有继承音乐/书籍修改保持未提交，不吸入本轮提交。
+服务启用GO；客户端候选已具备零配置接线，但GitHub现有程序及日用安装未更新，公开客户端发布须另行授权。Free账户额度与OAuth服务共享，分布式滥用仍可能耗尽额度；不自动升级。维护步骤见services/igdb-game-videos/README.md；公网报告和最终版本/回退记录见.artifacts/igdb-production-ready-20261018/public-deployment-report.md。全部继承音乐/书籍修改保持未提交，Production、版本和GitHub均未修改。
 
 ## IGDB真实API、PC候选及发行版核对（2026-10-18，当前增量）
 

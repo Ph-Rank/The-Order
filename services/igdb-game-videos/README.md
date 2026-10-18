@@ -3,14 +3,47 @@
 Independent, disabled-by-default application adapter. It does not change or deploy
 the Bangumi OAuth Worker. It neither serves nor proxies video bytes.
 
+## Qualified public deployment — 2026-10-19
+
+The owner approved first deployment and Secret setup. The existing account's
+Workers usage page showed the Free plan's 100,000 requests/day limit; no plan
+upgrade or paid resource was created. The live root is
+`https://the-order-igdb-game-videos.zyx2251721565.workers.dev/`, matching the native
+client default. Worker code is frozen at `29e8ef4`; the enabled version after the
+tested disable/re-enable cycle is `188682bb-4b3c-4f97-9569-196049204c2e`.
+
+Both developer values are Cloudflare Secrets. One SQLite namespace and
+`single-app-quota-v1` remain the quota owner after redeployment. **Do not start
+local or staging services with these same credentials.** Use synthetic upstreams,
+a separately authorized development application, or the already shared namespace.
+The local setup below is for an independently authorized development environment.
+
+Public HTTPS passed 16 protocol/identity/cache/security checks. Two isolated
+WinUI samples played after the owner clicked YouTube; native probes confirmed
+`playing`. Disable returned 503, cached client metadata survived, re-enable
+restored 200, and server cache timestamps survived. Clearing remote client cache
+and restarting retained confirmation/default choices with five user files
+unchanged. Nine sampled edge/DO events were `ok`, with CPU 1–6 ms and no exceptions.
+These are low-load observations, not long-term or stress qualification. Daily
+SQLite usage/storage dashboard metrics remain unverified. Desktop tooling failed;
+new native render captures omitted video/text and are excluded from visual proof.
+
+Full evidence is in
+`.artifacts/igdb-production-ready-20261018/public-deployment-report.md`. Frozen
+regression remains native 4428/0/0, Node 35/35, workerd/SQLite 7/7. This activation
+did not publish a desktop update, change the installed daily app or touch a
+Production profile. Existing public clients do not acquire this feature until a
+separately authorized client release. Config still defaults to **off** on deploy;
+use the reviewed operator script below to disable or explicitly re-enable.
+
 ## Developer access
 
 Follow [IGDB's official setup](https://api-docs.igdb.com/#getting-started): a Twitch
 developer account with 2FA and a **Confidential** application supplies the client
 ID and secret. The app grant uses `client_credentials`, not an end-user login.
 Check the Twitch developer agreement and IGDB's non-commercial/commercial usage
-conditions before enabling a public service. This repository does not supply
-credentials or claim an approved public deployment.
+conditions before enabling a public service. This repository supplies no
+credentials; the deployment above is limited to the owner's approved application.
 
 1. Copy `.dev.vars.example` to `.dev.vars` **in this directory**, then fill the two
    developer values privately and set `IGDB_ENABLED=true`. Keep the file restricted

@@ -1,12 +1,14 @@
 # 开发与维护
 
-## IGDB 公开服务候选（2026-10-18，未部署）
+## IGDB 公网服务维护（2026-10-19）
 
-本轮codex/igdb-production-readiness-20261018基于532a940和当前dirty。services/igdb-game-videos/wrangler.toml仍用于本地；wrangler.production.jsonc为独立线上配置，首次IGDB_ENABLED=false、IGDB_PUBLIC=true、诊断关闭、禁用preview URL，保留v1 SQLite迁移。check-deployment.mjs仅在无.dev.vars的全新暂存目录作dry-run；operate-approved.mjs要求用户直接授权和冻结审查凭据，先禁用部署核对域，再Cloudflare Secrets私密stdin，再启用。不得自行执行首次公开部署或套餐升级，不操作Bangumi OAuth Worker。
+独立the-order-igdb-game-videos已获用户批准并部署在现有Workers Free账户；实际根地址https://the-order-igdb-game-videos.zyx2251721565.workers.dev/已核对，Secrets仅在服务端。部署载荷冻结29e8ef4，SQLite迁移v1、固定single-app-quota-v1及限流/持久预算保持。wrangler.production.jsonc仍默认IGDB_ENABLED=false；正常重部署会关闭服务，启用必须显式覆盖。不要删除命名空间或同时用同一Twitch凭据另起本地/staging协调器，不操作Bangumi Worker或升级套餐。
 
-推荐HTTPS地址沿用现有账户子域，但尚未上线/验证。正式Production/Beta内置该地址；Test和Development无默认公网调用，HTTP回环只限显式Test。用本轮Start-Test.ps1 -Run ui-<全新名> -Payload <client-candidate-v1绝对路径> -ExpectedVersion 1.2.0运行固定合成Profile；不能裸启动EXE。Native-Step/Control仅操作该Test，退出检查exitCode=0。本轮测试服务18787只监听127.0.0.1，已正常关闭；不可与未来线上共用凭据的独立协调器同时运行。
+使用已审查.artifacts/igdb-production-ready-20261018/predeployment-review.json及worker-qualified-v3：operate-approved.mjs disable --user-approved --review=<该文件>可关闭；重新启用加enable --free-plan-confirmed --local-use-stopped。命令标记不是授权，须核对具体操作已获授权。首次bootstrap已完成，不应重复建立命名空间；Secrets不进入配置普通变量、客户端、日志或仓库。详细安全部署与回退见services/igdb-game-videos/README.md。
 
-验证：客户端完整4428/0/0，服务35/35，workerd SQLite重启/预算/缓存契约7/7，Release x64通过。真实IGDB最小联调与两部实际YouTube播放、缓存断网保留、清缓存重启确认恢复分别记录，不重跑/重算上轮36部覆盖。本轮Source/Native用户数据无schema变更；服务v2键重建远程缓存。Free额度与其他Worker共享、10ms CPU、公开HTTPS尚待上线验证，当前不能宣称公网已可用。新审查文档和具体命令见services/igdb-game-videos/README.md、docs/igdb-game-videos-v1.md及.artifacts/igdb-production-ready-20261018/。
+Production/Beta默认内置HTTPS；Test/Development无默认公网。实际隔离验收使用本轮Start-Test.ps1 -Run ui-<全新名> -Payload <portable-rc绝对路径> -ExpectedVersion 1.2.0 -HttpsService https://the-order-igdb-game-videos.zyx2251721565.workers.dev/；不能裸启动EXE。不要重启共享开发凭据的18787/8787服务。两部真实公网视频由用户点击开始、应用探针确认playing；其余原生peer流程、缓存故障、恢复及重启均有独立回执，不作为完整物理输入验证。新桌面截图受工具故障阻塞，应用内渲染截图已排除。
+
+完整冻结回归4428/0/0、Node35/35、workerd SQLite7/7和Release x64不变；新增公网16项、停用恢复、确认/默认和5文件哈希检查通过。线上CPU样本1–6ms无异常；Free共享账户100000调用/日，DO每日行数/存储用量及长期/不同地区网络仍待运营观察。本轮无库schema迁移、Production访问、日用替换、版本提升、推送或Release；本机候选不等于已向公开用户分发。报告、最终线上版本及冻结哈希见.artifacts/igdb-production-ready-20261018/public-deployment-report.md。
 
 ## IGDB真实API验收与版本核对（2026-10-18，当前增量）
 
