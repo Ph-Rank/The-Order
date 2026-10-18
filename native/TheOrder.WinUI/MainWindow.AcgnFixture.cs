@@ -40,6 +40,8 @@ public sealed partial class MainWindow
         allowed |= id.StartsWith("AniListUserLink-", StringComparison.Ordinal);
         allowed |= id is "MusicListeningExpand" or "MusicListeningLoad" or "MusicListeningDigital" or "MusicListeningApple" or "MusicListeningCancel";
         allowed |= id is "BookReadingExpand" or "BookReadingRefresh" or "BookReadingCancel" or "BookReadingSources";
+        allowed |= id is "GameVideosExpand" or "GameVideosRefresh" or "GameVideosCancel" or "GameVideosWithdraw" or "GameVideosReset" or "GamePV";
+        allowed |= new[] { "GameVideosConfirm-", "GameVideosReject-", "GameVideoPlay-", "GameVideoDefault-", "GameVideoReject-" }.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal));
         allowed |= id.StartsWith("BookPlatform-", StringComparison.Ordinal);
         allowed |= launchSettings || gameSettings;
         if (!allowed || id.Length > 200 || mode is not ("inspect" or "focus" or "invoke" or "expand" or "collapse" or "toggle" or "select0" or "select1" or "select2")) throw new InvalidDataException("Unsupported bounded control.");

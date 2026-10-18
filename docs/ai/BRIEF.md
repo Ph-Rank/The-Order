@@ -1,5 +1,15 @@
 # The Order：当前实现与评审交接
 
+## IGDB 游戏宣传影像 v1（2026-10-18，最新开发增量）
+
+当前 `codex/igdb-game-videos-20261018` 从3ed4463及全部既有音乐/书籍dirty继续，仅增加游戏影像。NextMoe仍为主资料；IGDB提供候选和已关联YouTube记录。游戏详情按需加载，标题或Steam检索不自动确认，明确编号可精确读取。原版/重制/移植/合集需核对，作品级影像不声称对应本地发行版。确认/排除/撤销/默认复用Native Profile独立用户决定，缓存清理和重启不丢失；迟到结果、并发revision、错误缓存和变更后的版本身份均有回归。
+
+新增44项客户端测试，最终完整客户端含既有本地合成Worker契约4371 passed / 0 failed / 0 skipped；独立IGDB服务14项Node测试通过，Release x64 publish-v4通过。实际Test WinUI验证确认、排除、默认、撤销、切换、隐藏/收起释放及560/1180宽浅/深主题。游戏假视频得到真实YouTube150降级；已有CLANNAD动画PV独立进入playing，返回未恢复旧游戏播放器。以上不能当IGDB真实覆盖证据。
+
+先冻结36部真实样本、10部pilot；无明确授权开发凭据，真实IGDB匹配率、视频覆盖/版本准确性和游戏播放率均未验证，不能写作0%或以Mock补齐。独立服务端适配默认禁用、无公开路由、未部署；凭据只在服务端，普通用户不登录Twitch、不申请Key。没有修改现有生产Bangumi OAuth Worker。后续最少配置与门槛见docs/igdb-game-videos-v1.md及services/igdb-game-videos/README.md。
+
+本任务仅提交IGDB增量，接手时音乐/书籍UI及文档增量仍独立保留未提交；实际候选含它们，复现需结合.artifacts/igdb-game-pv-20261018/source-freeze.json。当前是开发接入GO、真实数据/公开分发NO-GO，缺开发凭据及真实样本播放。未改Production、日用安装、版本、Tag或GitHub；不要将此前的替换/发布授权套到本轮。
+
 ## 书籍阅读与购买入口 v1（2026-10-18，最新增量）
 
 当前维护 `codex/book-outlets-v1-20261018`，从 9147b06 及接手时全部未提交音乐成果继续。本轮为已确认的漫画/小说/其他书籍增加紧凑“阅读与购买”：保留 AniList externalLinks 与 Bangumi 显式网址，按实际用途和层级分类，首页/搜索/禁用/类型冲突不进主要区域。MangaDex 新增轻量只读补充：一次原题检索最多10条，完整候选、唯一相同 AniList 编号、完整标题及已知 MAL 编号不冲突才采用已有完整网址；不引入阅读器、章节下载、账户、新服务器或全库索引，也不把其上传记录当官方渠道。版本、语言、ISBN 差异和原始来源保留；单卷不借用根系列身份。

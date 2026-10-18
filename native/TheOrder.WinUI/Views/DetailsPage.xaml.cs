@@ -120,6 +120,7 @@ public sealed partial class DetailsPage : Page, IImageHost
         ArtworkSourceText.Text = string.Join("\n", new[] { detail?.Relationship, detail?.CoverDescription, detail?.BackdropDescription });
         SourceLinks.ItemsSource = work is null ? null : CandidateDetailLinks.From(work).Select(l => new DetailSourceLink(l.Title, l.Url)).ToArray();
         }
+        SynchronizeGameVideos(detail);
         if (!ViewModel.IsDetailsLoading) SynchronizeBangumi();
         SynchronizeReview();
         var title = ViewModel.Draft?.Source.Personal.Name ?? "";

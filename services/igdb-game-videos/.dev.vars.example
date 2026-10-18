@@ -1,0 +1,4 @@
+# Copy to .dev.vars for local development only. Never commit filled values.
+IGDB_CLIENT_ID=
+IGDB_CLIENT_SECRET=
+IGDB_ENABLED=false

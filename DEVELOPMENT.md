@@ -1,5 +1,13 @@
 # 开发与维护
 
+## IGDB 游戏宣传影像 v1（2026-10-18，最新增量）
+
+当前codex/igdb-game-videos-20261018基于3ed4463及全部继承dirty，只做IGDB游戏对应/影像、Native Profile决定、共享动画播放器复用。无新版本、真实资料迁移、日用替换、推送或发布。完整设计、凭据及样本口径见docs/igdb-game-videos-v1.md；独立Worker未部署，默认IGDB_ENABLED=false、无公开路由，不改生产Bangumi OAuth Worker。
+
+固定SDK10.0.401、锁依赖。Release x64/NativeProductionCandidate=true/UseSharedCompilation=true/PathMap/CopyOutputSymbolsToPublishDirectory=false的publish-v4为最终应用载荷。只用.artifacts/igdb-game-pv-20261018/Start-Test.ps1 -Run ui-<全新名> -Payload <本轮publish-v4绝对路径> -ExpectedVersion 1.2.0启动，固定自己的Test Profile，不能裸启动默认Production。-WithoutService验证开发配置缺失；默认读取本轮合成Miniflare地址。退出用该目录Control.ps1 -Action exit并检查exitCode=0。测试创建的cache可删除，不能删除用户身份目录来模拟撤销。
+
+最终完整客户端4371/0/0含既有Worker合成契约；启动器输出重定向本轮新目录，未改既有Worker源代码。独立服务14项Node测试使用node --test services/igdb-game-videos/test/worker.test.mjs。真实IGDB尚无开发凭据，36样本及前10pilot保持未验证；coverage.mjs --all --output=<全新文件>无配置时零网络并输出BLOCKED报告，有地址也不自动证明真实上游或身份准确。测试脚本、日志、真实WinUI截图与源码/载荷哈希保留于.artifacts/igdb-game-pv-20261018；Mock、真实原站嵌入和物理输入不得混称。
+
 ## 书籍阅读与购买入口 v1（2026-10-18，最新增量）
 
 维护 `codex/book-outlets-v1-20261018`，当前工作树 `update-channels-20261016/The-Order`；保留9147b06上全部未提交音乐增量。本轮仅书籍入口。`BookOutlets`做纯分类、保参去重和层级/来源保留；`BookReadingViewModel`只在展开时刷新缺字段和补充元数据，带取消、世代和旧资料保留。MangaDex仅已确认AniList漫画，原题单页10条，完整/唯一跨站编号、标题和已知MAL编号均核对；只使用实际完整网址，不扩展bw等标识短键，不写人工身份。
