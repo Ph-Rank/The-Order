@@ -19,7 +19,8 @@ public static class MediaUserLinkRules
         && (link.State != MediaUserLinkState.Pending || link.Relation == "RELATED")
         && (link.Source.Anchor.Purpose == MediaIdentityPurpose.AniListMedia && link.Target is { Provider: "AniList" or "MyAnimeList", Resource: "Anime" or "Manga" }
             || link.Source.Anchor.Purpose == MediaIdentityPurpose.MusicRelease && link.Target is { Provider: "MusicBrainz", Resource: "Release" or "ReleaseGroup" }
-            || link.Source.Anchor.Purpose == MediaIdentityPurpose.CatalogWork && link.Target is { Provider: "NextMoe", Resource: "Work" } && link.State == MediaUserLinkState.Pending)
+            || link.Source.Anchor.Purpose == MediaIdentityPurpose.CatalogWork && link.Target is { Provider: "NextMoe", Resource: "Work" } && link.State == MediaUserLinkState.Pending
+            || link.Source.Anchor.Purpose == MediaIdentityPurpose.MusicListening && link.Target is { Provider: "iTunes", Resource: "Album:JP" or "Album:CN" or "Album:US" } && link.State == MediaUserLinkState.Related)
         && (link.Relation != "OTHER_EDITION" || link.Source.Anchor.Purpose == MediaIdentityPurpose.MusicRelease && link.Target.Resource == "Release");
     public static bool Valid(MediaUserLinks? value) => value is { Anchor.IsValid: true, Revision: >= 0, Items.Length: <= 256 }
         && value.Items.All(x => Valid(x) && x.Source.Anchor == value.Anchor)

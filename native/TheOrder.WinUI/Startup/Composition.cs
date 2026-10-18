@@ -122,6 +122,7 @@ internal static class Composition
         services.AddSingleton<IBangumiEpisodesProvider>(p => p.GetRequiredService<BangumiSubjectDetailsProvider>());
         services.AddSingleton<IBangumiEpisodesReader>(p => new BangumiEpisodesService(p.GetRequiredService<IBangumiEpisodesProvider>(), access: p.GetRequiredService<BangumiAccessContext>()));
         services.AddSingleton<IMusicBrainzProvider>(p => new MusicBrainzProvider(p.GetRequiredService<PublicArtworkNetwork>().Client));
+        services.AddSingleton<IAppleCatalogProvider>(p => new AppleCatalogProvider(p.GetRequiredService<PublicArtworkNetwork>().Client));
         services.AddSingleton<IMusicBrainzEntityReader>(p => (IMusicBrainzEntityReader)p.GetRequiredService<IMusicBrainzProvider>());
         services.AddSingleton<IMusicBrainzCache, IsolatedMusicBrainzCache>();
         services.AddSingleton<IMediaIdentityDecisions, IsolatedMediaIdentityDecisions>();

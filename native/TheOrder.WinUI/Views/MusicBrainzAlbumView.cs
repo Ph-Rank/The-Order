@@ -22,6 +22,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
     private readonly TextBlock relation = Text(14), status = Text(14), choiceReason = Text(13);
     private readonly ContentLanguageInfo languageInfo = new();
     private readonly DetailSynopsis summary = new() { Heading = "简介 · Bangumi" };
+    private readonly MusicListeningView listening = new();
     private readonly TagFlowPanel releaseFacts = MusicDetailFormatting.Facts();
     private readonly TextBlock coverCredit = Text(14);
     private readonly CoverPresenter cover = new() { Width = 156, Height = 156, PreserveEntireImage = true, ImageCornerRadius = 8 };
@@ -94,7 +95,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         credits.Content = personnel; summarySection.Children.Add(summary);
         raw.Content = rawBody; sourceBody.Children.Add(raw); sourceBody.Children.Add(refresh); sources.Content = sourceBody;
         var body = new StackPanel { Spacing = 24, MaxWidth = 1160, HorizontalAlignment = HorizontalAlignment.Stretch,
-            Children = { header, relation, status, actions, confirmActions, userSelections, candidateSection, tracksSection, credits, summarySection, languageInfo, sources } };
+            Children = { header, relation, status, actions, confirmActions, userSelections, candidateSection, listening, tracksSection, credits, summarySection, languageInfo, sources } };
         scroll = new() { Content = body, HorizontalContentAlignment = HorizontalAlignment.Stretch, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Children.Add(scroll);
         scroll.Loaded += (_, _) => QueueStart(); body.SizeChanged += (_, _) => { QueueStart(); RestoreAlbumPosition(); };
@@ -133,11 +134,12 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         Deactivate(); if (model is not null) { model.PropertyChanged -= StateChanged; model.Dispose(); }
         registry = coverRegistry; cover.Pipeline = images; bangumiLink = openBangumi;
         model = new(subjects, music); model.PropertyChanged += StateChanged;
+        listening.Configure(music as IMusicListeningReader);
         if (entityView is not null) { entityView.Dispose(); Children.Remove(entityView); entityView = null; }
         if (entities is not null)
         {
             entityView = new() { Visibility = Visibility.Collapsed };
-            entityView.Configure(entities, OpenMusicSourceAsync);
+            entityView.Configure(entities, OpenMusicSourceAsync, music as IMusicListeningReader);
             entityView.ReturnToAlbum = ReturnFromEntity;
             Children.Add(entityView);
         }
@@ -157,6 +159,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
     private void Render()
     {
         var album = model?.Displayed?.Album; var source = model?.RelatedSelection == true ? null : model?.SourceDetails?.Details; var item = model?.Item;
+        listening.SetContext(album is null ? null : new(MusicBrainzEntityKind.Release, album.Release.Id));
         var localizedTitle = album is not null ? ContentLanguage.MusicTitle(album, source, model?.State == MusicAlbumState.Ready) : source is not null ? ContentLanguage.BangumiTitle(source) : null;
         title.Text = localizedTitle?.Text is { Length: > 0 } selectedTitle ? selectedTitle : album?.Release.Title ?? source?.Title ?? item?.Title ?? "音乐";
         originalTitle.Text = localizedTitle?.OriginalText ?? "";
@@ -424,6 +427,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         if (!active || disposed || entityView is null || !MusicBrainzReference.ValidId(reference.Id)
             || reference.Kind is not (MusicBrainzEntityKind.Work or MusicBrainzEntityKind.Artist or MusicBrainzEntityKind.Recording)) return;
         entityReturnOffset = scroll.VerticalOffset; startPending = false; pendingAlbumOffset = null; albumRestoreVersion++;
+        listening.Cancel();
         entityActive = true; scroll.Visibility = Visibility.Collapsed; entityView.Visibility = Visibility.Visible;
         await entityView.OpenAsync(reference);
     }
@@ -472,6 +476,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
     internal object Evidence => new
     {
         contentLanguage = languageInfo.Evidence, originalTitle = originalTitle.Text, state = model?.State.ToString(), subjectId = model?.Item?.Id, title = title.Text, status = status.Text, model?.SelectionReason,
+        listening = listening.Evidence,
         artistCredits = model?.Displayed?.Album.Release.ArtistCredits,
         artistLinks = (artistLinks.Content as TagFlowPanel)?.Children.OfType<HyperlinkButton>().Select(InteractiveCardEvidence.Hit).ToArray(),
         releaseId = model?.Displayed?.Album.Release.Id, releaseGroupId = model?.Displayed?.Album.Release.ReleaseGroupId,
@@ -499,8 +504,8 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
             count += CountScrollers(Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(root, i));
         return count;
     }
-    public void Deactivate() { active = false; generation++; startPending = false; pendingAlbumOffset = null; albumRestoreVersion++; model?.Deactivate(); entityView?.Deactivate(); entityActive = false; cover.SourceKey = null; coverKey = null; requestedCover = null; ring.IsActive = false; }
-    public void Dispose() { if (disposed) return; Deactivate(); disposed = true; if (model is not null) { model.PropertyChanged -= StateChanged; model.Dispose(); } entityView?.Dispose(); cover.Pipeline = null; }
+    public void Deactivate() { active = false; generation++; startPending = false; pendingAlbumOffset = null; albumRestoreVersion++; model?.Deactivate(); listening.Deactivate(); entityView?.Deactivate(); entityActive = false; cover.SourceKey = null; coverKey = null; requestedCover = null; ring.IsActive = false; }
+    public void Dispose() { if (disposed) return; Deactivate(); disposed = true; if (model is not null) { model.PropertyChanged -= StateChanged; model.Dispose(); } listening.Dispose(); entityView?.Dispose(); cover.Pipeline = null; }
     private const string TrackTemplate = """
     <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:views="using:TheOrder.WinUI.Views">
       <Border Padding="0,7" BorderBrush="{ThemeResource DividerBrush}" BorderThickness="0,0,0,1">

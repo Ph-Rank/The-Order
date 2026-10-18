@@ -38,6 +38,7 @@ public sealed partial class MainWindow
         allowed |= id is "AniListAddRelated" or "AniListSavePending" or "AniListUserSelections" or "AniListRestoreAutomatic" or "AniListRetryCover"
             or "MusicAlbumAddRelated" or "MusicAlbumSavePending" or "MusicAlbumRestoreAutomatic" or "MusicAlbumRetryCover";
         allowed |= id.StartsWith("AniListUserLink-", StringComparison.Ordinal);
+        allowed |= id is "MusicListeningExpand" or "MusicListeningLoad" or "MusicListeningDigital" or "MusicListeningApple" or "MusicListeningCancel";
         allowed |= launchSettings || gameSettings;
         if (!allowed || id.Length > 200 || mode is not ("inspect" or "focus" or "invoke" or "expand" or "collapse" or "toggle" or "select0" or "select1" or "select2")) throw new InvalidDataException("Unsupported bounded control.");
         if ((mode == "toggle" || mode.StartsWith("select", StringComparison.Ordinal)) && !(launchSettings || gameSettings)) throw new InvalidDataException("Only launch settings accept Test value changes.");

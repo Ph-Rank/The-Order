@@ -2,8 +2,8 @@ namespace TheOrder.Application;
 
 // Public metadata remains disposable. User edition decisions use a stable typed
 // Bangumi source in a separate Native Profile component.
-public sealed class MusicBrainzService(IMusicBrainzProvider provider, IMusicBrainzCache? disk = null,
-    Func<DateTimeOffset>? clock = null, IMediaIdentityDecisions? identityDecisions = null) : IMusicBrainzReader, IMediaUserLinkReader
+public sealed partial class MusicBrainzService(IMusicBrainzProvider provider, IMusicBrainzCache? disk = null,
+    Func<DateTimeOffset>? clock = null, IMediaIdentityDecisions? identityDecisions = null, IAppleCatalogProvider? apple = null) : IMusicBrainzReader, IMediaUserLinkReader, IMusicListeningReader
 {
     private readonly IMediaIdentityDecisions decisions = identityDecisions ?? (disk as IMediaIdentityDecisionOwner)?.IdentityDecisions ?? new SessionMediaIdentityDecisions();
     public static readonly TimeSpan SearchFreshFor = TimeSpan.FromHours(1), AlbumFreshFor = TimeSpan.FromDays(1), MaximumStaleAge = TimeSpan.FromDays(7);
@@ -192,6 +192,8 @@ public sealed class MusicBrainzService(IMusicBrainzProvider provider, IMusicBrai
             ReleaseEvents = release.ReleaseEvents.ToArray(), ArtistCredits = release.ArtistCredits.ToArray() };
         return value with
         {
+            Outlets = value.Outlets is { } outlets ? MusicOutlets.Copy(outlets) : null,
+            Apple = value.Apple is { } catalog ? catalog with { Candidates = catalog.Candidates.ToArray() } : null,
             Search = value.Search is { } search ? search with { Candidates = search.Candidates.Select(Release).ToArray() } : null,
             Album = value.Album is { } album ? album with
             {

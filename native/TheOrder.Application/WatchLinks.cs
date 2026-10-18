@@ -27,6 +27,10 @@ public interface IWatchLinkPreferencesStore
 }
 public static class WatchLinks
 {
+    // Shared display ordering; preferences never remove valid links.
+    public static IEnumerable<T> OrderPlatforms<T>(IEnumerable<T> input, Func<T,string> platform, string[] preferred, bool alphabetic)
+        => alphabetic ? input.OrderBy(platform, StringComparer.CurrentCulture)
+            : preferred.Length > 0 ? input.OrderBy(x => { var n = Array.IndexOf(preferred, platform(x)); return n < 0 ? preferred.Length : n; }) : input;
     public static bool SafeUrl(string? value)
     {
         if (value is not { Length: > 0 and <= 2048 } || value.Any(char.IsControl) || !Uri.TryCreate(value, UriKind.Absolute, out var uri)
@@ -89,7 +93,7 @@ public static class WatchLinks
             output[key] = stronger with { Sources = old.Sources.Concat(link.Sources).DistinctBy(x => (x.Source, x.Url, x.Note, x.DataVersion)).Take(8).ToArray(), Regions = old.Regions.Concat(link.Regions).Distinct().Take(64).ToArray() };
         }
         var items = output.Values.AsEnumerable();
-        return sort switch { WatchLinkSort.BilibiliFirst => items.OrderBy(x => PlatformKey(x) == "bilibili" ? 0 : 1).ToArray(),
-            WatchLinkSort.PlatformName => items.OrderBy(x => x.Platform, StringComparer.CurrentCulture).ToArray(), _ => items.ToArray() };
+        return sort switch { WatchLinkSort.BilibiliFirst => OrderPlatforms(items, PlatformKey, ["bilibili"], false).ToArray(),
+            WatchLinkSort.PlatformName => OrderPlatforms(items, x => x.Platform, [], true).ToArray(), _ => items.ToArray() };
     }
 }
