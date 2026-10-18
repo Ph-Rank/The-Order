@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker,{IgdbCoordinator,parseQuery,gameQuery,mapGame} from "../src/index.mjs";
+import worker,{IgdbCoordinator,parseQuery,gameQuery,mapGame,cacheKey} from "../src/index.mjs";
 const fixtureGame=(id=1)=>({id,name:"Synthetic game",game_type:{type:"Remaster"},parent_game:99,version_parent:2,platforms:[{name:"PC"}],external_games:[{uid:"123",external_game_source:{name:"Steam"}}],videos:[{id:10,game:id,name:"Launch Trailer",video_id:"abcdefghijk"}]});
 const request=q=>new Request("https://fixture.test/v1/game-videos/query",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(q)});
 function host(handler,enabled=true){
@@ -96,10 +96,10 @@ test("Coordinator restart preserves shared cooldown and dispatch guard",async()=
 test("A bounded shared queue rejects excess work instead of forwarding unbounded requests",async()=>{
   const h=host();let release;const held=new Promise(r=>release=r);
   await run(async u=>{if(u.includes("oauth2/token"))return token();await held;return Response.json([fixtureGame()]);},async()=>{
-    const pending=Array.from({length:8},()=>h.coordinator.fetch(new Request("https://internal.test/query",{method:"POST",body:JSON.stringify({title:"same cached query"})})));
+    const pending=Array.from({length:8},(_,n)=>h.coordinator.fetch(new Request("https://internal.test/query",{method:"POST",body:JSON.stringify({title:"different uncached query "+n})})));
     await new Promise(r=>setTimeout(r,10));
-    assert.equal((await h.coordinator.fetch(new Request("https://internal.test/query",{method:"POST",body:JSON.stringify({title:"excess"})}))).status,429);
-    release();assert.ok((await Promise.all(pending)).every(r=>r.status===200));
+    try{assert.equal((await h.coordinator.fetch(new Request("https://internal.test/query",{method:"POST",body:JSON.stringify({title:"excess"})}))).status,429);}
+    finally{release();}assert.ok((await Promise.all(pending)).every(r=>r.status===200));
   });
 });
 test("Upstream timeout remains a retryable failure and recovery is not poisoned by a cached miss",async()=>{
@@ -134,7 +134,7 @@ test("Public responses keep diagnostics private by default, including unexpected
 });
 test("Legacy cached results lacking game parent context are refetched without confusing edition parents",async()=>{
   const h=host(),q={title:"test"};let calls=0;
-  h.map.set('v1:'+JSON.stringify(q),{until:Date.now()+10000,value:{games:[{id:1,name:"Synthetic game",kind:"Port"}],complete:true,fetchedAtUtc:new Date().toISOString()}});
+  h.map.set(cacheKey(q),{until:Date.now()+10000,value:{games:[{id:1,name:"Synthetic game",kind:"Port"}],complete:true,fetchedAtUtc:new Date().toISOString()}});
   await run(async u=>u.includes("oauth2/token")?token():(calls++,Response.json([fixtureGame()])),async()=>{
     const value=await(await worker.fetch(request(q),h.env)).json();assert.equal(value.games[0].parentGame,99);assert.equal(value.games[0].versionParent,2);
   });assert.equal(calls,1);

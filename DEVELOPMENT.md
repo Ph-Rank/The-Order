@@ -1,5 +1,13 @@
 # 开发与维护
 
+## IGDB 公开服务候选（2026-10-18，未部署）
+
+本轮codex/igdb-production-readiness-20261018基于532a940和当前dirty。services/igdb-game-videos/wrangler.toml仍用于本地；wrangler.production.jsonc为独立线上配置，首次IGDB_ENABLED=false、IGDB_PUBLIC=true、诊断关闭、禁用preview URL，保留v1 SQLite迁移。check-deployment.mjs仅在无.dev.vars的全新暂存目录作dry-run；operate-approved.mjs要求用户直接授权和冻结审查凭据，先禁用部署核对域，再Cloudflare Secrets私密stdin，再启用。不得自行执行首次公开部署或套餐升级，不操作Bangumi OAuth Worker。
+
+推荐HTTPS地址沿用现有账户子域，但尚未上线/验证。正式Production/Beta内置该地址；Test和Development无默认公网调用，HTTP回环只限显式Test。用本轮Start-Test.ps1 -Run ui-<全新名> -Payload <client-candidate-v1绝对路径> -ExpectedVersion 1.2.0运行固定合成Profile；不能裸启动EXE。Native-Step/Control仅操作该Test，退出检查exitCode=0。本轮测试服务18787只监听127.0.0.1，已正常关闭；不可与未来线上共用凭据的独立协调器同时运行。
+
+验证：客户端完整4428/0/0，服务35/35，workerd SQLite重启/预算/缓存契约7/7，Release x64通过。真实IGDB最小联调与两部实际YouTube播放、缓存断网保留、清缓存重启确认恢复分别记录，不重跑/重算上轮36部覆盖。本轮Source/Native用户数据无schema变更；服务v2键重建远程缓存。Free额度与其他Worker共享、10ms CPU、公开HTTPS尚待上线验证，当前不能宣称公网已可用。新审查文档和具体命令见services/igdb-game-videos/README.md、docs/igdb-game-videos-v1.md及.artifacts/igdb-production-ready-20261018/。
+
 ## IGDB真实API验收与版本核对（2026-10-18，当前增量）
 
 codex/igdb-live-qualification-20261018从6665e5d和原dirty继续。真实凭据仅在services/igdb-game-videos/.dev.vars（Git ignored），不复制/回显/打包；客户端只有固定服务地址。Wrangler本地仅127.0.0.1:8787，默认公开配置仍禁用、无路由，无部署。game_type.type是当前实际字段；IGDB_DIAGNOSTICS默认false，开发诊断仅返回白名单阶段/状态，不输出原异常或认证内容。

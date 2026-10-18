@@ -12,15 +12,12 @@ public sealed class IgdbGameVideoProvider(HttpClient client, Uri? service = null
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web) { MaxDepth = 24 };
     public async Task<IgdbResult> QueryAsync(GameVideoQuery query, CancellationToken cancellation)
     {
-        if (service is null) throw new GameVideoException("unconfigured");
-        if (!service.IsAbsoluteUri || service.UserInfo.Length != 0 || service.Query.Length != 0 || service.Fragment.Length != 0 || service.AbsolutePath != "/"
-            || !(service.Scheme == "https" && service.IsDefaultPort && !IPAddress.TryParse(service.Host, out _) && !service.IsLoopback
-                || allowTestLoopback && service.Scheme == "http" && service.IsLoopback)) throw new GameVideoException("unconfigured");
+        if (!IgdbServiceEndpoint.Valid(service, allowTestLoopback)) throw new GameVideoException("unconfigured");
         if (!AniListValidation.Text(query.Title, 200, false) || query.Id is <= 0 || query.SteamId is not null && !GameVideos.ValidId(query.SteamId)) throw new InvalidDataException("游戏影像查询无效。");
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellation); stop.CancelAfter(TimeSpan.FromSeconds(15));
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(service, "v1/game-videos/query")) { Content = JsonContent.Create(query, options: Options) };
+            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(service!, "v1/game-videos/query")) { Content = JsonContent.Create(query, options: Options) };
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, stop.Token).ConfigureAwait(false);
             if ((int)response.StatusCode is >= 300 and < 400) throw new GameVideoException("invalid_response");
             if (response.Content.Headers.ContentLength is > 262144) throw new GameVideoException("invalid_response");

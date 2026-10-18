@@ -127,7 +127,7 @@ internal static class Composition
         services.AddSingleton<IMusicBrainzCache, IsolatedMusicBrainzCache>();
         services.AddSingleton<IMediaIdentityDecisions, IsolatedMediaIdentityDecisions>();
         services.AddSingleton<IGameVideoProvider>(p => new IgdbGameVideoProvider(p.GetRequiredService<PublicArtworkNetwork>().Client,
-            Uri.TryCreate(configuration["IGDB_SERVICE_URL"], UriKind.Absolute, out var service) ? service : null,
+            IgdbServiceEndpoint.Resolve(Program.Profile?.Manifest.ProfileKind, configuration["IGDB_SERVICE_URL"]),
             Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test));
         services.AddSingleton<IGameVideoCache, IsolatedGameVideoCache>();
         services.AddSingleton<GameVideoReader>();

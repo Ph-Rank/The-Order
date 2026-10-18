@@ -1,1 +1,1 @@
-{"name":"the-order-igdb-game-videos","version":"0.1.0","private":true,"type":"module","scripts":{"test":"node --test --test-concurrency=1 test/*.test.mjs"}}
+{"name":"the-order-igdb-game-videos","version":"0.1.0","private":true,"type":"module","scripts":{"test":"node --test --test-concurrency=1 test/*.test.mjs","check:deployment":"node scripts/check-deployment.mjs","test:contract":"node test/public-contract.mjs"}}

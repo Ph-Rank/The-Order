@@ -1,5 +1,15 @@
 # The Order：当前实现与评审交接
 
+## IGDB 公开使用准备（2026-10-18，未部署）
+
+当前分支 codex/igdb-production-readiness-20261018，从532a940及全部继承修改继续。独立服务新增公开配置wrangler.production.jsonc，SQLite迁移及唯一single-app-quota-v1不变；没有改动生产Bangumi Worker、Production资料、日用安装、版本或GitHub。推荐the-order-igdb-game-videos.zyx2251721565.workers.dev，按现有账户域提出，须由首次禁用部署实际返回的地址核对，不能称已上线。
+
+补齐匿名边缘IP限流、全局持久预算（每日10000次准入、1000次games派发、1000次token grant，每分钟60次games）、275ms共享节流、去重合并、12秒排队期限、认证/网络熔断及缓存故障隔离。token只在内存，预算支持冷启动，不能假设每天仅24次续期。Free支持SQLite DO；账户套餐尚需上线前确认，且免费调用额度与账户其他Worker共用，不能保证分布式攻击下不影响OAuth额度。普通客户端没有共享固定令牌或Twitch凭据。Production/Beta默认使用内置HTTPS；Test/Development不自动使用生产地址，只有Test允许显式HTTP回环。
+
+完整客户端4428 passed / 0 failed / 0 skipped；服务35/35；真实workerd/SQLite契约7/7；Release x64候选client-candidate-v1通过。当前候选WinUI实际播放CLANNAD与魔法使之夜重制版，收起/返回释放；关闭IGDB测试服务后保留缓存资料；移走远程缓存并重启，人工确认及默认视频恢复，4份决定与主库共5文件哈希不变。真实API、合成书架/NextMoe和模拟故障分别留证。本轮不重复36部覆盖统计。
+
+首次公开部署、设置生产Secrets和启用仍等待用户最终批准。部署前还需确认现有账户Workers Free；部署后必须完成实际公共HTTPS与WinUI端到端、免费CPU/用量观测，不能用本地上游HTTPS成功代替。完整运营/关闭/回退步骤在services/igdb-game-videos/README.md，证据与冻结门禁在.artifacts/igdb-production-ready-20261018/。开发准备GO，公开可用待部署验收；所有继承音乐/书籍修改保持未提交，不吸入本轮提交。
+
 ## IGDB真实API、PC候选及发行版核对（2026-10-18，当前增量）
 
 当前分支 codex/igdb-live-qualification-20261018，基于6665e5d及全部继承dirty。503已证实来自IGDB字段game_type.name错误，修正为game_type.type；同一Wrangler和凭据恢复200，无代理/DNS/TLS改动。新增默认关闭的阶段诊断，不输出凭据、原始错误或响应正文；保留parent_game与version_parent区别和旧缓存兼容。

@@ -1,5 +1,17 @@
 # 游戏宣传影像：IGDB v1
 
+## 公开使用准备（2026-10-18，先准备后批准部署）
+
+本轮codex/igdb-production-readiness-20261018从532a940和全部继承修改继续，不重复播放器、身份匹配或36部覆盖测量。普通Production/Beta客户端已内置独立HTTPS服务地址，Test/Development保持显式配置；无客户端Secret、Twitch登录、用户API Key或Wrangler依赖。公开服务尚未部署，内置地址目前是候选配置，不是已上线承诺。
+
+保持single-app-quota-v1及SQLite后端，新增公开IP边缘限流和持久全局预算、去重合并、有界队列、认证/网络熔断、跨重启退避及缓存读取。修正冷启动令牌预算，避免把24次续期假设变成正常用户的可用性瓶颈。Free可采用该后端，但当前账户套餐/实际线上CPU用量须首次部署前后核对；账户100000次免费Worker调用也与原OAuth服务共享。分布式滥用仍可耗尽免费账户额度，应用预算不保证DDoS隔离，任何套餐升级都需另行授权。
+
+明确的本地门禁：完整客户端4428/0/0（新增19项），Node35/35（新增18项），真实workerd/SQLite契约7/7；Release x64候选构建通过。现有凭据仅在隔离开发服务私密读取，真实Twitch/IGDB通过HTTPS；客户端到测试服务仍为显式回环HTTP，不能写成已完成公网HTTPS端到端。WinUI候选实际播放CLANNAD及魔法使之夜重制版；关闭服务后保留缓存与重试提示；移走远程缓存并重启，恢复人工确认和默认视频，4份用户决定及主库5个文件字节不变。截图、TRX、来源/载荷清单和失败记录留在.artifacts/igdb-production-ready-20261018/。书架/NextMoe为合成输入，不是Production资料。
+
+首次上线配置、Secrets、准确命令、Free限制、运行监控与快速关闭/回退见[独立服务说明](../services/igdb-game-videos/README.md#public-production-candidate-2026-10-18)。独立生产配置默认关闭，禁用预览环境；不允许用同一凭据新建staging配额协调器。所有现有本地/直接凭据调用须在启用生产前停止。已准备受审查哈希保护的执行脚本，但未执行公开部署或Secret写入。
+
+结论：本地生产准备GO；公网可用性待用户批准首次部署及真实HTTPS/WinUI复验后判定。没有推送、发布、版本提升、日用替换、Production用户资料迁移或生产Bangumi服务改动。下方旧阶段报告保留历史状态，不能用旧候选截图冒充本轮验收。
+
 ## 真实 API 验收及候选修复（2026-10-18，当前状态）
 
 本轮分支 `codex/igdb-live-qualification-20261018`，基于 `6665e5d` 和全部继承未提交成果。

@@ -23,13 +23,14 @@ credentials or claim an approved public deployment.
    No new account, payment, or production route is created by this task.
 3. Set `THE_ORDER_NATIVE_IGDB_SERVICE_URL` only in the **Test app process**, e.g.
    `http://127.0.0.1:8787/`, together with the existing explicit Test Profile flags.
-   Never start the candidate without those Profile flags. Production composition
-   refuses HTTP loopback and accepts only a configured HTTPS service root.
+   Never start the candidate without those Profile flags. Production/Beta use the
+   reviewed built-in HTTPS service root; only Test accepts explicit HTTP loopback.
+   Test/Development never silently select the production service.
 
-Public deployment requires separate authorization. `workers_dev=false`, no route,
-and `IGDB_ENABLED=false` intentionally prevent accidental exposure. A future
-deployment needs its own secret bindings, an HTTPS service URL, usage/abuse review,
-and actual API qualification. It must route every query for the same IGDB app to
+Public deployment requires separate authorization. `wrangler.toml` remains a
+local, disabled-by-default configuration. The separately reviewed
+`wrangler.production.jsonc` exposes only this independent Worker on workers.dev,
+with its first deployment still **disabled**. It must route every query for the same IGDB app to
 the single `single-app-quota-v1` Durable Object, including additional environments;
 deploying independent coordinators with the same app credentials breaks the shared
 quota guarantee. Do not reuse this credential pair in another uncoordinated client.
@@ -49,7 +50,9 @@ queries, arbitrary URLs, user credentials, or YouTube search operations.
   without parent context are refetched.
 - At most 20 candidates are returned; the 21st row marks the result incomplete.
 - Requests across all installations serialize through one coordinator, at least
-  275 ms apart, with one upstream request active and at most eight queued callers.
+  275 ms apart, with one upstream request active and at most eight unique queries.
+  Identical queries coalesce with at most 32 waiters; cached reads bypass the slow
+  upstream queue. Queued work expires after 12 seconds.
   Dispatch barriers and 429 cooldown survive Durable Object restart.
 - App tokens stay in coordinator memory, renew before expiry, and get one renewal
   after 401. Tokens and secrets never enter responses or the cache.
@@ -99,3 +102,141 @@ No raw exception/stack, upstream response body, headers, credential values or
 authentication URLs are logged or returned. Do not enable verbose HTTP tracing
 to investigate credentials. The 2026-10-18 503 was an invalid games field, not a
 reason to change DNS/proxy settings or disable TLS validation.
+
+## Public production candidate (2026-10-18)
+
+Recommended URL: `https://the-order-igdb-game-videos.zyx2251721565.workers.dev/`.
+The suffix follows the repository's existing first-party Worker address; it is
+not a new purchased domain. **It is not yet a deployed or qualified public
+endpoint.** Bootstrap verifies the address actually returned by Cloudflare. A
+different account subdomain stops Secret setup and enabling until the client
+address is corrected and requalified. The Bangumi service is never changed.
+
+### Free plan and operating bounds
+
+Official [DO pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/)
+allows SQLite objects on Workers Free. The current published free allowances are
+100,000 DO requests/day, 13,000 GB-s/day, 5 million SQLite rows read/day, 100,000
+rows written/day and 5 GB storage. KV API calls on SQLite objects also count as
+row operations. The existing `new_sqlite_classes` migration is retained.
+[Workers Free](https://developers.cloudflare.com/workers/platform/limits/) also
+limits the account to 100,000 Worker invocations/day and 10 ms CPU/invocation.
+These are **account-wide allowances**, shared with other Workers including the
+existing OAuth Worker. No paid plan, extra database, cron, custom domain, queue
+or analytics service is requested. No production resource was created in this
+preparation task. Verify the account is still Free before bootstrap; CLI login
+alone does not establish its billing plan.
+
+The initial application limits are deliberately lower: 10,000 admitted queries,
+1,000 games API dispatches and 1,000 token grants per UTC day; at most 60 games
+dispatches/minute, with the existing 275 ms spacing. Counts are committed before
+dispatch, include failed attempts/401 retries, and survive restart/deploy. All
+counter changes serialize independently from the slow query queue. Corrupt
+counter state fails closed rather than silently restoring a fresh budget.
+The token is memory-only, so object recreation can require a new grant even
+before expiry; the grant ceiling therefore covers cold starts rather than
+assuming only 24 hourly renewals.
+Cache entries remain bounded to 256; successful results last 12 h, true empty
+results 30 min. Identity/Steam keys do not depend on whichever title was used.
+
+The [edge Rate Limiting binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
+provides 60 requests/minute per Cloudflare-observed IP. A missing/broken binding
+or absent edge IP fails closed in public mode. IP limits can affect shared NAT
+users, are approximate and local to each Cloudflare location, and **are not
+global accounting or authentication**. There is no fixed client token to extract.
+Even rejected traffic consumes Worker invocations. A distributed attack can
+exhaust the account's free allowance and affect the other Worker; these controls
+bound IGDB load but do not promise DDoS isolation or unlimited free availability.
+On Free, quota exhaustion is a service failure, not permission to upgrade.
+
+### Faults, monitoring and privacy
+
+- Twitch and games 429 persist a bounded Retry-After cooldown, including HTTP-date
+  values; token failures cannot repeatedly acquire grants after object restart.
+- An invalid app credential opens a five-minute circuit; three transient failures
+  open a 30-second circuit. One serialized recovery resets it. Cached metadata
+  remains readable through upstream cooldown/circuit failures.
+- Global budgets, cache writes or coordinator failures never produce an empty
+  success. Oversize/slow bodies, unknown fields, arbitrary queries/URLs, redirects
+  and browser origins are rejected. Input is bounded to 1 KiB, provider output
+  to 256 KiB. Token POST bodies and upstream responses are never logged.
+- Only public title and IGDB/Steam IDs cross the desktop protocol. No local entry
+  ID, path, play record, game bytes, client key or Twitch login is sent. Headers
+  from the desktop are not forwarded to the coordinator or upstream.
+- Automatic invocation logs and traces are disabled. Only bounded circuit-open
+  events and 80%/100% budget thresholds are emitted, without titles, IPs, tokens,
+  response bodies or stacks. Use the existing Cloudflare dashboard's Worker
+  request/error/CPU metrics, DO duration and SQLite read/write usage; review them
+  after enabling and during the first day. Do not add paid monitoring. Budget
+  alerts are operator notifications, not another billing cap.
+
+### One app, one quota owner
+
+There is exactly one production Worker name, DO namespace binding and object
+name `single-app-quota-v1`. Do not add Wrangler named environments with the same
+Twitch credentials. Stop **all** uncoordinated local/direct use of that application
+before setting production Secrets/enabling it. The local testing runtime is not
+a second live production quota owner. Future staging must omit these credentials
+and either use synthetic responses, a separately authorized development app, or
+bind to the production object's namespace via `script_name` and the same name;
+it must never create another quota namespace for the shared app. This repository
+cannot prevent an operator from reusing the credentials in unrelated software.
+
+### Local qualification and first-deployment approval
+
+From the repository root:
+
+```powershell
+node services/igdb-game-videos/scripts/check-deployment.mjs --bundle=.artifacts/igdb-production-ready-20261018/worker-candidate-final
+node --test --test-concurrency=1 services/igdb-game-videos/test/*.test.mjs
+node services/igdb-game-videos/test/public-contract.mjs --output=.artifacts/igdb-production-ready-20261018/contract-new-run
+```
+
+The bundle command stages only public code/configuration in an owned directory,
+without `.dev.vars`, then performs `wrangler deploy --dry-run`. The contract runs
+real workerd/SQLite with synthetic upstream, including restart and hard budgets.
+Neither is a real public HTTPS acceptance test or a Cloudflare deployment.
+
+**Do not run the following before direct user approval.** After reviewing the
+frozen receipt, confirming Workers Free in the dashboard, stopping this Twitch
+app's local use, and confirming the non-commercial usage terms, execute in order:
+
+```powershell
+$review = '.artifacts/igdb-production-ready-20261018/predeployment-review.json'
+node services/igdb-game-videos/scripts/operate-approved.mjs bootstrap --user-approved --free-plan-confirmed --review=$review
+node services/igdb-game-videos/scripts/operate-approved.mjs secrets --user-approved --free-plan-confirmed --local-use-stopped --review=$review
+node services/igdb-game-videos/scripts/operate-approved.mjs enable --user-approved --free-plan-confirmed --local-use-stopped --review=$review
+```
+
+Flags never substitute for human authorization. The source/configuration hashes
+must match the receipt. Bootstrap deploys **disabled** and verifies the actual
+workers.dev hostname. The Secret step privately reads only the two developer
+fields from the authorized `.dev.vars` and pipes JSON to `wrangler secret bulk`;
+no value is in an argument, ordinary variable, log or desktop artifact. The
+production bindings are **Cloudflare Secrets**, not a published `.dev.vars`.
+The reviewed credential-free stage is also used for real deployment. Raw CLI
+output is suppressed, including on failure.
+
+After enabling, test the **actual HTTPS endpoint** from the native provider:
+title candidate, exact original/remaster IDs, Steam edition, repeated query/cache,
+concurrent duplicate, sanitized error and kill/re-enable. Then run the isolated
+WinUI candidate against that HTTPS address, play two samples, return, restart and
+check saved decisions. Record actual Cloudflare resource/plan metrics. Until then
+zero-configuration client wiring is ready, but public end-to-end is **pending**.
+Ordinary users will not configure a key, Twitch login, address or Wrangler.
+
+### Disable and rollback
+
+```powershell
+node services/igdb-game-videos/scripts/operate-approved.mjs disable --user-approved --review=$review
+```
+
+The same reviewed deploy defaults to `IGDB_ENABLED=false`, even if a dashboard
+variable was previously true. There is no `keep_vars` override. The edge returns
+an unavailable state without calling the DO. Do not delete the Worker, namespace,
+SQLite data or migration, and do not revert to the earlier service without the
+public limits. Disable first, then select a separately reviewed prior Worker
+version if required. Persisted budgets/dispatch barriers remain. The native
+client can fall back to the previously retained candidate without migrating the
+library; identity decisions are separate user data and no schema changes occur.
+No daily installation is replaced or public release created by this task.

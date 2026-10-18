@@ -1,0 +1,23 @@
+{
+  "$schema": "../bangumi-auth-worker/node_modules/wrangler/config-schema.json",
+  "name": "the-order-igdb-game-videos",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-08-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "send_metrics": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": { "enabled": true, "invocation_logs": false },
+    "traces": { "enabled": false }
+  },
+  "vars": {
+    "IGDB_ENABLED": "false",
+    "IGDB_DIAGNOSTICS": "false",
+    "IGDB_PUBLIC": "true"
+  },
+  "ratelimits": [{ "name": "IP_LIMITER", "namespace_id": "2026101801", "simple": { "limit": 60, "period": 60 } }],
+  "durable_objects": { "bindings": [{ "name": "IGDB_COORDINATOR", "class_name": "IgdbCoordinator" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["IgdbCoordinator"] }]
+}
