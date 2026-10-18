@@ -1,0 +1,86 @@
+{
+  "result": "ok",
+  "response": "collection",
+  "limit": 10,
+  "offset": 0,
+  "total": 2,
+  "data": [
+    {
+      "id": "6d4e768d-d68a-449f-8983-f7acbc160d9c",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "ja-ro": "Kara no Kyoukai: The Garden of Sinners"
+        },
+        "altTitles": [
+          {
+            "en": "Boundary of Emptiness"
+          },
+          {
+            "ja": "空の境界 the Garden of sinners"
+          },
+          {
+            "ko": "공의 경계"
+          },
+          {
+            "ru": "Граница пустоты: Сад грешников"
+          },
+          {
+            "zh": "空之境界the Garden of sinners"
+          },
+          {
+            "ar": "حديقة الآثمين"
+          },
+          {
+            "vi": "Khu vườn của những tội nhân"
+          }
+        ],
+        "links": {
+          "al": "53947",
+          "ap": "kara-no-kyoukai-the-garden-of-sinners",
+          "bw": "series/135012",
+          "kt": "15902",
+          "mu": "x3en0dy",
+          "mal": "23947"
+        },
+        "officialLinks": null
+      }
+    },
+    {
+      "id": "902d5bdd-4ec7-4605-b0d0-dd4e8c9dd7d5",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "en": "Kara no Kyoukai - Mirai Fukuin (Doujinshi)"
+        },
+        "altTitles": [
+          {
+            "ja": "空の境界 未来福音"
+          },
+          {
+            "ja-ro": "Mirai Fukuin (Kara no Kyoukai)"
+          },
+          {
+            "ja-ro": "Kara no Kyoukai: Mirai Fukuin"
+          },
+          {
+            "en": "Kara no Kyoukai: Mirai Fukuin/recalled out summer"
+          },
+          {
+            "en": "Kara no Kyoukai: the Garden of sinners"
+          },
+          {
+            "uk": "Межа пустоти: Благословення майбутнього"
+          }
+        ],
+        "links": {
+          "al": "40429",
+          "kt": "20156",
+          "mu": "s6pevmq",
+          "mal": "10429"
+        },
+        "officialLinks": null
+      }
+    }
+  ]
+}

@@ -142,10 +142,15 @@ public sealed class AniListProvider(HttpClient client, AniListRateCoordinator? r
             WatchLinks = Rows(row, "externalLinks").Where(x => Str(x, "type") == "STREAMING" && !Flag(x, "isDisabled"))
                 .Select(x => new AniListWatchLink(Number(x, "id") ?? 0, Str(x, "site"), Str(x, "url"), Optional(x, "language"), Optional(x, "notes")))
                 .Where(AniListPlayback.ValidWatchLink).DistinctBy(x => x.Url).Take(24).ToArray(),
-            Trailer = MapTrailer(Node(row, "trailer")), HasPlaybackMetadata = true
+            Trailer = MapTrailer(Node(row, "trailer")), HasPlaybackMetadata = true,
+            BookLinks = MapBookLinks(row),
+            HasBookLinkMetadata = Str(row, "type") == "MANGA" && row.TryGetProperty("externalLinks", out _)
         };
         if (!AniListValidation.Details(result)) throw Invalid(); return result;
     }
+    public static BookExternalLink[] MapBookLinks(JsonElement row) => Str(row, "type") == "MANGA"
+        ? Rows(row, "externalLinks").Take(96).Select(x => new BookExternalLink(Number(x, "id") ?? 0, Str(x, "site"), Optional(x, "url"), Str(x, "type"),
+            Optional(x, "language"), Optional(x, "notes"), Flag(x, "isDisabled"))).Where(BookOutlets.ValidRaw).ToArray() : [];
     private static AniListPerson Person(JsonElement row) => new(Number(row, "id") ?? 0, Str(Node(row, "name"), "full"), Str(Node(row, "name"), "native"), Image(Node(row, "image"), "large"));
     private static AniListCharacter MapCharacter(JsonElement row) => new(Person(Node(row, "node")), Str(row, "role"), Rows(row, "voiceActors").Take(8).Select(Person).ToArray())
     {

@@ -72,11 +72,17 @@ public static class WatchLinks
                 && long.TryParse(token[2..], NumberStyles.None, CultureInfo.InvariantCulture, out var number) && number > 0 && token[2..] == number.ToString(CultureInfo.InvariantCulture))
                 return kind + ":bilibili:" + token;
         }
+        return kind + ":" + ExternalResourceKey(link.Url, preserveFragment: false);
+    }
+    // Shared by watch and book links. Opening always uses the original URL.
+    public static string ExternalResourceKey(string url, bool preserveFragment = true, bool preserveTag = false)
+    {
+        var uri = new Uri(url);
         // Only tracking fields are ignored; unknown query parameters, paths and
         // episode IDs remain distinct. Never deduplicate by title or site name.
         var query = string.Join('&', uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries).Where(x =>
-        { var key = x.Split('=')[0]; return !key.StartsWith("utm_", StringComparison.OrdinalIgnoreCase) && key is not ("spm_id_from" or "spm_from" or "tag"); }));
-        return kind + ":" + uri.GetLeftPart(UriPartial.Path).TrimEnd('/') + (query.Length > 0 ? "?" + query : "");
+        { var key = x.Split('=')[0]; return !key.StartsWith("utm_", StringComparison.OrdinalIgnoreCase) && key is not ("spm_id_from" or "spm_from") && (preserveTag || key != "tag"); }));
+        return uri.GetLeftPart(UriPartial.Path).TrimEnd('/') + (query.Length > 0 ? "?" + query : "") + (preserveFragment ? uri.Fragment : "");
     }
     public static WatchLink[] Merge(AnimeWatchIdentity identity, IEnumerable<WatchLink> input, WatchLinkSort sort = WatchLinkSort.BilibiliFirst)
     {

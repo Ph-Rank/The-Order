@@ -1,0 +1,65 @@
+{
+  "result": "ok",
+  "response": "collection",
+  "limit": 10,
+  "offset": 0,
+  "total": 1,
+  "data": [
+    {
+      "id": "4801f266-cc4e-4c3b-8d1d-f50f08b25b62",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "ja-ro": "Witch Watch"
+        },
+        "altTitles": [
+          {
+            "ja": "ウィッチウォッチ"
+          },
+          {
+            "en": "Witch Watch"
+          },
+          {
+            "zh": "魔女与使魔"
+          },
+          {
+            "zh-hk": "魔女與使魔"
+          },
+          {
+            "hi": "विच वॉच"
+          },
+          {
+            "kk": "Мыстан сақшысы"
+          },
+          {
+            "ne": "विच वाच"
+          },
+          {
+            "ru": "Ведьмнадзор"
+          },
+          {
+            "ru": "Страж ведьмы"
+          },
+          {
+            "uk": "Відьмоварта"
+          }
+        ],
+        "links": {
+          "al": "128896",
+          "ap": "witch-watch",
+          "bl": "950316",
+          "bw": "series/300154/list",
+          "kt": "58718",
+          "mu": "akczntm",
+          "amz": "https://www.amazon.co.jp/dp/B09BF1FVFG",
+          "cdj": "https://www.cdjapan.co.jp/product/NEOBK-3124282",
+          "ebj": "https://ebookjapan.yahoo.co.jp/books/640752/",
+          "mal": "133545",
+          "raw": "https://shonenjumpplus.com/episode/4856001361115843140",
+          "engtl": "https://mangaplus.shueisha.co.jp/titles/100145"
+        },
+        "officialLinks": null
+      }
+    }
+  ]
+}

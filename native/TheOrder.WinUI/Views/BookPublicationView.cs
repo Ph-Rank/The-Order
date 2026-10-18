@@ -20,6 +20,10 @@ public sealed class BookPublicationView : StackPanel, IDisposable
     private readonly TextBox queryTitle = new() { Header = "原标题", PlaceholderText = "书名", MaxLength = 200, HorizontalAlignment = HorizontalAlignment.Stretch }, queryIsbn = new() { Header = "ISBN（可选）", PlaceholderText = "输入 ISBN 精确查找", MaxLength = 40, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly Button back = Button("返回上一本"), cancel = Button("取消读取"), reloadSaved = Button("刷新已保存版本"), refreshRelations = Button("刷新关系"), search = Button("查找"), next = Button("查看更多版本"), confirm = Button("确认此出版版本"), refreshPreview = Button("刷新记录");
     private BookDetailsViewModel? model;
+    private readonly BookReadingView reading = new();
+    private AniListDetails? rootReadingAniList;
+    private string? rootReadingFingerprint;
+    private bool readingAllowed;
     private string? shownSource;
     private BangumiSubjectDetails? shownBangumiFacts;
     private AniListDetails? shownAniListFacts;
@@ -57,7 +61,7 @@ public sealed class BookPublicationView : StackPanel, IDisposable
         ndl.Content = searchBody; content.Children.Add(ndl); content.Children.Add(previewBody); content.Children.Add(confirmation);
         var publicationActions = Flow(); publicationActions.Children.Add(confirm); publicationActions.Children.Add(refreshPreview); content.Children.Add(publicationActions);
         content.Children.Add(raw);
-        section.Content = content; Children.Add(section);
+        section.Content = content; Children.Add(reading); Children.Add(section);
         section.Expanding += async (_, _) => { if (!syncing && model is not null) await model.ExpandAsync(); };
         section.Collapsed += (_, _) => { if (!syncing) model?.Collapse(); };
         relations.Expanding += async (_, _) => { if (!syncing && model is not null) await model.LoadRelationsAsync(); };
@@ -72,17 +76,28 @@ public sealed class BookPublicationView : StackPanel, IDisposable
         foreach (var panel in new[] { relationCards, candidateCards }) panel.SizeChanged += (_, _) => Clamp(panel);
         Unloaded += (_, _) => { if (!IsLoaded) Deactivate(); };
     }
-    public void Configure(IBangumiSubjectDetailsReader subjects, IBookBibliographyReader books, IBangumiBookRelationsReader bookRelations)
+    public void Configure(IBangumiSubjectDetailsReader subjects, IBookBibliographyReader books, IBangumiBookRelationsReader bookRelations, IAniListReader? aniList = null)
     {
         if (model is not null) { model.PropertyChanged -= StateChanged; model.Dispose(); }
-        model = new(subjects, books, bookRelations); model.PropertyChanged += StateChanged; Render();
+        model = new(subjects, books, bookRelations); model.PropertyChanged += StateChanged; reading.Configure(aniList, subjects); Render();
     }
-    public void SetSource(BangumiSubjectDetails? bangumi, AniListDetails? currentAniList, bool bridgeTrusted) => model?.SetSource(bangumi, currentAniList, bridgeTrusted);
+    public void SetSource(BangumiSubjectDetails? bangumi, AniListDetails? currentAniList, bool bridgeTrusted, bool linksAllowed = true)
+    {
+        readingAllowed = linksAllowed;
+        var root = bridgeTrusted && bangumi?.Kind == BangumiRelationKind.Book ? BookSource.From(bangumi)
+            : currentAniList?.Media.Kind == AniListMediaKind.Manga ? BookSource.From(currentAniList) : null;
+        rootReadingFingerprint = root?.Fingerprint;
+        rootReadingAniList = linksAllowed && (root?.Identity.Provider == "AniList" || bridgeTrusted && root?.Identity.Level is BookEntityLevel.Unknown or BookEntityLevel.Series) ? currentAniList : null;
+        model?.SetSource(bangumi, currentAniList, bridgeTrusted);
+    }
     private void StateChanged(object? sender, PropertyChangedEventArgs e) { if (!disposed) Render(); }
     private void Render()
     {
         renderVersion++; var source = model?.Source;
         Visibility = Visible(source is not null); if (model is null || source is null) return;
+        reading.SetSource(readingAllowed ? source : null,
+            readingAllowed && source.Fingerprint == rootReadingFingerprint ? rootReadingAniList : null,
+            readingAllowed ? model.Bangumi : null);
         syncing = true; section.IsExpanded = model.Expanded; syncing = false;
         heading.Text = model.Bangumi is { } titleSource ? ContentLanguage.BangumiTitle(titleSource).Text : model.AniList is { } aniTitle ? ContentLanguage.AniListTitle(aniTitle.Media).Text : source.Title; heading.Visibility = Visible(model.CanBack);
         identity.Text = source.Identity.Provider + (source.Identity.Level == BookEntityLevel.Unknown ? "" : " · " + LevelName(source.Identity.Level));
@@ -279,8 +294,8 @@ public sealed class BookPublicationView : StackPanel, IDisposable
     }
     private void FocusHeading() { var version = renderVersion; DispatcherQueue.TryEnqueue(() => { if (!disposed && version == renderVersion) { section.StartBringIntoView(); if (back.Visibility == Visibility.Visible) back.Focus(FocusState.Programmatic); else section.Focus(FocusState.Programmatic); } }); }
     public void Cancel() => model?.Cancel();
-    public void Deactivate() { model?.Deactivate(); shownSource = null; renderVersion++; }
-    public void Dispose() { if (disposed) return; Deactivate(); disposed = true; if (model is not null) { model.PropertyChanged -= StateChanged; model.Dispose(); } }
+    public void Deactivate() { model?.Deactivate(); reading.Deactivate(); shownSource = null; renderVersion++; }
+    public void Dispose() { if (disposed) return; Deactivate(); disposed = true; reading.Dispose(); if (model is not null) { model.PropertyChanged -= StateChanged; model.Dispose(); } }
     internal async Task FixtureAsync(string action, string? id)
     {
         if (model?.Source is null) return;
@@ -313,7 +328,7 @@ public sealed class BookPublicationView : StackPanel, IDisposable
         historyDepth = model?.HistoryDepth, status = model?.Message, incoming = model?.Incoming, canConfirm = model?.CanConfirm, confirmationBlock = model?.ConfirmationBlock,
         relationExpanded = relations.IsExpanded, relations = model?.Relations?.Snapshot.Items.Where(x => x.Kind == BangumiRelationKind.Book).Select(x => new { x.Id, x.Relation }).ToArray(),
         candidates = model?.Candidates.Select(x => new { x.Id, x.Title, x.Isbns, x.IsAggregate }).ToArray(), nextStart = model?.Search?.Page.NextStart,
-        preview = model?.Preview?.Publication, previewFromSearch = model?.Preview?.FromSearch, saved = model?.Bindings.Select(x => x.PublicationId).ToArray(), bindingsLoaded = model?.BindingsLoaded,
+        preview = model?.Preview?.Publication, previewFromSearch = model?.Preview?.FromSearch, saved = model?.Bindings.Select(x => x.PublicationId).ToArray(), bindingsLoaded = model?.BindingsLoaded, reading = reading.Evidence,
         candidateHitTargets = candidateCards.Children.OfType<Button>().Select(InteractiveCardEvidence.Hit).ToArray(), width = ActualWidth };
     private static string LevelName(BookEntityLevel value) => value switch { BookEntityLevel.Series => "系列", BookEntityLevel.Volume => "单卷", BookEntityLevel.Publication => "出版物", BookEntityLevel.Aggregate => "集合", _ => "层级未注明" };
     private static string FormatName(string value) => value switch { "MANGA" => "漫画", "NOVEL" => "小说", "ONE_SHOT" => "短篇漫画", _ => value };

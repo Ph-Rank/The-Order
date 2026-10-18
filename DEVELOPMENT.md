@@ -1,5 +1,18 @@
 # 开发与维护
 
+## 书籍阅读与购买入口 v1（2026-10-18，最新增量）
+
+维护 `codex/book-outlets-v1-20261018`，当前工作树 `update-channels-20261016/The-Order`；保留9147b06上全部未提交音乐增量。本轮仅书籍入口。`BookOutlets`做纯分类、保参去重和层级/来源保留；`BookReadingViewModel`只在展开时刷新缺字段和补充元数据，带取消、世代和旧资料保留。MangaDex仅已确认AniList漫画，原题单页10条，完整/唯一跨站编号、标题和已知MAL编号均核对；只使用实际完整网址，不扩展bw等标识短键，不写人工身份。
+
+复用固定SDK10.0.401、locked依赖与现有客户端回归入口。本轮最终 `.artifacts/book-outlets-v1-20261018/tests-full-accepted/` 为 **4327/0/0**，包含本地合成Worker；`tests-books-qualified/`165/0/0是重叠子集，新书籍64项。`tests-before-mal/`保留同ID核对编号变化的实际失败反例；恢复保护后的源文件逐字节核验。两次早期全套既有launcher/chain超时、一次中间全套4325/0/0及全部原日志也保留，不放宽启动标准、不伪称环境根因已修复。
+
+最终 `publish-accepted` 是Release x64/NativeProductionCandidate=true载荷；只经本轮 `Start-Test.ps1 -Run ui-<全新名> -Payload <本轮publish-accepted绝对路径> -ExpectedVersion 1.2.0` 启动，固定自己的 `test-profile`，不可裸启动EXE默认Production。`Control.ps1`/`Native-Step.ps1`仅已有Test受限peer，平台按钮只inspect，实际外部点击由定向桌面工具完成。final为`ui-accepted-books`，其前`ui-qualified-books`含实际平台点击；每阶段源码/载荷、控制回执与截图均独立保留。已退出自己的全部Test进程，未操作日用程序。
+
+新缓存字段为可选附加，MangaDex补充使用现有AniList远程缓存的 `booklinks:md-v1:<format>:<id>`，24小时新鲜/14天最大离线及原子封装不变；旧版无法识别时忽略该可丢弃行，无主库或人工确认schema迁移。不能将Provider编号声明视为人工确认；同源编号相同但MAL发生冲突时，每次重建展示仍重新验证。实际断网、其他Windows/DPI及物理输入不属本轮已验收范围。
+
+28项冻结样本与平台证据见 `coverage-final.json`、`md-coverage.json`、`*-platform-evidence.json` 和 `ui-and-test-gate.json`；16/25主入口、MangaDex新增3部电子书类别，不代表具体版本准确商品覆盖。NDL429/超时和MangaDex网页安全拦截另列，未绕过。新功能详见 `docs/book-reading-outlets-v1.md`。只提交书籍增量；音乐原dirty继续保留，实际构建须同时保留其工作树内容，不可仅凭新HEAD声称已包含它们。本轮无发布、安装切换或Production操作。
+
+
 ## 1.2.0 已发布；后续音乐入口独立开发（2026-10-18）
 
 v1.2.0 已在 Ph-Rank/The-Order 正式发布，draft=false、prerelease=false、Latest；Tag 与远端 main 对应 453c671d00e16d78cd665e0ec3610b282c2d7778。公开六份附件均匿名重新下载并核对 SHA-256，旧稳定版和 Beta 4 资产保持。完成凭据：.artifacts/release-1.2.0-20261018/publication-complete.json。此前 NextMoe 提示修复 67175a1 已随此版发布。

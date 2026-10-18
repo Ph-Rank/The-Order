@@ -129,6 +129,7 @@ internal static class Composition
         services.AddSingleton<IMusicBrainzReader, MusicBrainzService>();
         services.AddSingleton<IAniListProvider>(p => new AniListProvider(p.GetRequiredService<PublicArtworkNetwork>().Client));
         services.AddSingleton<IAniListCache, IsolatedAniListCache>();
+        services.AddSingleton<IBookOutletSupplementProvider>(p => new MangaDexBookLinksProvider(p.GetRequiredService<PublicArtworkNetwork>().Client));
         services.AddSingleton<IAniListReader, AniListService>();
         services.AddSingleton<IsolatedBookBibliographyStore>();
         services.AddSingleton<IBookBibliographyCache>(p => p.GetRequiredService<IsolatedBookBibliographyStore>());

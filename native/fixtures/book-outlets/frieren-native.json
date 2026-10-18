@@ -1,0 +1,236 @@
+{
+  "result": "ok",
+  "response": "collection",
+  "limit": 10,
+  "offset": 0,
+  "total": 8,
+  "data": [
+    {
+      "id": "1e46de27-70a0-4aca-8192-b5a3c589ddfd",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "en": "Sousou no Frieren - Kudaranai Nichijou (Doujinshi)"
+        },
+        "altTitles": [
+          {
+            "ja": "葬送のフリーレン - くだらない日常"
+          }
+        ],
+        "links": {
+          "raw": "https://www.pixiv.net/artworks/113876232"
+        },
+        "officialLinks": null
+      }
+    },
+    {
+      "id": "b0b721ff-c388-4486-aa0f-c2b0bb321512",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "ja-ro": "Sousou no Frieren"
+        },
+        "altTitles": [
+          {
+            "en": "Frieren: Beyond Journey's End"
+          },
+          {
+            "en": "Frieren at the Funeral"
+          },
+          {
+            "ru": "Фрирен, провожающая в последний путь"
+          },
+          {
+            "ja": "葬送のフリーレン"
+          },
+          {
+            "zh-hk": "葬送的芙莉蓮"
+          },
+          {
+            "ko": "장송의 프리렌"
+          },
+          {
+            "th": "คำอธิษฐานในวันที่จากลา Frieren"
+          },
+          {
+            "el": "Φρίρεν: Πέρα από το Τέλος του Ταξιδιού"
+          },
+          {
+            "de": "Frieren: Nach dem Ende der Reise"
+          },
+          {
+            "en": "Frieren: Remnants Of The Departed"
+          },
+          {
+            "es-la": "Frieren: Más allá del final"
+          },
+          {
+            "es-la": "Frieren: Más allá del fin del viaje"
+          },
+          {
+            "vi": "Pháp Sư Tiễn Táng Frieren"
+          }
+        ],
+        "links": {
+          "al": "118586",
+          "ap": "frieren-beyond-journeys-end",
+          "bl": "832389",
+          "bw": "series/260459/list",
+          "kt": "56355",
+          "mu": "ugf5dzu",
+          "amz": "https://www.amazon.co.jp/dp/B08KNX1RSQ",
+          "ebj": "https://ebookjapan.yahoo.co.jp/books/601441",
+          "mal": "126287",
+          "raw": "https://www.sunday-webry.com/detail.php?title_id=1093",
+          "engtl": "https://www.viz.com/vizmanga/chapters/frieren-the-journeys-end"
+        },
+        "officialLinks": null
+      }
+    },
+    {
+      "id": "8edc81f2-bb70-4100-9df7-2552a14e5d75",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "en": "Sousou no Frieren - kmtakpk's Frieren Koma (Doujinshi)"
+        },
+        "altTitles": [
+          {
+            "ja": "葬送のフリーレン - P助のフリーレンコマ"
+          },
+          {
+            "en": "Frieren at the Funeral - kmtakpk's Frieren Koma"
+          },
+          {
+            "en": "Frieren: Beyond Journey’s End - kmtakpk's Frieren Koma"
+          }
+        ],
+        "links": {
+          "raw": "https://twitter.com/kmtakpk/status/1749967693829271613"
+        },
+        "officialLinks": null
+      }
+    },
+    {
+      "id": "9906dfa8-52c9-40ac-8eef-1099a85c8611",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "ja-ro": "Sousou no Frieren Anthology: Kotonaru Tabi o Tanoshimu Mahou"
+        },
+        "altTitles": [
+          {
+            "ja": "葬送のフリーレン　アンソロジー～異なる旅を楽しむ魔法～"
+          },
+          {
+            "en": "Funeral Frieren Anthology: The Magic of Enjoying a Divergent Journey"
+          }
+        ],
+        "links": {
+          "al": "173310",
+          "bw": "series/449050/list",
+          "mu": "mlfc52k",
+          "amz": "https://www.amazon.co.jp/dp/4098530996",
+          "ebj": "https://ebookjapan.yahoo.co.jp/books/803754",
+          "mal": "164432",
+          "raw": "https://blog.www.sunday-webry.com/entry/20230522"
+        },
+        "officialLinks": null
+      }
+    },
+    {
+      "id": "1d55e985-8379-41bc-aeca-acd069bcadd0",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "en": "Sousou no Frieren -  Fern ga Ookiku Naru Ohanashi (Doujinshi)"
+        },
+        "altTitles": [
+          {
+            "ja": "葬送のフリーレン - フェルンが大きくなるお話"
+          },
+          {
+            "en": "Frieren at the Funeral -  Dreams About Fern"
+          },
+          {
+            "en": "Frieren: Beyond Journey’s End - Dreams About Fern"
+          }
+        ],
+        "links": {
+          "raw": "https://www.pixiv.net/artworks/115896589"
+        },
+        "officialLinks": null
+      }
+    },
+    {
+      "id": "7c9462f1-dab2-4b1e-913d-55806fe94213",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "en": "エルフの少女とお花の紳士(フリーレン＆老ヒンメル)"
+        },
+        "altTitles": [
+          {
+            "en": "Elf girl and flower gentleman"
+          },
+          {
+            "en": "Elf girl and flower gentleman (Frieren and old Himmel)"
+          },
+          {
+            "ja": "エルフの少女とお花の紳士"
+          }
+        ],
+        "links": {},
+        "officialLinks": null
+      }
+    },
+    {
+      "id": "03f3f742-e2da-4f3c-b057-0bb9da6757ee",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "en": "Sousou no Frieren - Gaku Paro na Shutaferu (Doujinshi)"
+        },
+        "altTitles": [
+          {
+            "ja": "葬送のフリーレン - 学パロなシュタフェル"
+          },
+          {
+            "en": "Frieren at the Funeral - Stark X Fern: School AU"
+          },
+          {
+            "en": "Frieren: Beyond Journey’s End - Stark X Fern: School AU"
+          },
+          {
+            "uk": "Фрірен: подорож після кінця. Старк x Ферн: Шкільний Всесвіт"
+          }
+        ],
+        "links": {
+          "raw": "https://twitter.com/search?q=from%3Aryuka_sf%20%E3%82%B7%E3%83%A5%E3%82%BF%E3%83%95%E3%82%A7%E3%83%AB%E5%AD%A6%E3%83%91%E3%83%AD&src=typed_query&f=live"
+        },
+        "officialLinks": null
+      }
+    },
+    {
+      "id": "e5afc3bc-c054-4b71-a182-a7e5ae9a4417",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "en": "Hokuto no Ken & Sousou no Frieren - Gouken no Frieren (Doujinshi)"
+        },
+        "altTitles": [
+          {
+            "ja": "剛拳のフリーレン"
+          },
+          {
+            "en": "Frieren of the Strong Fist"
+          }
+        ],
+        "links": {
+          "raw": "https://www.dlsite.com/maniax/work/=/product_id/RJ01142446.html"
+        },
+        "officialLinks": null
+      }
+    }
+  ]
+}

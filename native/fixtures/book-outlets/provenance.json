@@ -1,0 +1,30 @@
+[
+  {
+    "fixture": "berserk-native.json",
+    "url": "https://api.mangadex.org/manga?title=%E3%83%99%E3%83%AB%E3%82%BB%E3%83%AB%E3%82%AF&limit=10&order%5Brelevance%5D=desc",
+    "utc": "2026-10-18T08:23:32.121955+00:00",
+    "originalSha256": "ccf829ebb16a83ea82f18a6c3a6a0592a9400980adf9486f3ef7190d4a1888a7",
+    "selection": "Exact metadata projection; no titles or links invented; descriptions/images/chapters not retained"
+  },
+  {
+    "fixture": "frieren-native.json",
+    "url": "https://api.mangadex.org/manga?title=%E8%91%AC%E9%80%81%E3%81%AE%E3%83%95%E3%83%AA%E3%83%BC%E3%83%AC%E3%83%B3&limit=10&order%5Brelevance%5D=desc",
+    "utc": "2026-10-18T08:23:35.724837+00:00",
+    "originalSha256": "dc374816c87f7d1c82fb16d3644779eaf569c05eb726d84dc7c141a882748043",
+    "selection": "Exact metadata projection; no titles or links invented; descriptions/images/chapters not retained"
+  },
+  {
+    "fixture": "kara-native.json",
+    "url": "https://api.mangadex.org/manga?title=%E7%A9%BA%E3%81%AE%E5%A2%83%E7%95%8C+the+Garden+of+sinners&limit=10&order%5Brelevance%5D=desc",
+    "utc": "2026-10-18T08:23:42.385795+00:00",
+    "originalSha256": "f2ca23a231840d6925eb20ba80055e0a028b13fdb5c5c305f30439cc3a846eef",
+    "selection": "Exact metadata projection; no titles or links invented; descriptions/images/chapters not retained"
+  },
+  {
+    "fixture": "witch-native.json",
+    "url": "https://api.mangadex.org/manga?title=%E3%82%A6%E3%82%A3%E3%83%83%E3%83%81%E3%82%A6%E3%82%A9%E3%83%83%E3%83%81&limit=10&order%5Brelevance%5D=desc",
+    "utc": "2026-10-18T08:23:39.133280+00:00",
+    "originalSha256": "c7da4b2d089490d0ad5f09e03e246923999103e1619abec07b8b216e8dc1dddf",
+    "selection": "Exact metadata projection; no titles or links invented; descriptions/images/chapters not retained"
+  }
+]

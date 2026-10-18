@@ -3,8 +3,9 @@ using System.Text;
 
 namespace TheOrder.Application;
 
-public sealed class AniListService(IAniListProvider provider, IAniListCache? disk = null,
-    Func<DateTimeOffset>? clock = null, IMediaIdentityDecisions? identityDecisions = null) : IAniListReader, IMediaUserLinkReader
+public sealed partial class AniListService(IAniListProvider provider, IAniListCache? disk = null,
+    Func<DateTimeOffset>? clock = null, IMediaIdentityDecisions? identityDecisions = null,
+    IBookOutletSupplementProvider? bookSupplementProvider = null) : IAniListReader, IMediaUserLinkReader, IBookOutletSupplementReader
 {
     private readonly IMediaIdentityDecisions decisions = identityDecisions ?? (disk as IMediaIdentityDecisionOwner)?.IdentityDecisions ?? new SessionMediaIdentityDecisions();
     public static readonly TimeSpan FreshFor = TimeSpan.FromHours(24), SearchFreshFor = TimeSpan.FromHours(6), MaximumStaleAge = TimeSpan.FromDays(14);
@@ -150,7 +151,7 @@ public sealed class AniListService(IAniListProvider provider, IAniListCache? dis
         finally { commits.Release(); }
     }
     private async Task<(AniListCacheValue Value, bool Cached, bool Stale, string? Warning)> LoadCacheAsync(string key, bool refresh,
-        TimeSpan fresh, Func<CancellationToken, Task<AniListCacheValue>> fetch, CancellationToken cancellation)
+        TimeSpan fresh, Func<CancellationToken, Task<AniListCacheValue>> fetch, CancellationToken cancellation, bool preservePreviousOnFailure = false)
     {
         cancellation.ThrowIfCancellationRequested(); var previous = await ReadAsync(key, cancellation).ConfigureAwait(false);
         var needsPlayback = previous?.Details is { Media.Kind: AniListMediaKind.Anime, HasPlaybackMetadata: false };
@@ -163,7 +164,7 @@ public sealed class AniListService(IAniListProvider provider, IAniListCache? dis
                 throw new AniListException(AniListFailure.InvalidResponse, "AniList 资料格式不一致。");
             await SaveIfCurrentAsync(key, version, value, cancellation).ConfigureAwait(false); return (value, false, false, null);
         }
-        catch (AniListException e) when (previous is not null && e.Failure is AniListFailure.Offline or AniListFailure.Timeout or AniListFailure.Server or AniListFailure.RateLimited)
+        catch (AniListException e) when (previous is not null && (preservePreviousOnFailure || e.Failure is AniListFailure.Offline or AniListFailure.Timeout or AniListFailure.Server or AniListFailure.RateLimited))
         {
             cancellation.ThrowIfCancellationRequested(); return (previous, true, needsPlayback || Now - previous.CachedAtUtc >= fresh, "暂时无法更新，显示之前读取的 AniList 资料。");
         }
