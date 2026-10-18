@@ -15,8 +15,6 @@ $originalHash = $null
 [xml]$versionProperties = Get-Content -LiteralPath (Join-Path $repo 'native/Directory.Build.props') -Raw
 $releaseVersion = [string]$versionProperties.Project.PropertyGroup.Version
 $fileVersion = [string]$versionProperties.Project.PropertyGroup.FileVersion
-$installerFileVersion = [string]$versionProperties.Project.PropertyGroup.InstallerFileVersion
-if (!$installerFileVersion) { $installerFileVersion = $fileVersion }
 $beta = $releaseVersion.Contains('-beta.')
 $product = 'The Order'
 $setupIdentity = 'TheOrder.Setup.F7940B13-6814-42F7-AB71-69A9901D7DB3'
@@ -160,7 +158,7 @@ $payloadChecks = Join-Path $build 'verified-paths.iss'
 [IO.File]::WriteAllLines($payloadChecks, $checks, [Text.UTF8Encoding]::new($false))
 $compilerArgs = @('/Qp', ('/DPayloadDirectory=' + $payload), ('/DAddonDirectory=' + $addon),
     ('/DOutputDirectory=' + $distribution), ('/DPayloadEntries=' + $payloadEntries), ('/DPayloadChecks=' + $payloadChecks), (Join-Path $installerSource 'TheOrder.iss'))
-$compilerArgs = @(('/DReleaseVersion=' + $releaseVersion), ('/DReleaseFileVersion=' + $installerFileVersion)) + $compilerArgs
+$compilerArgs = @(('/DReleaseVersion=' + $releaseVersion), ('/DReleaseFileVersion=' + $fileVersion)) + $compilerArgs
 if ($beta) { $compilerArgs = @('/DPublicBeta=1') + $compilerArgs }
 & $compiler @compilerArgs 2>&1 | Tee-Object -FilePath (Join-Path $output 'installer-build.log') | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Setup compiler failed.' }
