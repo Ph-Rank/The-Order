@@ -11,6 +11,7 @@ public sealed class GameVideoView : StackPanel, IDisposable
 {
     private readonly Expander section = new() { Header = "宣传影像 / PV", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel candidates = new() { Spacing = 8 }, videos = new() { Spacing = 8 };
+    private readonly StackPanel identityActions = new() { Spacing = 8 };
     private readonly StackPanel otherCandidates = new() { Spacing = 8 };
     private readonly Expander otherVersions = new() { Header = "其他检索结果", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly TextBlock status = Text(13);
@@ -31,8 +32,8 @@ public sealed class GameVideoView : StackPanel, IDisposable
         AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite);
         var searchRow = new Grid { ColumnSpacing = 8 }; searchRow.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); searchRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         searchRow.Children.Add(query); searchRow.Children.Add(search); Grid.SetColumn(search, 1);
-        var details = new Expander { Header = "对应游戏与用户视频", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Content = new StackPanel { Spacing = 8, Children = { searchRow, manual, add } } };
+        var details = new Expander { Header = "影像选项", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Content = new StackPanel { Spacing = 8, Children = { identityActions, searchRow, manual, add } } };
         var attribution = Text(12, "资料来源：IGDB · YouTube。数据库收录不等于官方发布；作品级影像不保证对应本地版本。"); attribution.Opacity = .7;
         section.Content = new StackPanel { Spacing = 10, Children = { status, candidates, otherVersions, videos, player,
             new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6, Children = { retry, cancel } }, details, attribution } };
@@ -65,11 +66,11 @@ public sealed class GameVideoView : StackPanel, IDisposable
         if (model.Busy || !model.Videos.Any(x => x.VideoId == playing)) StopPlayer();
         status.Text = model.Message; status.Visibility = status.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         search.IsEnabled = add.IsEnabled = retry.IsEnabled = !model.Busy; cancel.Visibility = model.Busy ? Visibility.Visible : Visibility.Collapsed;
-        candidates.Children.Clear(); otherCandidates.Children.Clear(); videos.Children.Clear(); otherVersions.Visibility = Visibility.Collapsed;
+        identityActions.Children.Clear(); candidates.Children.Clear(); otherCandidates.Children.Clear(); videos.Children.Clear(); otherVersions.Visibility = Visibility.Collapsed;
         if (model.Game is { } game)
         {
             var row = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6, Children = { Text(13, game.Name + " · " + GameVideos.CandidateKind(game) + " · " + (game.ReleaseDate ?? "日期未注明")) } };
-            var withdraw = Action("撤销游戏对应", "GameVideosWithdraw", () => model.WithdrawAsync()); row.Children.Add(withdraw); candidates.Children.Add(row);
+            var withdraw = Action("撤销游戏对应", "GameVideosWithdraw", () => model.WithdrawAsync()); identityActions.Children.Add(withdraw); candidates.Children.Add(row);
             if (game.ParentGame is { } main) candidates.Children.Add(Text(12, "所属游戏 · IGDB " + main));
         }
         else
@@ -89,13 +90,14 @@ public sealed class GameVideoView : StackPanel, IDisposable
             var title = Text(14, item.Name); var caption = Text(12, item.Classification + (item.UserProvided ? " · 来源：用户提供" : " · 来源：IGDB · YouTube") + (model.DefaultVideo == item.VideoId ? " · 默认" : ""));
             var row = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6 };
             var play = Action("播放", "GameVideoPlay-" + item.VideoId, () => { playing = item.VideoId; player.Show(model.Game?.Id ?? 0, true, new("youtube", item.VideoId)); player.Expand(); return Task.CompletedTask; });
+            play.Style = (Style)Microsoft.UI.Xaml.Application.Current.Resources["AccentButtonStyle"];
             row.Children.Add(play); row.Children.Add(Action("设为默认", "GameVideoDefault-" + item.VideoId, () => model.ChooseVideoAsync(item, false)));
             row.Children.Add(Action(item.UserProvided ? "移除" : "排除此视频", "GameVideoReject-" + item.VideoId, () => item.UserProvided ? model.RemoveManualAsync(item) : model.ChooseVideoAsync(item, true)));
             var original = Action("YouTube ↗", "GameVideoOriginal-" + item.VideoId, async () => { if (!await Windows.System.Launcher.LaunchUriAsync(new Uri(item.Url))) status.Text = "无法打开原站，请检查默认浏览器。"; }); row.Children.Add(original);
             ToolTipService.SetToolTip(title, item.UserProvided ? "用户提供，未核验" : "IGDB " + string.Join(" / ", item.Relations.Select(x => x.GameId + ":" + x.Id + " · " + x.Name)));
             videos.Children.Add(new StackPanel { Spacing = 4, Children = { title, caption, row } });
         }
-        if (model.Videos.Length > 0 || model.Game is not null) videos.Children.Add(Action("重置视频选择", "GameVideosReset", () => model.ResetVideoChoicesAsync()));
+        if (model.Videos.Length > 0 || model.Game?.Videos.Length > 0) identityActions.Children.Add(Action("重置视频选择", "GameVideosReset", () => model.ResetVideoChoicesAsync()));
     }
     private StackPanel Candidate(IgdbGame item)
     {
@@ -110,7 +112,7 @@ public sealed class GameVideoView : StackPanel, IDisposable
     }
     private Button Action(string text, string id, Func<Task> action)
     {
-        var button = new Button { Content = text, IsEnabled = model?.Busy != true }; AutomationProperties.SetAutomationId(button, id);
+        var button = new Button { Content = text, MinHeight = 32, Padding = new Thickness(12, 5, 12, 5), CornerRadius = new(6), IsEnabled = model?.Busy != true }; AutomationProperties.SetAutomationId(button, id);
         button.Click += async (_, _) => { try { await action(); } catch { status.Text = "操作暂未完成，请重试。"; } }; return button;
     }
     private void StopPlayer() { player.Show(null, false, null); playing = null; }

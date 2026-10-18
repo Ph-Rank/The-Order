@@ -108,7 +108,7 @@ public sealed class GameVideoViewModel(GameVideoReader reader, IMediaIdentityDec
             else { Game = null; videoChoices = personalVideos; Message = Candidates.Length == 0 ? "尚未找到对应的 IGDB 游戏，可更换标题或手动添加视频。" : Complete ? "请选择并确认对应游戏；请核对原版、重制版、移植版与合集。" : "候选未完整读取，请手动核对，未自动确认。"; }
             if (!Current(run, source)) return;
             loaded = true; Rebuild();
-            if (Game is not null && Videos.Length == 0 && !result.Stale) Message = "IGDB 当前未收录此游戏的可用视频。";
+            if (Game is not null && Videos.Length == 0 && !result.Stale) Message = Game.Videos.Length > 0 ? "此游戏的影像已被排除，可在选项中恢复。" : "本次未读取到可用影像，可稍后刷新。";
         }
         catch (OperationCanceledException) { if (Current(run, source)) Message = "已取消读取，可以重试。"; }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)

@@ -339,4 +339,39 @@ public sealed class GameVideoTests
         using var client=new HttpClient(new Http(q=>{Assert.Equal("/v1/game-videos/query",q.RequestUri!.AbsolutePath);Assert.Null(q.Headers.Authorization);Assert.False(q.Headers.Contains("Client-ID"));return new(HttpStatusCode.OK){Content=JsonContent.Create(Result(Game(2)))};}));
         var p=new IgdbGameVideoProvider(client,new("https://fixture.test/"));var error=await Assert.ThrowsAsync<GameVideoException>(()=>new GameVideoReader(p).QueryAsync(new("test",Id:1),false,default));Assert.Equal("invalid_response",error.Code);
     }
+    [Fact]
+    public async Task NegativeVideoCacheExpiresSoonerWithoutLosingUserIdentity()
+    {
+        var now=DateTimeOffset.UtcNow; var q=new GameVideoQuery("test",Id:1);var cache=new Cache();
+        cache.Values[GameVideos.Key(q)] = new([Game() with {Videos=[]}],true,now.AddMinutes(-31));
+        var provider=Fake(Game());
+        var result=await new GameVideoReader(provider,cache,()=>now).QueryAsync(q,false,default);
+        Assert.Single(provider.Queries); Assert.NotEmpty(Assert.Single(result.Result.Games).Videos);
+        Assert.False(result.Stale);
+    }
+    [Fact]
+    public async Task SuccessfulVideoCacheStillAvoidsRedundantRequests()
+    {
+        var now=DateTimeOffset.UtcNow;var q=new GameVideoQuery("test",Id:1);var cache=new Cache();
+        cache.Values[GameVideos.Key(q)] = new([Game()],true,now.AddHours(-2));var provider=Fake(Game());
+        var result=await new GameVideoReader(provider,cache,()=>now).QueryAsync(q,false,default);
+        Assert.Empty(provider.Queries);Assert.NotEmpty(Assert.Single(result.Result.Games).Videos);
+    }
+    [Fact]
+    public async Task AnonymousVideoTitleRetainsRelationAndNeutralClassification()
+    {
+        var video=new IgdbVideo(10,1,"abcdefghijk","宣传影像"){OriginalName=null};
+        var provider=Fake(Game() with {Videos=[video]});using var model=new GameVideoViewModel(new(provider),new SessionMediaIdentityDecisions());
+        model.SetSource(Source(1));await model.LoadAsync();
+        var shown=Assert.Single(model.Videos);Assert.Equal("宣传影像",shown.Classification);
+        Assert.Equal(10,Assert.Single(shown.Relations).Id);Assert.False(shown.UserProvided);
+    }
+    [Theory] [InlineData(true)] [InlineData(false)]
+    public async Task UpgradeRetainsPositiveOfflineCacheButNeverReusesLegacyEmptyVideos(bool positive)
+    {
+        var now=DateTimeOffset.UtcNow;var q=new GameVideoQuery("test",Id:1);var cache=new Cache();
+        cache.Values[GameVideos.Key(q).Replace("igdb-v2:","igdb-v1:")] = new([Game() with {Videos=positive?Game().Videos:[]}],true,now.AddMinutes(-1));
+        var provider=Fake(Game());var result=await new GameVideoReader(provider,cache,()=>now).QueryAsync(q,false,default);
+        Assert.Equal(positive?0:1,provider.Queries.Count);Assert.NotEmpty(Assert.Single(result.Result.Games).Videos);
+    }
 }

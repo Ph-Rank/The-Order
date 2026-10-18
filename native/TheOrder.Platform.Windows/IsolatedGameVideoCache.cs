@@ -13,7 +13,7 @@ public sealed class IsolatedGameVideoCache(NativeConfiguration configuration) : 
     private readonly SemaphoreSlim gate = new(1);
     private sealed record Envelope(int Version, Guid ProfileId, Guid StoreId, string Key, string Hash, byte[] Payload);
     private static string Name(string key) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key))) + ".json";
-    private static bool Key(string key) => key.StartsWith("igdb-v1:", StringComparison.Ordinal) && key.Length == 72 && key[8..].All(char.IsAsciiHexDigit);
+    private static bool Key(string key) => (key.StartsWith("igdb-v2:", StringComparison.Ordinal) || key.StartsWith("igdb-v1:", StringComparison.Ordinal)) && key.Length == 72 && key[8..].All(char.IsAsciiHexDigit);
     public Task<IgdbResult?> ReadAsync(string key, CancellationToken cancellation) => Run(key, async (root, profile) =>
     { await Task.CompletedTask; return Read(Path.Combine(root, Name(key)), profile, key); }, cancellation);
     public async Task WriteAsync(string key, IgdbResult value, CancellationToken cancellation)

@@ -140,3 +140,12 @@ test("Legacy cached results lacking game parent context are refetched without co
   });assert.equal(calls,1);
   assert.throws(()=>mapGame({...fixtureGame(),parent_game:1}));
 });
+
+test("A verified game-video relation remains usable when its optional title is absent",()=>{
+  for(const name of [undefined,null,""]){
+    const game=mapGame({...fixtureGame(),videos:[{id:10,game:1,video_id:"abcdefghijk",name}]});
+    assert.equal(game.videos.length,1);assert.equal(game.videos[0].name,"宣传影像");
+    assert.equal(game.videos[0].originalName,null);
+  }
+  assert.throws(()=>mapGame({...fixtureGame(),videos:[{id:10,game:999,video_id:"abcdefghijk"}]}));
+});

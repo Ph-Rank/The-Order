@@ -14,7 +14,7 @@ const POLICY = Object.freeze({requestsPerDay:10000, gamesPerDay:1000, gamesPerMi
 export function publicPolicy() { return POLICY; }
 export function coordinatorName() { return COORDINATOR; }
 export function cacheKey(q) {
-  return q.id ? "v2:id:"+q.id : q.steamId ? "v2:steam:"+q.steamId : "v2:title:"+q.title.normalize("NFC").trim().replace(/\s+/gu," ").toLowerCase();
+  return q.id ? "v3:id:"+q.id : q.steamId ? "v3:steam:"+q.steamId : "v3:title:"+q.title.normalize("NFC").trim().replace(/\s+/gu," ").toLowerCase();
 }
 const fields = "id,name,alternative_names.name,first_release_date,game_type.type,parent_game,version_parent,remakes,remasters,platforms.name,involved_companies.developer,involved_companies.company.name,external_games.uid,external_games.external_game_source.name,videos.id,videos.game,videos.name,videos.video_id";
 const networkCodes = new Set(["ENETUNREACH","ECONNREFUSED","ECONNRESET","ETIMEDOUT","ENOTFOUND","EAI_AGAIN","CERT_HAS_EXPIRED","UNABLE_TO_VERIFY_LEAF_SIGNATURE","DEPTH_ZERO_SELF_SIGNED_CERT","ERR_TLS_CERT_ALTNAME_INVALID","UND_ERR_CONNECT_TIMEOUT","UND_ERR_SOCKET"]);
@@ -45,8 +45,12 @@ export function mapGame(g) {
   const strings = (v,max) => list(v,max,x => {if(!text(x.name,500))throw Error("invalid_response");return x.name;});
   const videos = list(g.videos,32,v => {
     if(v.game !== g.id) throw Error("invalid_response");
-    if(!id(v.id) || !text(v.name,500) || !/^[a-zA-Z0-9_-]{11}$/.test(v.video_id)) return null;
-    return {id:v.id,gameId:g.id,videoId:v.video_id,name:v.name};
+    if(!id(v.id) || !/^[a-zA-Z0-9_-]{11}$/.test(v.video_id)) return null;
+    // The relation and YouTube ID establish ownership. IGDB titles are optional;
+    // never discard a valid relation or invent a trailer/official classification.
+    const originalName=v.name == null || v.name === "" ? null : text(v.name,500) ? v.name : undefined;
+    if(originalName === undefined) return null;
+    return {id:v.id,gameId:g.id,videoId:v.video_id,name:originalName ?? "宣传影像",originalName};
   }).filter(Boolean);
   const date = g.first_release_date == null ? null : new Date(g.first_release_date * 1000);
   if(date && (!Number.isFinite(g.first_release_date) || !Number.isFinite(date.getTime()))) throw Error("invalid_response");
@@ -148,8 +152,8 @@ export class IgdbCoordinator {
     if(new Set(games.map(g=>g.id)).size!==games.length || q.id && (games.length>1||games.some(g=>g.id!==q.id)))throw new IgdbFailure("invalid_response","games_identity",response.status);
     const value={games,complete:rows.length<=20,fetchedAtUtc:new Date().toISOString()};
     const key=cacheKey(q);
-    await this.state.storage.put(key,{until:Date.now()+(games.length?43200000:1800000),value});
-    const keys=await this.state.storage.list({prefix:"v2:",limit:POLICY.cacheEntries+1});if(keys.size>POLICY.cacheEntries)await this.state.storage.delete([...keys.keys()].find(k=>k!==key));
+    await this.state.storage.put(key,{until:Date.now()+(games.some(g=>g.videos.length)?43200000:1800000),value});
+    const keys=await this.state.storage.list({prefix:"v3:",limit:POLICY.cacheEntries+1});if(keys.size>POLICY.cacheEntries)await this.state.storage.delete([...keys.keys()].find(k=>k!==key));
     if(breaker?.failures)await this.state.storage.delete("circuit-v1");
     return value;
   }

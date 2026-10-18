@@ -1,5 +1,16 @@
 # The Order：当前实现与评审交接
 
+## 1.2.1 Beta 1 发布候选（2026-10-19）
+
+维护分支 codex/public-beta-1.2.1-20261019。已将接手时未提交、但已在日用版验收的音乐/书籍增量单独提交为ccd15ee；未混入reports或research_notes。版本按现有更新器协议采用1.2.1-beta.1（数字1.2.1.1），GitHub必须Pre-release，不修改稳定latest及旧附件。
+
+修复IGDB有合法YouTube关系但名称缺失时被丢弃：保留原名称null，中性显示“宣传影像”，不声称官方PV；105342真实公网返回68884/lVNrSOc0wG0且originalName为null，修复前同ID空列表。服务继续使用原Worker、原SQLite namespace和single-app-quota-v1；缓存命名升级，不创建第二套配额或修改Secrets。客户端保留旧正缓存离线降级，旧空缓存重新读取；主库、人工确认/排除/默认schema不变。
+
+NextMoe已收录DLsite的RJ/VJ/BJ商品编号转换为普通来源蓝色链接，首页/搜索页不进入商品来源，不后台逐条探测商品。上游旧商品可能404；已以真实RJ297925核对《星空铁道与白的旅行》商品页。宣传影像放到标签上方，高级撤销/重置收进影像选项。播放器显式启用YouTube原生控件与中文界面，分辨率由YouTube自身决定；不使用失效的强制画质API。
+
+本轮隔离证据目录.artifacts/release-1.2.1-beta-20261019/。当前代码阶段服务Node36/36、workerd/SQLite7/7及客户端定向128/128；完整回归、最终WinUI、安装包/回退、日用切换及GitHub发布仍须后续凭据确认，不能视作已交付。所有测试仅合成Test Profile，不读取Production或游戏数据。后续以该目录最终report.md和completion.json确认实际完成范围。
+
+
 ## IGDB 公网服务已验收（2026-10-19）
 
 用户批准后，按已冻结29e8ef4执行独立the-order-igdb-game-videos的关闭部署、核对域名、Cloudflare Secrets及启用。实际地址https://the-order-igdb-game-videos.zyx2251721565.workers.dev/，与客户端内置值一致。已登录Workers面板显示每天100000次限额及Upgrade，与官方Free档一致；没有升级、付费资源或Bangumi部署。SQLite与single-app-quota-v1保持唯一，所有本地直接凭据服务已关闭。

@@ -40,6 +40,7 @@ internal sealed class AnimeAvailabilityView : StackPanel, IDisposable
         if (automationPrefix != "Anime") pv.Header = "播放影像 · YouTube";
         var actions = new TagFlowPanel { HorizontalSpacing = 10, VerticalSpacing = 8, CenterInlineItems = false, Children = { original, retry } };
         pvBody.Children.Add(Text(13, attribution));
+        pvBody.Children.Add(Text(12, "播放后可在视频右下角的设置菜单中选择画质；可用选项由 YouTube 提供。"));
         pvBody.Children.Add(actions); pvBody.Children.Add(playerStatus); pvBody.Children.Add(host); pv.Content = pvBody;
         retry.Click += async (_, _) => { Stop(); await StartAsync(); };
         original.Click += async (_, _) => { if (trailer is { } value) await OpenLinkAsync(value.Url); };

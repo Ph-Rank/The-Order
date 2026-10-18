@@ -36,6 +36,7 @@ public sealed partial record RemoteWorkDto(JsonElement Value)
     internal static string? ReferenceUrl(string source, string id)
     {
         if (source == "vndb" && Regex.IsMatch(id, "^[vr][0-9]+$")) return "https://vndb.org/" + id;
+        if (source == "dlsite" && Regex.IsMatch(id, "^(?:RJ|VJ|BJ)[0-9]{6,12}$")) return "https://www.dlsite.com/home/work/=/product_id/" + id + ".html";
         if (!ValidId(id)) return null;
         return source switch { "bangumi" => "https://bgm.tv/subject/" + id, "steam" => "https://store.steampowered.com/app/" + id + "/",
             "erogamescape" => "https://erogamescape.dyndns.org/~ap2/ero/toukei_kaiseki/game.php?game=" + id, "howlongtobeat" => "https://howlongtobeat.com/game/" + id, _ => null };

@@ -40,6 +40,8 @@ public sealed class AniListPlaybackTests
         var trailer = Map("""{"trailer":{"id":"9ZseZTshl2k","site":"youtube"}}""").Trailer!;
         Assert.True(trailer.CanEmbed); Assert.Equal("https://www.youtube.com/watch?v=9ZseZTshl2k", trailer.Url);
         var html = AniListPlayback.PlayerDocument(trailer); Assert.Contains("youtube-nocookie.com", html); Assert.Contains("autoplay:0", html);
+        Assert.Contains("controls:1", html); Assert.Contains("hl:'zh-CN'", html);
+        Assert.DoesNotContain("setPlaybackQuality", html);
         Assert.Contains("strict-origin-when-cross-origin", html); Assert.Contains(AniListPlayback.AppOrigin, html); Assert.Contains("script-src 'sha256-", html);
         Assert.Throws<InvalidDataException>(() => AniListPlayback.PlayerDocument(trailer with { Id = "';alert(1)//" }));
         Assert.Throws<InvalidDataException>(() => AniListPlayback.PlayerDocument(trailer with { Site = "evil" }));

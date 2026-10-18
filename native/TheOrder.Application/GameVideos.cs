@@ -6,7 +6,10 @@ using TheOrder.Domain;
 namespace TheOrder.Application;
 
 public sealed record IgdbExternal(string Source, string Id);
-public sealed record IgdbVideo(int Id, int GameId, string VideoId, string Name);
+public sealed record IgdbVideo(int Id, int GameId, string VideoId, string Name)
+{
+    public string? OriginalName { get; init; }
+}
 public sealed record IgdbGame(int Id, string Name, string[] Aliases, string[] Developers, string[] Platforms,
     string? ReleaseDate, string Kind, int? VersionParent, int[] Remakes, int[] Remasters, IgdbExternal[] ExternalIds, IgdbVideo[] Videos)
 {
@@ -76,10 +79,10 @@ public static class GameVideos
         && (game.ReleaseDate is null || DateOnly.TryParseExact(game.ReleaseDate, "yyyy-MM-dd", out _))
         && (game.VersionParent is null or > 0) && (game.ParentGame is null or > 0) && game.ParentGame != game.Id && game.Remakes.Concat(game.Remasters).All(x => x > 0)
         && game.ExternalIds.All(x => x is not null && AniListValidation.Text(x.Source, 100, false) && AniListValidation.Text(x.Id, 100, false))
-        && game.Videos.All(x => x is { Id: > 0 } && x.GameId == game.Id && AniListPlayback.ValidTrailer(new("youtube", x.VideoId)) && AniListValidation.Text(x.Name, 500, false));
+        && game.Videos.All(x => x is { Id: > 0 } && x.GameId == game.Id && AniListPlayback.ValidTrailer(new("youtube", x.VideoId)) && AniListValidation.Text(x.Name, 500, false) && AniListValidation.OptionalText(x.OriginalName, 500));
     public static bool Valid(IgdbResult? result) => result is { Games.Length: <= 20 } && result.FetchedAtUtc != default
         && result.Games.All(Valid) && result.Games.Select(x => x.Id).Distinct().Count() == result.Games.Length;
-    public static string Key(GameVideoQuery query) => "igdb-v1:" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(query)));
+    public static string Key(GameVideoQuery query) => "igdb-v2:" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(query)));
     public static string IdentityFormat(IgdbGame game) => game.Kind + (game.ParentGame is { } id ? "; parent_game=" + id : "");
     // A presentation shortlist, never an identity decision. Keep the complete
     // result available for manual review, including unknown platform/type data.
@@ -136,9 +139,16 @@ public sealed class GameVideoReader(IGameVideoProvider provider, IGameVideoCache
     {
         var now = (clock ?? (() => DateTimeOffset.UtcNow))(); var key = GameVideos.Key(query);
         var prior = cache is null ? null : await cache.ReadAsync(key, cancellation);
+        // Positive legacy rows remain available offline. Old empty rows may have
+        // discarded unnamed IGDB videos and must never suppress a fresh query.
+        if (prior is null && cache is not null)
+        {
+            var legacy = await cache.ReadAsync(key.Replace("igdb-v2:", "igdb-v1:", StringComparison.Ordinal), cancellation);
+            if (legacy?.Games?.Any(g => g?.Videos?.Length > 0) == true) prior = legacy;
+        }
         if (prior is not null && (!GameVideos.Valid(prior) || query.Id is { } expected && (prior.Games.Length > 1 || prior.Games.Any(x => x.Id != expected))
             || now - prior.FetchedAtUtc < TimeSpan.Zero || now - prior.FetchedAtUtc > TimeSpan.FromDays(7))) prior = null;
-        if (!refresh && prior is not null && now - prior.FetchedAtUtc < TimeSpan.FromHours(12)) return (prior, false);
+        if (!refresh && prior is not null && now - prior.FetchedAtUtc < (prior.Games.Any(g => g.Videos.Length > 0) ? TimeSpan.FromHours(12) : TimeSpan.FromMinutes(30))) return (prior, false);
         try
         {
             var value = await provider.QueryAsync(query, cancellation); cancellation.ThrowIfCancellationRequested();
