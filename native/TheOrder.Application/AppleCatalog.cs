@@ -63,7 +63,7 @@ public sealed record AppleCatalogResult(AppleCatalogQuery Query, AppleAlbumCandi
     {
         if (query.ExplicitAlbumId == candidate.Id) return true;
         var left = MusicBrainzMatching.Normalize(query.Title); var right = MusicBrainzMatching.Normalize(candidate.Title);
-        return left == right || Math.Min(left.Length, right.Length) >= 8 && (left.Contains(right, StringComparison.Ordinal) || right.Contains(left, StringComparison.Ordinal));
+        return left.Length > 0 && right.Length > 0 && (left == right || Math.Min(left.Length, right.Length) >= 8 && (left.Contains(right, StringComparison.Ordinal) || right.Contains(left, StringComparison.Ordinal)));
     }
 }
 public interface IAppleCatalogProvider

@@ -46,6 +46,11 @@ public sealed class MusicOutletPolicyTests
 {
     [Theory]
     [InlineData("free streaming", MusicBrainzEntityKind.Release, "https://open.spotify.com/album/09vpDdZGprjKr4tleWomBV", MusicOutletKind.Listening, "Album")]
+    [InlineData("streaming", MusicBrainzEntityKind.Release, "https://music.youtube.com/playlist?list=OLAK5uy_lDYNwTELHncx4saX3DfVgVuvTVI-pjweU", MusicOutletKind.Listening, "Album")]
+    [InlineData("streaming", MusicBrainzEntityKind.Recording, "https://music.youtube.com/watch?v=0123456789A", MusicOutletKind.Listening, "Recording")]
+    [InlineData("streaming", MusicBrainzEntityKind.Release, "https://music.youtube.com/playlist?list=PL-arbitrary-playlist", MusicOutletKind.Information, "Page")]
+    [InlineData("streaming", MusicBrainzEntityKind.Release, "https://y.qq.com/n/yqq/album/001abc.html", MusicOutletKind.Listening, "Album")]
+    [InlineData("streaming", MusicBrainzEntityKind.Release, "https://y.qq.com/n/yqq/album.html", MusicOutletKind.Information, "Page")]
     [InlineData("discography entry", MusicBrainzEntityKind.Release, "https://open.spotify.com/album/09vpDdZGprjKr4tleWomBV", MusicOutletKind.Information, "Album")]
     [InlineData("free streaming", MusicBrainzEntityKind.Recording, "https://open.spotify.com/album/09vpDdZGprjKr4tleWomBV", MusicOutletKind.Information, "Album")]
     [InlineData("free streaming", MusicBrainzEntityKind.Recording, "https://music.163.com/#/song?id=123", MusicOutletKind.Listening, "Recording")]
@@ -110,6 +115,9 @@ public sealed class AppleMusicCatalogTests
     {
         var result = Map(Row("Songs of the Seafarer")); Assert.Empty(result.Candidates); Assert.Equal(1, result.Discarded);
     }
+    [Fact]
+    public void TitlesContainingOnlySymbolsCannotCreateTitleEvidence()
+        => Assert.Empty(Map(Row("♡"), Query() with { Title = "★" }).Candidates);
     [Theory]
     [InlineData("https://music.apple.com/us/album/synthetic/123", "USA")]
     [InlineData("https://music.apple.com/jp/album/synthetic/123?i=456", "JPN")]
@@ -138,6 +146,38 @@ public sealed class AppleMusicCatalogTests
         Assert.Single(result.Candidates); Assert.Equal(1, result.Discarded); Assert.Equal(2, handler.Paths.Count);
         Assert.StartsWith("/lookup?upc=", handler.Paths[0]); Assert.StartsWith("/search?", handler.Paths[1]);
         Assert.All(handler.Paths, path => { Assert.DoesNotContain("preview", path); Assert.DoesNotContain("artwork", path); });
+    }
+    [Theory]
+    [InlineData(500, MusicBrainzFailure.Server)]
+    [InlineData(429, MusicBrainzFailure.RateLimited)]
+    [InlineData(302, MusicBrainzFailure.InvalidResponse)]
+    public async Task CatalogHttpFailuresAreNotEmptyResultsOrIdentityChoices(int status, MusicBrainzFailure expected)
+    {
+        using var handler = new FailureHandler(status); using var http = new HttpClient(handler);
+        var error = await Assert.ThrowsAsync<MusicBrainzException>(() => new AppleCatalogProvider(http).SearchAsync(Query() with { ExplicitAlbumId = "123" }, default));
+        Assert.Equal(expected, error.Failure); Assert.Equal(1, handler.Calls);
+    }
+    [Fact]
+    public async Task HttpDeadlineAndCallerCancellationRemainDifferentOutcomes()
+    {
+        using var handler = new FailureHandler(null); using var http = new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(120) };
+        var error = await Assert.ThrowsAsync<MusicBrainzException>(() => new AppleCatalogProvider(http).SearchAsync(Query() with { ExplicitAlbumId = "123" }, default));
+        Assert.Equal(MusicBrainzFailure.Timeout, error.Failure);
+        using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new AppleCatalogProvider(http).SearchAsync(Query(), cancelled.Token));
+        Assert.Equal(1, handler.Calls);
+    }
+    private sealed class FailureHandler(int? status) : HttpMessageHandler
+    {
+        public int Calls;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            Calls++; if (status is null) { await Task.Delay(Timeout.Infinite, token); throw new InvalidOperationException(); }
+            var response = new HttpResponseMessage((HttpStatusCode)status.Value) { Content = new StringContent("{}") };
+            if (status == 429) response.Headers.RetryAfter = new(TimeSpan.Zero);
+            if (status == 302) response.Headers.Location = new("https://untrusted.example/redirect");
+            return response;
+        }
     }
     private sealed class Handler : HttpMessageHandler
     {

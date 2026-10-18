@@ -87,6 +87,9 @@ public static class MusicOutlets
             if (path is ["album" or "track", var id] && Digits(id)) layer = path[0] == "album" ? "Album" : "Recording"; }
         else if (host.EndsWith(".bandcamp.com", StringComparison.Ordinal)) { name = "Bandcamp";
             if (path is ["album" or "track", _]) layer = path[0] == "album" ? "Album" : "Recording"; }
+        else if (host == "music.youtube.com") { name = "YouTube Music"; var q = Query(u.Query);
+            if (path is ["playlist"] && q.TryGetValue("list", out var list) && Regex.IsMatch(list, "^OLAK5uy_[A-Za-z0-9_-]{10,100}$")) layer = "Album";
+            else if (path is ["watch"] && q.TryGetValue("v", out var video) && Regex.IsMatch(video, "^[A-Za-z0-9_-]{11}$")) layer = "Recording"; }
         else if (host is "music.163.com" or "m.music.163.com")
         {
             name = "网易云音乐"; var local = u.Fragment.StartsWith("#/") ? u.Fragment[1..] : u.PathAndQuery;
@@ -95,11 +98,11 @@ public static class MusicOutlets
             { layer = parts[0].Contains("album") ? "Album" : "Recording"; return (name, layer, "https://music.163.com/" + (layer == "Album" ? "album" : "song") + "?id=" + id, []); }
         }
         else if (host is "y.qq.com" or "i.y.qq.com") { name = "QQ 音乐";
+            var q = Query(u.Query);
             if (path.Length >= 2 && path[^2] is "albumDetail" or "songDetail" && Regex.IsMatch(path[^1], "^[A-Za-z0-9]{1,64}$")) layer = path[^2] == "albumDetail" ? "Album" : "Recording";
-            else if (path.Length >= 3 && path[^3] == "cover") layer = "Album";
-            else if (path.Length >= 3 && path[^3] == "song") layer = "Recording";
-            else if (path.LastOrDefault() == "album.html") layer = "Album";
-            else if (path.LastOrDefault() == "songDetail.html") layer = "Recording";
+            else if (path.Length >= 2 && path[^2] is "album" or "cover" or "song" && Regex.IsMatch(path[^1], "^[A-Za-z0-9]{1,64}\\.html$")) layer = path[^2] == "song" ? "Recording" : "Album";
+            else if (path.LastOrDefault() == "album.html" && (q.TryGetValue("albummid", out var albumMid) && Regex.IsMatch(albumMid,"^[A-Za-z0-9]{1,64}$") || q.TryGetValue("albumid", out var albumId) && Digits(albumId))) layer = "Album";
+            else if (path.LastOrDefault() == "songDetail.html" && (q.TryGetValue("songmid", out var songMid) && Regex.IsMatch(songMid,"^[A-Za-z0-9]{1,64}$") || q.TryGetValue("songid", out var songId) && Digits(songId))) layer = "Recording";
         }
         else if (host is "listen.tidal.com" or "tidal.com") { name = "Tidal"; if (path.Length >= 2 && path[^2] is "album" or "track") layer = path[^2] == "album" ? "Album" : "Recording"; }
         else if (host is "open.qobuz.com" or "www.qobuz.com") { name = "Qobuz"; if (path.Contains("album")) layer = "Album"; else if (path.Contains("track")) layer = "Recording"; }

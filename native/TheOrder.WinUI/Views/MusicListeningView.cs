@@ -87,7 +87,7 @@ public sealed class MusicListeningView : Grid, IDisposable
             {
                 if (!MediaUserLinkRules.Valid(choice) || choice.Target.Provider != "iTunes" || !AppleAlbumCandidate.TryAlbumUrl(choice.Note, choice.Target.Resource[6..], out var id) || id != choice.Target.Id) continue;
                 var row = new TagFlowPanel { HorizontalSpacing = 10, VerticalSpacing = 6 };
-                row.Children.Add(External(choice.Title + " · " + choice.Target.Resource[6..] + " 商店 ↗", choice.Note));
+                row.Children.Add(External(choice.Title + " · " + choice.Target.Resource[6..] + " 商店", choice.Note));
                 var remove = Button("移除此页面"); remove.Click += async (_, _) =>
                 {
                     var current = model; var reference = current?.Reference;
@@ -107,7 +107,8 @@ public sealed class MusicListeningView : Grid, IDisposable
                 var box = new StackPanel { Spacing = 6, Children = { Text(15, candidate.Title), Text(13, candidate.Artist), Text(12, $"{candidate.ReleaseDate} · {candidate.TrackCount} 首 · {candidate.Country} 商店 · iTunes {candidate.Id}") } };
                 if (model.Current?.Snapshot is { } source) foreach (var difference in candidate.Differences(source)) box.Children.Add(Text(12, difference));
                 box.Children.Add(External("查看商店页面 ↗", candidate.Url));
-                var save = Button("保存这个商店页面"); save.IsEnabled = model.CanLoad; AutomationProperties.SetAutomationId(save, "MusicAppleSave-" + candidate.Id);
+                var alreadySaved = model.Choices?.Items.Any(x => x.Target == candidate.Target && x.Note == candidate.Url) == true;
+                var save = Button(alreadySaved ? "已保存这个页面" : "保存这个商店页面"); save.IsEnabled = model.CanLoad && !alreadySaved; AutomationProperties.SetAutomationId(save, "MusicAppleSave-" + candidate.Id);
                 save.Click += async (_, _) => await ConfirmApple(candidate, result); box.Children.Add(save);
                 candidates.Children.Add(new Border { Padding = new(12), CornerRadius = new(6), Background = (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["CardBackgroundFillColorDefaultBrush"], Child = box });
             }
@@ -117,16 +118,17 @@ public sealed class MusicListeningView : Grid, IDisposable
     }
     private void AddLinks(StackPanel body, IEnumerable<MusicOutletLink> input)
     {
-        foreach (var group in MusicOutlets.Merge(input, Sort).GroupBy(x => x.Kind))
+        foreach (var group in MusicOutlets.Merge(input, Sort).GroupBy(x => x.Kind).OrderBy(x => x.Key))
         {
-            body.Children.Add(Text(13, group.Key switch { MusicOutletKind.Listening => "收听入口", MusicOutletKind.Purchase => "购买页面", _ => "资料链接" }));
+            var kindLabel = group.Key switch { MusicOutletKind.Listening => "收听入口", MusicOutletKind.Purchase => "购买页面", _ => "资料链接" };
+            body.Children.Add(Text(13, kindLabel));
             var flow = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 8 };
             foreach (var value in group)
             {
                 var label = value.Regions.Length == 0 ? "地区未注明" : "商店地区 · " + string.Join(" / ", value.Regions);
                 var content = new StackPanel { IsHitTestVisible = false, Spacing = 4, Children = { Text(15, value.Platform + " ↗"), Text(12, label + " · " + (value.TargetLayer == "Album" ? "专辑页" : value.TargetLayer == "Recording" ? "曲目页" : "资料页")) } };
                 var link = new Button { Content = content, CornerRadius = new(6), Padding = new(12, 8, 12, 8), HorizontalContentAlignment = HorizontalAlignment.Left, MaxWidth = 340 };
-                ToolTipService.SetToolTip(link, value.Url); AutomationProperties.SetName(link, value.Platform + " · " + group.Key + " · " + label);
+                ToolTipService.SetToolTip(link, value.Url); AutomationProperties.SetName(link, value.Platform + " · " + kindLabel + " · " + label);
                 link.Click += async (_, _) => await Open(value.Url); flow.Children.Add(link);
                 foreach (var source in value.Sources) evidence.Children.Add(Text(12, value.Platform + " · " + source.Source + " · " + source.Note + " · " + source.Url));
             }
