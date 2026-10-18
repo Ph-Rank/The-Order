@@ -81,7 +81,7 @@ public sealed class MusicOutletPolicyTests
     {
         var first = OutletData.Snapshot().Links[0];
         var duplicate = first with { Url = first.Url + "?si=tracking", Sources = [new("第二来源", first.Entity.Url, "同一目标")] };
-        var other = first with { Entity = OutletData.Ref(MusicTestData.Other) };
+        var other = MusicOutlets.FromRelationship(OutletData.Ref(MusicTestData.Other), first.RelationshipType, "forward", false, first.Url, OutletData.Now)!;
         var domestic = MusicOutlets.FromRelationship(first.Entity, "streaming", "forward", false, "https://music.163.com/#/album?id=123", OutletData.Now)!;
         var merged = MusicOutlets.Merge([first, duplicate, other, domestic], MusicOutletSort.DomesticFirst);
         Assert.Equal(3, merged.Length); Assert.Equal("网易云音乐", merged[0].Platform); Assert.Equal("https://music.163.com/album?id=123", merged[0].Url);

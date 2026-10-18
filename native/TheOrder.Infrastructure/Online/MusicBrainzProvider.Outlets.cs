@@ -29,7 +29,7 @@ public sealed partial class MusicBrainzProvider : IMusicOutletProvider
                 var raw = OptionalText(url, "resource", 2048);
                 if (raw is null) continue;
                 var ended = row.TryGetProperty("ended", out var flag) && flag.ValueKind == JsonValueKind.True;
-                var item = MusicOutlets.FromRelationship(reference, Text(row, "type", 200), Text(row, "direction", 20), ended, raw, stamp);
+                var item = MusicOutlets.FromRelationship(reference, Text(row, "type", 200), Text(row, "direction", 20), ended, raw, stamp, Id(row, "type-id"), Id(url, "id"));
                 if (item is not null && MusicOutlets.Valid(item)) links.Add(item);
             }
         }

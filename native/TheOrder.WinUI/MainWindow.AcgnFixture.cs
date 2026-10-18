@@ -38,7 +38,7 @@ public sealed partial class MainWindow
         allowed |= id is "AniListAddRelated" or "AniListSavePending" or "AniListUserSelections" or "AniListRestoreAutomatic" or "AniListRetryCover"
             or "MusicAlbumAddRelated" or "MusicAlbumSavePending" or "MusicAlbumRestoreAutomatic" or "MusicAlbumRetryCover";
         allowed |= id.StartsWith("AniListUserLink-", StringComparison.Ordinal);
-        allowed |= id is "MusicListeningExpand" or "MusicListeningLoad" or "MusicListeningDigital" or "MusicListeningApple" or "MusicListeningCancel";
+        allowed |= id is "MusicListeningExpand" or "MusicListeningLoad" or "MusicListeningCancel" or "MusicListeningDetails" or "MusicAlbumSources";
         allowed |= id is "BookReadingExpand" or "BookReadingRefresh" or "BookReadingCancel" or "BookReadingSources";
         allowed |= id is "GameVideosExpand" or "GameVideosRefresh" or "GameVideosCancel" or "GameVideosWithdraw" or "GameVideosReset" or "GamePV";
         allowed |= new[] { "GameVideosConfirm-", "GameVideosReject-", "GameVideoPlay-", "GameVideoDefault-", "GameVideoReject-" }.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal));

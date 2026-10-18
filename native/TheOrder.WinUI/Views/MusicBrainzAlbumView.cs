@@ -16,7 +16,7 @@ namespace TheOrder.WinUI.Views;
 public sealed class MusicBrainzAlbumView : Grid, IDisposable
 {
     private readonly TextBlock title = Text(28), type = Text(14), artist = Text(16);
-    private readonly TextBlock originalTitle = Text(14);
+    private readonly TextBlock originalTitle = Text(14), releaseLine = Text(14);
     private readonly ContentControl artistLinks = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private MusicBrainzArtistCredit[]? shownArtists;
     private readonly TextBlock relation = Text(14), status = Text(14), choiceReason = Text(13);
@@ -25,11 +25,11 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
     private readonly MusicListeningView listening = new();
     private readonly TagFlowPanel releaseFacts = MusicDetailFormatting.Facts();
     private readonly TextBlock coverCredit = Text(14);
-    private readonly CoverPresenter cover = new() { Width = 156, Height = 156, PreserveEntireImage = true, ImageCornerRadius = 8 };
+    private readonly CoverPresenter cover = new() { Width = 136, Height = 136, PreserveEntireImage = true, ImageCornerRadius = 8 };
     private readonly Grid header = new() { ColumnSpacing = 20 };
     private readonly ProgressRing ring = new() { Width = 18, Height = 18 };
-    private readonly Button cancel = Button("取消读取"), retry = Button("重试"), editions = Button("选择其他发行版"), refresh = Button("刷新音乐资料");
-    private readonly Button confirm = Button("确认使用此发行版"), reject = Button("排除此发行版"), chooseAgain = Button("重新选择"), showTracks = Button("查看曲目列表");
+    private readonly Button cancel = Button("取消读取"), retry = Button("重试"), editions = Button("切换发行版"), refresh = Button("刷新音乐资料");
+    private readonly Button confirm = Button("确认使用此发行版"), reject = Button("排除此发行版"), chooseAgain = Button("重新选择"), showTracks = Button("曲目列表 ↓");
     private readonly TextBox searchQuery = new() { PlaceholderText = "专辑名，或 MusicBrainz 发行版 / 专辑组链接", MaxLength = 2000, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly Button search = Button("查找专辑");
     private readonly Button retryCover = Button("重试封面");
@@ -71,6 +71,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         AutomationProperties.SetAutomationId(editions, "MusicAlbumEditions"); AutomationProperties.SetAutomationId(confirm, "MusicAlbumConfirm");
         AutomationProperties.SetAutomationId(searchQuery, "MusicAlbumSearchQuery"); AutomationProperties.SetAutomationId(search, "MusicAlbumSearch");
         AutomationProperties.SetAutomationId(showTracks, "MusicAlbumShowTracks"); AutomationProperties.SetAutomationId(tracksSection, "MusicAlbumTracks");
+        AutomationProperties.SetAutomationId(sources, "MusicAlbumSources");
         title.FontWeight = FontWeights.SemiBold; type.Opacity = choiceReason.Opacity = .75; credits.Visibility = Visibility.Collapsed;
         confirm.Style = (Style)Microsoft.UI.Xaml.Application.Current.Resources["AccentButtonStyle"];
         cover.ImageCornerRadius = 7;
@@ -78,7 +79,9 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         header.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); header.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         header.Children.Add(coverFrame);
         originalTitle.Opacity = .7;
-        var info = new StackPanel { Spacing = 10, Children = { type, title, originalTitle, artist, artistLinks, releaseFacts, choiceReason } }; SetColumn(info, 1); header.Children.Add(info);
+        releaseLine.Opacity = .8; relation.Opacity = .8;
+        releaseFacts.HorizontalSpacing = 18; releaseFacts.VerticalSpacing = 6; releaseFacts.MaximumItemWidth = 340;
+        var info = new StackPanel { Spacing = 6, Children = { type, title, originalTitle, artist, artistLinks, releaseLine, releaseFacts, choiceReason } }; SetColumn(info, 1); header.Children.Add(info);
         actions.Children.Add(ring); actions.Children.Add(cancel); actions.Children.Add(retry); actions.Children.Add(showTracks); actions.Children.Add(editions);
         confirmActions.Children.Add(confirm); confirmActions.Children.Add(addRelated); confirmActions.Children.Add(chooseAgain);
         actions.Children.Add(savePending);
@@ -86,7 +89,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         retryCover.Click += (_, _) => cover.RetryFailed();
         cover.SourceStateChanged += () => retryCover.Visibility = Visible(active && !cover.HasImage && cover.SourceKey is not null && cover.SourceStatus is not ("loading" or "not-started"));
         AutomationProperties.SetAutomationId(addRelated, "MusicAlbumAddRelated"); AutomationProperties.SetAutomationId(savePending, "MusicAlbumSavePending"); AutomationProperties.SetAutomationId(restoreAutomatic, "MusicAlbumRestoreAutomatic");
-        actions.Children.Add(reject); AutomationProperties.SetAutomationId(reject, "MusicAlbumReject");
+        AutomationProperties.SetAutomationId(reject, "MusicAlbumReject");
         ToolTipService.SetToolTip(reject, "取消关联并排除自动匹配；仍可手动核对后重新确认。");
         searchRow.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); searchRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         searchRow.Children.Add(searchQuery); SetColumn(search, 1); searchRow.Children.Add(search);
@@ -94,8 +97,9 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         tracksSection.Children.Add(Text(22, "曲目列表")); tracksSection.Children.Add(discs);
         credits.Content = personnel; summarySection.Children.Add(summary);
         raw.Content = rawBody; sourceBody.Children.Add(raw); sourceBody.Children.Add(refresh); sources.Content = sourceBody;
-        var body = new StackPanel { Spacing = 24, MaxWidth = 1160, HorizontalAlignment = HorizontalAlignment.Stretch,
-            Children = { header, relation, status, actions, confirmActions, userSelections, candidateSection, listening, tracksSection, credits, summarySection, languageInfo, sources } };
+        var overview = new StackPanel { Spacing = 12, Children = { header, relation, status, actions, confirmActions, userSelections, candidateSection } };
+        var body = new StackPanel { Spacing = 20, MaxWidth = 1160, HorizontalAlignment = HorizontalAlignment.Stretch,
+            Children = { overview, listening, tracksSection, credits, summarySection, languageInfo, sources } };
         scroll = new() { Content = body, HorizontalContentAlignment = HorizontalAlignment.Stretch, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Children.Add(scroll);
         scroll.Loaded += (_, _) => QueueStart(); body.SizeChanged += (_, _) => { QueueStart(); RestoreAlbumPosition(); };
@@ -125,7 +129,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         showTracks.Click += (_, _) => tracksSection.StartBringIntoView();
         search.Click += async (_, _) => await SearchAsync();
         searchQuery.KeyDown += async (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter && model?.CanLoad == true) { e.Handled = true; await SearchAsync(); } };
-        SizeChanged += (_, _) => { var narrow = ActualWidth < 520; cover.Width = cover.Height = narrow ? 104 : 156; title.FontSize = narrow ? 24 : 28; header.ColumnSpacing = narrow ? 14 : 20; };
+        SizeChanged += (_, _) => { var narrow = ActualWidth < 600; cover.Width = cover.Height = narrow ? 96 : 136; title.FontSize = narrow ? 22 : 26; header.ColumnSpacing = narrow ? 14 : 18; };
         Unloaded += (_, _) => { if (!IsLoaded) Deactivate(); };
     }
     public void Configure(IBangumiSubjectDetailsReader subjects, IMusicBrainzReader music, IImagePipeline images,
@@ -170,6 +174,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         RenderReleaseFacts(album, source);
         choiceReason.Text = model?.State == MusicAlbumState.Preview ? "发行版预览 · 尚未确认" : model?.SelectionReason ?? "";
         foreach (var text in new[] { artist, choiceReason }) text.Visibility = Visible(text.Text.Length > 0);
+        choiceReason.Visibility = Visible(model?.State == MusicAlbumState.Preview);
         var creditedArtists = album?.Release.ArtistCredits;
         if (!ReferenceEquals(shownArtists, creditedArtists))
         {
@@ -226,31 +231,31 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
             commands.Children.Add(open); commands.Children.Add(remove); row.Children.Add(commands); panel.Children.Add(row);
         }
         restoreAutomatic.Visibility = Visible(model?.CanRestoreAutomatic == true); restoreAutomatic.IsEnabled = model?.CanRestoreAutomatic == true;
-        panel.Children.Add(restoreAutomatic); userSelections.Content = panel;
-        userSelections.Visibility = Visible(model?.UserLinks?.Items.Length > 0 || model?.CanRestoreAutomatic == true);
+        userSelections.Content = panel;
+        userSelections.Visibility = Visible(model?.UserLinks?.Items.Length > 0);
     }
     private void RenderReleaseFacts(MusicBrainzAlbum? album, BangumiSubjectDetails? source)
     {
         releaseFacts.Children.Clear();
+        releaseLine.Text = "";
         if (album is null)
         {
-            MusicDetailFormatting.AddFact(releaseFacts, "发行日期", source?.ReleaseDate);
+            releaseLine.Text = source?.ReleaseDate ?? "";
             MusicDetailFormatting.AddFact(releaseFacts, "目录编号", string.Join(" / ", source?.MusicFacts?.CatalogNumbers ?? []));
         }
         else
         {
             var release = album.Release;
-            MusicDetailFormatting.AddFact(releaseFacts, "发行日期", release.Date);
-            MusicDetailFormatting.AddFact(releaseFacts, "发行地区", Country(release.Country));
             MusicDetailFormatting.AddFact(releaseFacts, "版本", release.Disambiguation);
             var allDigital = album.Discs.Length > 0 && album.Discs.All(x => x.Format == "Digital Media");
             var formats = album.Discs.Select(x => x.Format).Where(x => x.Length > 0).Distinct().Select(x => x == "Digital Media" ? "数字发行" : x);
-            MusicDetailFormatting.AddFact(releaseFacts, "载体与曲目", string.Join(" · ", new[] { string.Join(" / ", formats),
-                album.Discs.Length + (allDigital ? " 组曲目" : " 碟"), album.Discs.Sum(x => x.Tracks.Length) + " 首" }.Where(x => x.Length > 0)));
+            releaseLine.Text = string.Join(" · ", new[] { release.Date, Country(release.Country), string.Join(" / ", formats),
+                album.Discs.Length + (allDigital ? " 组曲目" : " 碟"), album.Discs.Sum(x => x.Tracks.Length) + " 首" }.Where(x => !string.IsNullOrWhiteSpace(x)));
             MusicDetailFormatting.AddFact(releaseFacts, "厂牌", string.Join(" / ", release.Labels.Select(x => x.Name).Where(x => x.Length > 0).Distinct()));
             MusicDetailFormatting.AddFact(releaseFacts, "目录编号", string.Join(" / ", release.Labels.Select(x => x.CatalogNumber).OfType<string>().Distinct()));
         }
         releaseFacts.Visibility = Visible(releaseFacts.Children.Count > 0);
+        releaseLine.Visibility = Visible(releaseLine.Text.Length > 0);
     }
     private void QueueStart()
     {
@@ -340,6 +345,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
             coverCredit.Text = album.CoverUrl is not null && !coverFallback ? "封面 · Cover Art Archive" : "封面 · 沿用 Bangumi";
             sourceBody.Children.Add(coverCredit);
         }
+        if (!string.IsNullOrWhiteSpace(model?.SelectionReason)) rawBody.Children.Add(Text(13, model.SelectionReason));
         rawBody.Children.Add(Text(14, "Bangumi 原始关系 · " + (item?.Relation ?? "未标明")));
         if (relationEvidence.Length > 0) rawBody.Children.Add(Text(14, relationEvidence));
         if (source?.MusicFacts is { } facts)
@@ -359,7 +365,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
                 if (release.Date is not null || release.Country is not null)
                     rawBody.Children.Add(Text(14, "发行地区与日期 · " + string.Join(" · ", new[] { Country(release.Country), release.Date }.OfType<string>())));
         }
-        sourceBody.Children.Add(raw); sourceBody.Children.Add(refresh);
+        sourceBody.Children.Add(raw); sourceBody.Children.Add(refresh); sourceBody.Children.Add(restoreAutomatic); sourceBody.Children.Add(reject);
     }
     private Task SearchAsync()
     {

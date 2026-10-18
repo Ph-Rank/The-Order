@@ -10,6 +10,8 @@
 
 服务启用GO；客户端候选已具备零配置接线，但GitHub现有程序及日用安装未更新，公开客户端发布须另行授权。Free账户额度与OAuth服务共享，分布式滥用仍可能耗尽额度；不自动升级。维护步骤见services/igdb-game-videos/README.md；公网报告和最终版本/回退记录见.artifacts/igdb-production-ready-20261018/public-deployment-report.md。全部继承音乐/书籍修改保持未提交，Production、版本和GitHub均未修改。
 
+用户随后明确授权替换本机正式版：2026-10-19已将同一已验收IGDB程序载荷切换至原C:/Users/MUSK/AppData/Local/Programs/The Order/TheOrder.exe，版本仍1.2.0。源码检查点382b322、应用代码29e8ef4，保留全部继承音乐/书籍工作；没有重新编译应用。标准Setup隔离安装通过，实际日用654份载荷、3份入口附件及更新基包一致，4份未知/路由文件保留。原安装目录WinUI以全新空Test资料启动并退出0，辅助工具默认全关；未打开、迁移或复制Production及凭据，未启动真实游戏、推送或发布。旧日用662份程序及旧Setup已核验备份在C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261019-003803-igdb-public-pv，仅供程序回退。当前客户端可使用内置公网IGDB地址，收尾只读请求返回200；实际播放沿用此前相同程序字节的公网验收证据，不宣称本次私库/实机游戏已验收。切换凭据以.artifacts/local-igdb-daily-20261019/completion.json为准。
+
 ## IGDB真实API、PC候选及发行版核对（2026-10-18，当前增量）
 
 当前分支 codex/igdb-live-qualification-20261018，基于6665e5d及全部继承dirty。503已证实来自IGDB字段game_type.name错误，修正为game_type.type；同一Wrangler和凭据恢复200，无代理/DNS/TLS改动。新增默认关闭的阶段诊断，不输出凭据、原始错误或响应正文；保留parent_game与version_parent区别和旧缓存兼容。
@@ -44,6 +46,41 @@ Release x64 `publish-accepted` 在自建 Test Profile 实际运行并正常退�
 源码只提交本任务书籍增量，继承的音乐代码和文档修改保留未提交；实际验收载荷包含这些音乐成果，须结合 `tested-source-manifest.json`。详见 `docs/book-reading-outlets-v1.md` 与 `.artifacts/book-outlets-v1-20261018/`。开发交付GO，后续公开发布CONDITIONAL GO，需单独发布验收及公开限制说明。本轮不推送、发布、替换日用安装或访问Production。
 
 
+用户随后明确授权替换日用正式版，已完成原安装目录的本机切换，仍显示1.2.0。复用上述已验收publish字节，标准Setup在独立AppID/Mutex且无注册的目录通过安装；实际日用654份载荷、3份入口附件与更新基包一致，4份未知/路由文件保留。原目录WinUI以全新空Test资料启动并正常退出0，辅助工具默认全关；未打开或迁移Production、读取凭据或改动GitHub。662份旧程序和上一音乐构建Setup回退保存在 C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261018-172357-book-outlets/。切换最终凭据 .artifacts/local-book-outlets-daily-20261018/completion.json；本次授权不包含发布。
+
+## 书籍入口排版与音乐来源按钮（2026-10-18，最新增量）
+
+用户授权两项视觉调整及日用替换。在现有3ed4463与全部继承音乐dirty上，只改BookReadingView、MusicListeningView：书籍所有有效主入口共用一个按可用宽度换行的布局，用途、语言及卷册版本说明保留；不再按类别强制另起一行。音乐“资料与来源”改成与书籍相同的普通Button，沿用主题文字颜色，展开、收起和链接内容不变。
+
+完整客户端含本地合成Worker回归4327 passed / 0 failed / 0 skipped；Release x64通过。真实隔离WinUI验证1180请求宽四个书籍入口同排、560宽自然换两行、浅/深主题及来源展开；音乐按钮原生角色Button、自动鼠标点击展开和受限peer收起通过。冻结公共元数据与明确合成的音乐版本/导航不作为新覆盖率、实际播放或物理输入证明。早期书籍展开在确认弹窗尚未关闭时被拒绝，确认后通过；无产品修复扩大范围，无新增低价值镜像单元测试。证据 .artifacts/outlet-layout-20261018/。
+
+已用标准Setup替换原日用目录，仍显示1.2.0。654份载荷、3份入口附件及更新基包一致，4份未知/路由文件保留；原目录WinUI仅用全新空Test资料启动，辅助工具默认全关，正常退出0。662份旧程序及上一书籍版本Setup备份在 C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261018-182404-outlet-layout/，仅供程序回退。未访问或迁移Production、读取真实凭据、提交、推送或修改公开附件。当前包含新UI及继承音乐的工作树增量，不能单靠HEAD重建相同载荷；源码及载荷哈希、切换最终凭据见 .artifacts/local-outlet-layout-daily-20261018/completion.json 和 source-freeze.json。
+
+
+## 音乐数字版自动加载与固定排序（2026-10-18，最新）
+
+当前维护分支`codex/music-auto-digital-20261018`，HEAD仍9147b06，保留继承的全部未提交音乐外链与排版成果。本次展开“正版收听与购买”即依次读取当前入口和同组数字发行版，无需再点查找；两阶段共享请求时效和取消，重复展开不重复查询，失败或取消后可重试，刷新同时更新两阶段。切换作品后迟到响应不能继续查询旧作品。界面移除排序选项，平台统一按显示名称排序，资料站也按Amazon、Discogs、VGMdb等友好名称排列；不删除有效链接、不更换当前发行版、不新增Provider或迁移用户资料。
+
+完整客户端含本地合成Worker契约4263 passed / 0 failed / 0 skipped；85项定向为重叠子集，新增11项自动加载/去重/取消/迟到/失败保留回归。首次定向失败源于Recording合成夹具误带发行版状态，修正夹具后通过，未放松产品校验，原失败日志保留。Release x64及标准安装包通过。实际WinUI中一次展开、另一次定向自动鼠标点击均直接呈现2组数字版，4个平台与3个资料链接保留，没有额外查找或排序控件。冻结公开元数据加明确合成的版本/关系仅证明本次交互，不证明真实覆盖、版权播放或物理输入。
+
+用户正常退出后已替换原`C:/Users/MUSK/AppData/Local/Programs/The Order/TheOrder.exe`，显示版本仍1.2.0。654份载荷、3份入口附件及更新基包一致，4份未知/路由文件保留；实际安装路径WinUI仅以全新空Test资料启动并正常退出0，辅助工具默认关闭。未访问或迁移Production、读取真实凭据，未提交、推送或发布。662份旧程序及上一排版构建Setup回退在`C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261018-142540-music-auto/`。开发凭据`.artifacts/music-auto-digital-20261018/`，切换凭据`.artifacts/local-music-auto-daily-20261018/`。下方旧“当前”均需结合本节时间阅读。
+
+## 音乐详情排版与日用切换（2026-10-18，上一节点）
+
+维护分支为`codex/music-layout-20261018`，HEAD仍9147b06，继承此前所有未提交音乐外链成果并继续保留为本地工作树修改。用户明确要求最大程度精简截图中的音乐详情并替换本机正式版：专辑头部合并日期/地区/载体/曲目数；平台改成32像素高的紧凑按钮；宽窗口数字版信息与入口同排，窄窗口换行。普通资料站、排序及完整关系来源默认折叠；不同发行版仍保持独立，未知地区不再逐项占行。恢复自动和取消关联归入资料区，已有个人商店页面及全部有效外链保留。没有新增Provider、身份融合或数据迁移。
+
+完整回归4252 passed / 0 failed / 0 skipped，74项定向为重叠子集；新增5项状态回归确保错误、离线回退、空结果、取消和恢复提示不会因精简被隐藏。Release x64构建、实际WinUI浅/深主题与1180/560宽窗口通过，资料区3个信息站链接保留、两种排序保留4个平台，窄窗口按钮无越界/重叠。两组数字版的展开收听区实测255逻辑像素。截图使用冻结公开音乐资料及明确合成的发行/关系夹具，不是国内真实覆盖、实际播放、物理输入或所有DPI的证明。
+
+用户正常退出日用程序后，已安装到原`C:/Users/MUSK/AppData/Local/Programs/The Order/TheOrder.exe`，显示版本保持1.2.0。654份载荷、3份入口附件及更新基包核对，4份未知/路由文件保留；实际安装路径WinUI以全新空Test资料启动并正常退出0，辅助工具默认全关。未打开、迁移Production或复制真实凭据。662份旧程序文件及之前MB外链体验构建的Setup保存在`C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261018-135533-music-layout/`。开发证据`.artifacts/music-layout-20261018/`，安装证据`.artifacts/local-music-layout-daily-20261018/`。未提交、推送、改Tag或发布；下方“当前”均需结合本节时间阅读。
+
+## MusicBrainz统一音乐外链来源（2026-10-18，当前增量）
+
+当前在update-channels-20261016工作树的`codex/music-mb-links-20261018`，基于9147b06继续。保留MusicBrainz既有网易云、QQ、酷狗及国际平台url-rels，不接入国内平台独立API、搜索、授权或代理；偏好只改变排序。当前界面和生产依赖停用主动iTunes目录查找，但保留MB的Apple外链和用户此前保存的独立Related页面。新增原始关系证据及按实体/URL去重，旧缓存可离线重分类，不迁移书架或人工身份schema。
+
+MB官方对streaming/free streaming明确使用合法收听定义，相关入口保留“正版收听 · MusicBrainz 收录”，普通资料及购买关系分别标注，不宣称即时可播放或应用独立核验版权。详见`docs/music-listening-v1.md`。本轮完整回归4247/0/0，84项定向为重叠子集，Release x64构建和实际隔离WinUI三种排序验证通过；国内链接使用明确标记的合成记录，真实播放未测试。证据根`.artifacts/music-mb-links-20261018/`。
+
+源码仍为本地未提交增量，不推送或发布。用户随后明确授权替换本机正式版：本轮已将上述音乐外链修复安装至原`C:/Users/MUSK/AppData/Local/Programs/The Order/TheOrder.exe`，显示版本仍为1.2.0，与GitHub公开453c671及先前8edaa72载荷不同。654份程序载荷、3份入口附件及更新基包核对通过，4份未知/路由文件保留；实际安装目录WinUI在全新空Test资料中启动、辅助工具默认全关、正常退出0。未打开、复制或迁移Production及真实凭据。662份旧程序文件及其Setup保存在`C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261018-132514-music-mb-links/`；证据根`.artifacts/local-mb-links-daily-20261018/`。先前8edaa72切换记录仍保留在下节，不用旧验收代替本次安装证据。
+
 ## 1.2.0 已发布；后续音乐入口独立开发（2026-10-18）
 
 v1.2.0 已在 Ph-Rank/The-Order 正式发布，draft=false、prerelease=false、Latest；Tag 与远端 main 对应 453c671d00e16d78cd665e0ec3610b282c2d7778。公开六份附件均匿名重新下载并核对 SHA-256，旧稳定版和 Beta 4 资产保持。完成凭据：.artifacts/release-1.2.0-20261018/publication-complete.json。此前 NextMoe 提示修复 67175a1 已随此版发布。
@@ -62,7 +99,9 @@ v1.2.0 已在 Ph-Rank/The-Order 正式发布，draft=false、prerelease=false、
 
 最终音乐应用代码为8edaa7207b1f668410b58d6ee086c3d1e8bd20fb，后续提交仅验收测试与文档；publish-dev-qualified/package-dev-qualified为载荷。实际无缓存重新联网找到魔法使之夜数字发行版；清音乐缓存、重启后CLANNAD人工商店选择仍在，原有5份书架/身份文件哈希不变。普通无诊断入口也完成鼠标导航/展开/滚轮浏览，没有打开平台或播放。
 
-独立试用：.artifacts/music-listening-20261018/Start-Music-Samples.cmd仅打开本轮合成Test书架；The-Order-Music-Dev-8edaa72-x64.zip无需SDK、首次为空Test书架，资料在解压目录相邻profile，不附带测试Profile。旧4b69c9d包保留为失败证据，不作为交付。证据与源码提交索引以该目录completion.json/report.md为准。音乐结果仅开发试用GO，尚未第二次公开发布、推送或替换日用程序。
+独立试用：.artifacts/music-listening-20261018/Start-Music-Samples.cmd仅打开本轮合成Test书架；The-Order-Music-Dev-8edaa72-x64.zip无需SDK、首次为空Test书架，资料在解压目录相邻profile，不附带测试Profile。旧4b69c9d包保留为失败证据，不作为交付。证据与源码提交索引以该目录completion.json/report.md为准。音乐功能没有第二次公开发布或推送。
+
+用户随后明确授权本机日用替换并回复已从托盘退出：2026-10-18已将8edaa72音乐应用构建、9147b06源码检查点的安装载荷切换至原C:/Users/MUSK/AppData/Local/Programs/The Order/TheOrder.exe。版本仍为1.2.0，这是本机音乐体验构建，与GitHub正式1.2.0的453c671载荷有区别。654份程序载荷、3份入口附件和更新基包核对通过，原安装目录4份未知/路由文件按元数据验证保留；没有读取、复制、迁移或启动Production资料。662份受管旧程序文件已核验备份至C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261018-114014-music-local-8edaa72/Program，同级保留原正式1.2.0回退Setup。安装目录实际WinUI使用全新空Test资料启动、默认工具全关、正常退出0。该启动检查不代表真实私库或物理输入验收。证据根.artifacts/local-music-daily-20261018；本次没有远端推送、Tag或Release变更。
 
 ## NextMoe 访问状态提示修复（2026-10-16，待下次发布）
 

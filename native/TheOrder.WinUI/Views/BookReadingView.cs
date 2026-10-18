@@ -58,24 +58,21 @@ internal sealed class BookReadingView : StackPanel, IDisposable
         status.Text = model.Message; status.Visibility = model.Busy || status.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         refresh.IsEnabled = model.CanLoad; cancel.Visibility = model.Busy ? Visibility.Visible : Visibility.Collapsed;
         if (model.Source is not { } current) return;
-        foreach (var group in model.Links.Where(x => x.Kind != BookOutletKind.Information).GroupBy(x => x.Kind).OrderBy(x => x.Key))
+        var flow = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 8, MaximumItemWidth = 430 };
+        foreach (var link in model.Links.Where(x => x.Kind != BookOutletKind.Information).OrderBy(x => x.Kind))
         {
-            var flow = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 8 };
-            foreach (var link in group)
-            {
-                var caption = string.Join(" · ", new[] { BookOutlets.KindName(link), BookOutlets.LanguageName(link.Language) });
-                var scope = BookOutlets.ScopeName(link, current);
-                var label = new StackPanel { Spacing = 3, IsHitTestVisible = false, Children = { Text(14, link.Platform + " ↗"), Text(12, caption) } };
-                if (scope != "系列入口") label.Children.Add(Text(12, scope));
-                var button = new Button { Content = label, Padding = new(12, 8, 12, 8), MaxWidth = 430, HorizontalContentAlignment = HorizontalAlignment.Left };
-                var id = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(BookOutlets.Key(link))))[..16];
-                AutomationProperties.SetAutomationId(button, "BookPlatform-" + id);
-                AutomationProperties.SetName(button, link.Platform + " · " + caption + " · " + scope);
-                ToolTipService.SetToolTip(button, scope + (link.Storefront is { } market ? "\n商店站点 · " + market + "（不代表可用地区）" : "") + "\n" + link.Url);
-                button.Click += async (_, _) => await OpenAsync(link.Url, BookOutlets.Key(link)); flow.Children.Add(button);
-            }
-            entries.Children.Add(flow);
+            var caption = string.Join(" · ", new[] { BookOutlets.KindName(link), BookOutlets.LanguageName(link.Language) });
+            var scope = BookOutlets.ScopeName(link, current);
+            var label = new StackPanel { Spacing = 3, IsHitTestVisible = false, Children = { Text(14, link.Platform + " ↗"), Text(12, caption) } };
+            if (scope != "系列入口") label.Children.Add(Text(12, scope));
+            var button = new Button { Content = label, Padding = new(12, 8, 12, 8), MaxWidth = 430, HorizontalContentAlignment = HorizontalAlignment.Left };
+            var id = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(BookOutlets.Key(link))))[..16];
+            AutomationProperties.SetAutomationId(button, "BookPlatform-" + id);
+            AutomationProperties.SetName(button, link.Platform + " · " + caption + " · " + scope);
+            ToolTipService.SetToolTip(button, scope + (link.Storefront is { } market ? "\n商店站点 · " + market + "（不代表可用地区）" : "") + "\n" + link.Url);
+            button.Click += async (_, _) => await OpenAsync(link.Url, BookOutlets.Key(link)); flow.Children.Add(button);
         }
+        if (flow.Children.Count > 0) entries.Children.Add(flow);
         if (entries.Children.Count == 0 && !model.Busy && model.Message.Length == 0) entries.Children.Add(Text(13, "暂未收录阅读或购买入口。"));
         foreach (var link in model.Links)
         {

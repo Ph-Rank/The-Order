@@ -9,7 +9,8 @@ public sealed partial class MusicBrainzService
         var key = $"outlets:{(int)reference.Kind}:{reference.Id}";
         var result = await LoadAsync(key, refresh, AlbumFreshFor, async token =>
             new MusicBrainzCacheValue(key, Now) { Outlets = await outlets.FetchOutletsAsync(reference, token).ConfigureAwait(false) }, cancellation).ConfigureAwait(false);
-        return new(result.Value.Outlets!, result.Cached, result.Stale, result.Warning);
+        var snapshot = result.Value.Outlets!;
+        return new(snapshot with { Links = MusicOutlets.Merge(snapshot.Links, MusicOutletSort.SourceOrder) }, result.Cached, result.Stale, result.Warning);
     }
     public async Task<MusicDigitalOutletResult> LoadDigitalOutletsAsync(MusicOutletSnapshot current, CancellationToken cancellation)
     {

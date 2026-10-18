@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
@@ -10,12 +11,12 @@ namespace TheOrder.WinUI.Views;
 
 public sealed class MusicListeningView : Grid, IDisposable
 {
-    private readonly Expander section = new() { Header = "正版收听与商店", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
-    private readonly StackPanel direct = new() { Spacing = 10 }, digital = new() { Spacing = 12 }, saved = new() { Spacing = 8 }, candidates = new() { Spacing = 12 }, evidence = new() { Spacing = 8 };
-    private readonly TextBlock status = Text(13), caption = Text(13, "这里只提供来源已收录或你确认的页面。平台存在不代表当前地区、账号或订阅可以播放。");
-    private readonly Button load = Button("重读入口"), other = Button("查找其他数字发行入口"), apple = Button("查找 iTunes 商店专辑"), cancel = Button("取消读取");
-    private readonly ComboBox order = new() { Header = "入口排序", MinWidth = 150, SelectedIndex = 0 }, country = new() { Header = "iTunes 商店地区", MinWidth = 140, SelectedIndex = 0 };
-    private readonly Expander details = new() { Header = "来源与版本说明", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander section = new() { Header = "正版收听与购买", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly StackPanel entries = new() { Spacing = 14 }, saved = new() { Spacing = 6 }, evidence = new() { Spacing = 8 };
+    private readonly StackPanel options = new() { Spacing = 12, Visibility = Visibility.Collapsed };
+    private readonly TextBlock status = Text(13);
+    private readonly Button load = Button("刷新入口"), cancel = Button("取消");
+    private readonly Button details = new() { Content = "资料与来源 ⌄" };
     private MusicListeningViewModel? model;
     private ContentDialog? dialog;
     private bool disposed;
@@ -23,22 +24,20 @@ public sealed class MusicListeningView : Grid, IDisposable
     {
         Visibility = Visibility.Collapsed;
         AutomationProperties.SetAutomationId(section, "MusicListeningExpand"); AutomationProperties.SetAutomationId(load, "MusicListeningLoad");
-        AutomationProperties.SetAutomationId(other, "MusicListeningDigital"); AutomationProperties.SetAutomationId(apple, "MusicListeningApple");
+        AutomationProperties.SetAutomationId(details, "MusicListeningDetails");
         AutomationProperties.SetAutomationId(cancel, "MusicListeningCancel"); AutomationProperties.SetAutomationId(status, "MusicListeningStatus");
-        AutomationProperties.SetAutomationId(order, "MusicListeningOrder"); AutomationProperties.SetAutomationId(country, "MusicListeningCountry");
         AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite);
-        foreach (var item in new[] { "国内平台优先", "来源顺序", "平台名称" }) order.Items.Add(item);
-        foreach (var item in new[] { "日本 JP", "中国大陆 CN", "美国 US" }) country.Items.Add(item);
-        var controls = new TagFlowPanel { HorizontalSpacing = 10, VerticalSpacing = 8, Children = { order, load, cancel } };
-        var extra = new TagFlowPanel { HorizontalSpacing = 10, VerticalSpacing = 8, Children = { other, country, apple } };
-        details.Content = evidence;
-        section.Content = new StackPanel { Spacing = 16, Children = { caption, controls, status, direct, extra, digital, saved, candidates, details } };
+        var toolbar = new TagFlowPanel { HorizontalSpacing = 10, VerticalSpacing = 6, Children = { details, cancel } };
+        options.Children.Add(load);
+        options.Children.Add(evidence);
+        var attribution = Text(12, "MusicBrainz 收录 · 地区及订阅条件以平台为准"); attribution.Opacity = .7;
+        section.Content = new StackPanel { Spacing = 12, Children = { status, entries, saved, toolbar, options, attribution } };
         Children.Add(section);
-        section.Expanding += async (_, _) => { if (model is { Current: null, CanLoad: true }) await model.LoadAsync(); };
-        load.Click += async (_, _) => { if (model is not null) await model.LoadAsync(true); };
-        other.Click += async (_, _) => { if (model is not null) await model.FindDigitalAsync(); };
-        apple.Click += async (_, _) => { if (model is not null) { var selected = MusicOutlets.StoreCountries[Math.Clamp(country.SelectedIndex, 0, 2)]; await model.FindAppleAsync(selected, model.Apple?.Query.Country == selected); } };
-        cancel.Click += (_, _) => model?.Cancel(); order.SelectionChanged += (_, _) => Render();
+        section.Expanding += async (_, _) => { if (model is not null) await model.ExpandAsync(); };
+        section.Collapsed += (_, _) => { if (model?.Busy == true) model.Cancel(); };
+        load.Click += async (_, _) => { if (model is not null) await model.ExpandAsync(true); };
+        cancel.Click += (_, _) => model?.Cancel();
+        details.Click += (_, _) => { options.Visibility = options.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible; details.Content = options.Visibility == Visibility.Visible ? "收起资料与来源 ⌃" : "资料与来源 ⌄"; };
     }
     public void Configure(IMusicListeningReader? reader)
     {
@@ -49,112 +48,130 @@ public sealed class MusicListeningView : Grid, IDisposable
     public void SetContext(MusicBrainzReference? reference)
     {
         if (disposed || model is null) { Visibility = Visibility.Collapsed; return; }
-        if (model.Reference != reference) { dialog?.Hide(); section.IsExpanded = false; details.IsExpanded = false; }
+        if (model.Reference != reference) { dialog?.Hide(); section.IsExpanded = false; options.Visibility = Visibility.Collapsed; details.Content = "资料与来源 ⌄"; }
         model.SetContext(reference); Visibility = MusicOutlets.Reference(model.Reference) ? Visibility.Visible : Visibility.Collapsed;
     }
     private void Changed(object? sender, PropertyChangedEventArgs args) => Render();
-    private MusicOutletSort Sort => (MusicOutletSort)Math.Clamp(order.SelectedIndex, 0, 2);
+    private static bool Useful(MusicOutletLink value) => value.Kind != MusicOutletKind.Information;
     private void Render()
     {
         if (disposed || model is null) return;
-        status.Text = model.Message; load.IsEnabled = model.CanLoad; cancel.Visibility = Visible(model.Busy);
-        other.IsEnabled = model.CanFindDigital; apple.IsEnabled = country.IsEnabled = model.CanFindApple;
-        other.Visibility = country.Visibility = apple.Visibility = Visible(model.Reference?.Kind == MusicBrainzEntityKind.Release);
-        direct.Children.Clear(); digital.Children.Clear(); candidates.Children.Clear(); saved.Children.Clear(); evidence.Children.Clear();
-        if (model.Current is { } current)
+        status.Text = model.Message; status.Visibility = Visible(model.Busy || model.NeedsAttention);
+        load.IsEnabled = model.CanLoad; cancel.Visibility = Visible(model.Busy);
+        entries.Children.Clear(); saved.Children.Clear(); evidence.Children.Clear();
+        var current = model.Current?.Snapshot;
+        if (current is not null)
         {
-            direct.Children.Add(Text(15, current.Snapshot.Entity.Kind == MusicBrainzEntityKind.Release ? "当前发行版的来源外链" : "此录音的来源外链"));
-            AddLinks(direct, current.Snapshot.Links);
-            if (current.Snapshot.Links.Length == 0) direct.Children.Add(Text(13, "尚未收录可核对的外链，可按需查找其他数字版本或商店页面。"));
-            evidence.Children.Add(Text(12, $"{current.Snapshot.Entity.Kind} · {current.Snapshot.Entity.Id} · 读取于 {current.Snapshot.FetchedAtUtc:yyyy-MM-dd HH:mm} UTC"));
+            if (current.Links.Any(Useful)) AddEdition(entries, current, model.Digital is null ? null : "当前发行版", false);
+            AddEvidence(current, "当前发行版");
         }
         if (model.Digital is { } others)
         {
-            digital.Children.Add(Text(16, "其他数字发行版本"));
-            digital.Children.Add(Text(13, "这些页面属于同专辑组的其他发行物，曲目、时长或母带可能不同；当前选择不变。"));
-            foreach (var item in others.Editions)
+            foreach (var edition in others.Editions.OrderByDescending(x => x.Snapshot.Links.Any(l => l.Kind == MusicOutletKind.Listening)))
             {
-                var box = new StackPanel { Spacing = 8, Children = { Text(15, item.Snapshot.Title), Text(13, string.Join(" · ", new[] { item.Snapshot.Artist, item.Snapshot.Date, item.Snapshot.TrackCount is { } n ? $"{n} 首" : "" }.Where(x => !string.IsNullOrWhiteSpace(x)))) } };
-                AddLinks(box, item.Snapshot.Links); digital.Children.Add(box);
+                if (edition.Snapshot.Links.Any(Useful)) AddEdition(entries, edition.Snapshot, "其他数字版", true);
+                AddEvidence(edition.Snapshot, "其他数字版");
             }
-            if (others.Warning is { } warning) digital.Children.Add(Text(12, warning));
         }
-        if (model.Choices?.Items.Length > 0)
+        if (current is not null && entries.Children.Count == 0 && !model.Busy && !model.NeedsAttention)
+            entries.Children.Add(Text(13, model.Digital is null ? "当前发行版未收录收听或购买入口。" : "本次未找到收听或购买入口。"));
+        foreach (var note in new[] { model.Current?.Warning, model.Digital?.Warning }.OfType<string>().Distinct()) evidence.Children.Add(Text(12, note));
+        if (model.Digital is not null) evidence.Children.Add(Text(12, "数字版入口属于同专辑组的其他发行物，曲目或母带可能不同；当前发行版保持不变。"));
+        RenderSaved();
+    }
+    private void AddEdition(StackPanel body, MusicOutletSnapshot snapshot, string? heading, bool digital)
+    {
+        var platforms = new StackPanel { Spacing = 6 }; AddLinks(platforms, snapshot.Links.Where(Useful));
+        if (heading is null) { body.Children.Add(platforms); return; }
+        var label = string.Join(" · ", new[] { digital ? "数字版" : heading, digital ? snapshot.Date : null, digital && snapshot.TrackCount is { } n ? $"{n} 首" : null }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        var text = Text(13, label); text.FontWeight = FontWeights.SemiBold;
+        var metadata = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { text } };
+        if (snapshot.Title != model?.Current?.Snapshot.Title) metadata.Children.Add(Text(13, snapshot.Title));
+        if (snapshot.Artist != model?.Current?.Snapshot.Artist) { var performer = Text(12, snapshot.Artist); performer.Opacity = .75; metadata.Children.Add(performer); }
+        var row = new Grid { ColumnSpacing = 16, RowSpacing = 6 };
+        row.ColumnDefinitions.Add(new() { Width = new(216) }); row.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        row.RowDefinitions.Add(new() { Height = GridLength.Auto }); row.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        row.Children.Add(metadata); row.Children.Add(platforms);
+        bool? wasNarrow = null;
+        row.SizeChanged += (_, _) =>
         {
-            saved.Children.Add(Text(16, "你选择的 iTunes 商店页面"));
-            saved.Children.Add(Text(12, "独立关联，不代表相同发行版本或 Apple Music 订阅可听。"));
-            foreach (var choice in model.Choices.Items)
-            {
-                if (!MediaUserLinkRules.Valid(choice) || choice.Target.Provider != "iTunes" || !AppleAlbumCandidate.TryAlbumUrl(choice.Note, choice.Target.Resource[6..], out var id) || id != choice.Target.Id) continue;
-                var row = new TagFlowPanel { HorizontalSpacing = 10, VerticalSpacing = 6 };
-                row.Children.Add(External(choice.Title + " · " + choice.Target.Resource[6..] + " 商店", choice.Note));
-                var remove = Button("移除此页面"); remove.Click += async (_, _) =>
-                {
-                    var current = model; var reference = current?.Reference;
-                    if (current is null || dialog is not null) return;
-                    dialog = new() { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "移除这个商店关联？", Content = "当前发行版和其他资料保持。", PrimaryButtonText = "移除", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
-                    try { if (await dialog.ShowAsync() == ContentDialogResult.Primary && ReferenceEquals(current, model) && current.Reference == reference) await current.RemoveAppleAsync(choice); }
-                    finally { dialog = null; }
-                }; row.Children.Add(remove); saved.Children.Add(row);
-            }
-        }
-        if (model.Apple is { } result)
-        {
-            candidates.Children.Add(Text(16, "iTunes 商店候选 · " + result.Query.Country));
-            candidates.Children.Add(Text(12, "仅为商店目录；核对后可保存，不会自动绑定或推断订阅播放资格。"));
-            foreach (var candidate in result.Candidates)
-            {
-                var box = new StackPanel { Spacing = 6, Children = { Text(15, candidate.Title), Text(13, candidate.Artist), Text(12, $"{candidate.ReleaseDate} · {candidate.TrackCount} 首 · {candidate.Country} 商店 · iTunes {candidate.Id}") } };
-                if (model.Current?.Snapshot is { } source) foreach (var difference in candidate.Differences(source)) box.Children.Add(Text(12, difference));
-                box.Children.Add(External("查看商店页面 ↗", candidate.Url));
-                var alreadySaved = model.Choices?.Items.Any(x => x.Target == candidate.Target && x.Note == candidate.Url) == true;
-                var save = Button(alreadySaved ? "已保存这个页面" : "保存这个商店页面"); save.IsEnabled = model.CanLoad && !alreadySaved; AutomationProperties.SetAutomationId(save, "MusicAppleSave-" + candidate.Id);
-                save.Click += async (_, _) => await ConfirmApple(candidate, result); box.Children.Add(save);
-                candidates.Children.Add(new Border { Padding = new(12), CornerRadius = new(6), Background = (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["CardBackgroundFillColorDefaultBrush"], Child = box });
-            }
-            evidence.Children.Add(Text(12, $"Apple 官方目录 · {result.Query.Country} · {result.FetchedAtUtc:yyyy-MM-dd HH:mm} UTC · 已排除 {result.Discarded} 条无法对应的结果"));
-            if (result.Limited) evidence.Children.Add(Text(12, "仅检查有限候选，不能由唯一返回项推断确定身份。"));
-        }
+            var narrow = row.ActualWidth < 620; if (wasNarrow == narrow) return; wasNarrow = narrow;
+            row.ColumnDefinitions[0].Width = narrow ? new(1, GridUnitType.Star) : new(216);
+            row.ColumnDefinitions[1].Width = narrow ? new(0) : new(1, GridUnitType.Star);
+            Grid.SetColumn(platforms, narrow ? 0 : 1); Grid.SetRow(platforms, narrow ? 1 : 0);
+        };
+        body.Children.Add(row);
     }
     private void AddLinks(StackPanel body, IEnumerable<MusicOutletLink> input)
     {
-        foreach (var group in MusicOutlets.Merge(input, Sort).GroupBy(x => x.Kind).OrderBy(x => x.Key))
+        foreach (var group in MusicOutlets.Merge(input, MusicOutletSort.PlatformName).OrderBy(PlatformName, StringComparer.CurrentCulture).GroupBy(x => x.Kind).OrderBy(x => x.Key))
         {
-            var kindLabel = group.Key switch { MusicOutletKind.Listening => "收听入口", MusicOutletKind.Purchase => "购买页面", _ => "资料链接" };
-            body.Children.Add(Text(13, kindLabel));
-            var flow = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 8 };
+            var row = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6 };
+            var kind = group.Key switch { MusicOutletKind.Listening => "收听", MusicOutletKind.Purchase => "购买", _ => "资料" };
+            var label = Text(12, kind); label.Opacity = .7; row.Children.Add(label);
             foreach (var value in group)
             {
-                var label = value.Regions.Length == 0 ? "地区未注明" : "商店地区 · " + string.Join(" / ", value.Regions);
-                var content = new StackPanel { IsHitTestVisible = false, Spacing = 4, Children = { Text(15, value.Platform + " ↗"), Text(12, label + " · " + (value.TargetLayer == "Album" ? "专辑页" : value.TargetLayer == "Recording" ? "曲目页" : "资料页")) } };
-                var link = new Button { Content = content, CornerRadius = new(6), Padding = new(12, 8, 12, 8), HorizontalContentAlignment = HorizontalAlignment.Left, MaxWidth = 340 };
-                ToolTipService.SetToolTip(link, value.Url); AutomationProperties.SetName(link, value.Platform + " · " + kindLabel + " · " + label);
-                link.Click += async (_, _) => await Open(value.Url); flow.Children.Add(link);
-                foreach (var source in value.Sources) evidence.Children.Add(Text(12, value.Platform + " · " + source.Source + " · " + source.Note + " · " + source.Url));
+                var name = PlatformName(value);
+                var content = Text(14, name + " ↗"); content.IsHitTestVisible = false;
+                var link = new Button { Content = content, CornerRadius = new(5), Padding = new(12, 5, 12, 5), MinHeight = 32, MaxWidth = 260, HorizontalContentAlignment = HorizontalAlignment.Left };
+                ToolTipService.SetToolTip(link, string.Join("\n", new[] { MusicOutlets.PurposeLabel(value), value.Regions.Length == 0 ? null : "地区 · " + string.Join(" / ", value.Regions), value.Url }.OfType<string>()));
+                AutomationProperties.SetAutomationId(link, "MusicOutlet-" + value.Entity.Id + "-" + value.Kind + "-" + name);
+                AutomationProperties.SetName(link, name + " · " + kind);
+                link.Click += async (_, _) => await Open(value.Url); row.Children.Add(link);
             }
-            body.Children.Add(flow);
+            body.Children.Add(row);
         }
     }
-    private async Task ConfirmApple(AppleAlbumCandidate candidate, AppleCatalogResult result)
+    private static string PlatformName(MusicOutletLink link) => new Uri(link.Url).Host switch
     {
-        var current = model; var reference = current?.Reference; var source = current?.Current?.Snapshot;
-        if (current is null || source is null || current.Apple != result || !current.CanLoad || dialog is not null) return;
-        var content = new StackPanel { Spacing = 8, Children = { Text(14, source.Title + " · " + source.Artist), Text(14, candidate.Title + " · " + candidate.Artist), Text(13, "保存为独立商店页面关联。不会更换当前发行版，也不表示 Apple Music 订阅可听。") } };
-        foreach (var difference in candidate.Differences(source)) content.Children.Add(Text(13, difference));
-        dialog = new() { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "保存这个 iTunes 商店页面？", Content = content, PrimaryButtonText = "核对后保存", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
-        try { if (await dialog.ShowAsync() == ContentDialogResult.Primary && ReferenceEquals(current, model) && current.Reference == reference && current.Apple == result) await current.SaveAppleAsync(candidate); }
-        finally { dialog = null; }
+        "www.amazon.co.jp" or "www.amazon.com" or "amazon.co.jp" or "amazon.com" => "Amazon",
+        "www.discogs.com" or "discogs.com" => "Discogs", "vgmdb.net" or "www.vgmdb.net" => "VGMdb",
+        "store.steampowered.com" => "Steam", _ => link.Platform
+    };
+    private void AddEvidence(MusicOutletSnapshot snapshot, string heading)
+    {
+        evidence.Children.Add(Text(13, heading + " · " + snapshot.Title));
+        AddLinks(evidence, snapshot.Links.Where(x => !Useful(x)));
+        evidence.Children.Add(Text(12, $"{snapshot.Artist} · {snapshot.Date}\n{snapshot.Entity.Kind} · {snapshot.Entity.Id} · {snapshot.FetchedAtUtc:yyyy-MM-dd HH:mm} UTC"));
+        foreach (var value in MusicOutlets.Merge(snapshot.Links, MusicOutletSort.PlatformName).OrderBy(PlatformName, StringComparer.CurrentCulture))
+        {
+            foreach (var source in value.Sources) evidence.Children.Add(Text(12, PlatformName(value) + " · " + source.Source + " · " + source.Note + "\n" + source.Url));
+            foreach (var relation in value.Relationships)
+                evidence.Children.Add(Text(12, $"{relation.Type} · {relation.Direction} · {relation.Entity.Kind}:{relation.Entity.Id}\n{relation.OriginalUrl}"));
+        }
     }
-    private HyperlinkButton External(string label, string url) { var link = new HyperlinkButton { Content = new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap, IsHitTestVisible = false }, Padding = new(0), HorizontalAlignment = HorizontalAlignment.Left }; link.Click += async (_, _) => await Open(url); return link; }
+    private void RenderSaved()
+    {
+        if (model?.Choices?.Items.Length is not > 0) return;
+        saved.Children.Add(Text(13, "已保存的个人页面"));
+        foreach (var choice in model.Choices.Items)
+        {
+            if (!MediaUserLinkRules.Valid(choice) || choice.Target.Provider != "iTunes" || !AppleAlbumCandidate.TryAlbumUrl(choice.Note, choice.Target.Resource[6..], out var id) || id != choice.Target.Id) continue;
+            var row = new TagFlowPanel { HorizontalSpacing = 10, VerticalSpacing = 6 };
+            var link = new HyperlinkButton { Content = new TextBlock { Text = choice.Title + " ↗", TextWrapping = TextWrapping.Wrap, IsHitTestVisible = false }, Padding = new(0), HorizontalAlignment = HorizontalAlignment.Left };
+            ToolTipService.SetToolTip(link, "你保存的独立商店关联 · " + choice.Target.Resource[6..] + " · " + choice.Note);
+            link.Click += async (_, _) => await Open(choice.Note); row.Children.Add(link);
+            var remove = Button("移除"); remove.Click += async (_, _) =>
+            {
+                var current = model; var reference = current?.Reference;
+                if (current is null || dialog is not null) return;
+                dialog = new() { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "移除这个商店关联？", Content = "当前发行版和其他资料保持。", PrimaryButtonText = "移除", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
+                try { if (await dialog.ShowAsync() == ContentDialogResult.Primary && ReferenceEquals(current, model) && current.Reference == reference) await current.RemoveAppleAsync(choice); }
+                finally { dialog = null; }
+            }; row.Children.Add(remove); saved.Children.Add(row);
+        }
+    }
     private async Task Open(string url)
     {
         try { if (!WatchLinks.SafeUrl(url) || !await Windows.System.Launcher.LaunchUriAsync(new Uri(url))) throw new InvalidOperationException(); }
-        catch { status.Text = "暂时无法打开平台页面，请稍后重试。"; }
+        catch { status.Text = "暂时无法打开平台页面，请稍后重试。"; status.Visibility = Visibility.Visible; }
     }
     private static TextBlock Text(double size, string value = "") => new() { Text = value, FontSize = size, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
-    private static Button Button(string value) => new() { Content = value, MinHeight = 32, CornerRadius = new(6), HorizontalAlignment = HorizontalAlignment.Left };
+    private static Button Button(string value) => new() { Content = value, MinHeight = 32, CornerRadius = new(5), HorizontalAlignment = HorizontalAlignment.Left };
     private static Visibility Visible(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
-    internal object Evidence => new { reference = model?.Reference, expanded = section.IsExpanded, busy = model?.Busy, current = model?.Current, digital = model?.Digital, apple = model?.Apple, saved = model?.Choices?.Items, status = status.Text };
+    internal object Evidence => new { reference = model?.Reference, expanded = section.IsExpanded, optionsExpanded = options.Visibility == Visibility.Visible,
+        busy = model?.Busy, current = model?.Current, digital = model?.Digital, apple = model?.Apple, saved = model?.Choices?.Items, status = status.Text,
+        statusVisible = status.Visibility == Visibility.Visible, sectionHeight = section.ActualHeight, contentRows = entries.Children.Count };
     public void Cancel() => model?.Cancel();
     public void Deactivate() { dialog?.Hide(); model?.SetContext(null); section.IsExpanded = false; Visibility = Visibility.Collapsed; }
     public void Dispose() { if (disposed) return; Deactivate(); disposed = true; if (model is not null) { model.PropertyChanged -= Changed; model.Dispose(); } }
