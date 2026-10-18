@@ -11,7 +11,7 @@ public sealed class GameVideoView : StackPanel, IDisposable
 {
     private readonly Expander section = new() { Header = "宣传影像 / PV", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel candidates = new() { Spacing = 8 }, videos = new() { Spacing = 8 };
-    private readonly StackPanel identityActions = new() { Spacing = 8 };
+    private readonly TagFlowPanel identityActions = new() { HorizontalSpacing = 8, VerticalSpacing = 6 };
     private readonly StackPanel otherCandidates = new() { Spacing = 8 };
     private readonly Expander otherVersions = new() { Header = "其他检索结果", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly TextBlock status = Text(13);
@@ -118,6 +118,7 @@ public sealed class GameVideoView : StackPanel, IDisposable
     private void StopPlayer() { player.Show(null, false, null); playing = null; }
     public void Suspend() { model?.Cancel(); StopPlayer(); }
     public void Dispose() { Suspend(); model?.Dispose(); player.Dispose(); }
+    internal Task ProbeForFixtureAsync() => player.ProbeForFixtureAsync();
     internal object Evidence => new { expanded = section.IsExpanded, source = model?.Source, game = model?.Game?.Id, model?.Busy, model?.Message,
         candidates = model?.Candidates.Select(x => x.Id), videos = model?.Videos, defaultVideo = model?.DefaultVideo, playing, playback = player.Evidence };
     private static TextBlock Text(double size, string text = "") => new() { FontSize = size, Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };

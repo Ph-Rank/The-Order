@@ -77,4 +77,12 @@ public sealed class AniListPlaybackTests
     }
     [Theory][InlineData(100)][InlineData(101)][InlineData(150)][InlineData(153)][InlineData(5)]
     public void PlayerFailuresHaveUsableFallback(int code) => Assert.NotEmpty(AniListPlayback.PlayerError(code));
+    [Fact]
+    public void InlinePlayerPolicyMatchesTheScriptAfterBrowserNewlineNormalization()
+    {
+        var html=AniListPlayback.PlayerDocument(new("youtube","abcdefghijk"));
+        var script=System.Text.RegularExpressions.Regex.Match(html,@"<script>([\s\S]*?)</script>").Groups[1].Value.Replace("\r\n","\n").Replace("\r","\n");
+        var hash=Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(script)));
+        Assert.Contains("script-src 'sha256-"+hash+"'",html);
+    }
 }

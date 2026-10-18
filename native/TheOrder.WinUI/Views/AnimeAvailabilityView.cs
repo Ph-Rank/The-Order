@@ -40,7 +40,7 @@ internal sealed class AnimeAvailabilityView : StackPanel, IDisposable
         if (automationPrefix != "Anime") pv.Header = "播放影像 · YouTube";
         var actions = new TagFlowPanel { HorizontalSpacing = 10, VerticalSpacing = 8, CenterInlineItems = false, Children = { original, retry } };
         pvBody.Children.Add(Text(13, attribution));
-        pvBody.Children.Add(Text(12, "播放后可在视频右下角的设置菜单中选择画质；可用选项由 YouTube 提供。"));
+        pvBody.Children.Add(Text(12, "可在播放器的“设置 → 画质”中选择清晰度；可用选项由 YouTube 提供。"));
         pvBody.Children.Add(actions); pvBody.Children.Add(playerStatus); pvBody.Children.Add(host); pv.Content = pvBody;
         retry.Click += async (_, _) => { Stop(); await StartAsync(); };
         original.Click += async (_, _) => { if (trailer is { } value) await OpenLinkAsync(value.Url); };
@@ -166,7 +166,7 @@ internal sealed class AnimeAvailabilityView : StackPanel, IDisposable
     internal void CollapseForFixture() => pv.IsExpanded = false;
     // Fixed action, available only through the existing Test-scoped fixture.
     internal async Task PlayForFixtureAsync() { if (web?.CoreWebView2 is { } core && state is "ready" or "paused") await core.ExecuteScriptAsync("if(typeof player!=='undefined'&&player&&player.playVideo){player.mute();player.playVideo();}"); }
-    internal async Task ProbeForFixtureAsync() { if (web?.CoreWebView2 is { } core) playerProbe = await core.ExecuteScriptAsync("typeof player!=='undefined'&&player&&player.getPlayerState?({state:player.getPlayerState(),seconds:player.getCurrentTime(),duration:player.getDuration()}):null"); }
+    internal async Task ProbeForFixtureAsync() { if (web?.CoreWebView2 is { } core) playerProbe = await core.ExecuteScriptAsync("({page:location.href,ready:document.readyState,api:typeof YT,apiPlayer:typeof YT==='undefined'?null:typeof YT.Player,callback:typeof window.onYouTubeIframeAPIReady,iframe:document.querySelector('iframe')?.src??null,player:typeof player!=='undefined'&&player&&player.getPlayerState?({state:player.getPlayerState(),seconds:player.getCurrentTime(),duration:player.getDuration()}):null})"); }
     public void Dispose() { if (disposed) return; Stop(); disposed = true; trailer = null; }
     private static TextBlock Text(double size, string value = "") => new() { FontSize = size, Text = value, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
 }

@@ -47,6 +47,9 @@ public static class AniListPlayback
         });};
         window.pausePv=()=>{if(player&&player.pauseVideo)player.pauseVideo();};
         """;
+        // HTML parsing normalizes CRLF/CR to LF before checking inline CSP hashes.
+        // Git checkout/build newline policy must not disable the player.
+        script = script.ReplaceLineEndings("\n");
         var hash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(script)));
         return $$"""
         <!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="strict-origin-when-cross-origin">

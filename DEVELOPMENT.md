@@ -8,7 +8,7 @@
 
 NextMoe已收录DLsite的RJ/VJ/BJ商品编号转换为普通来源蓝色链接，首页/搜索页不进入商品来源，不后台逐条探测商品。上游旧商品可能404；已以真实RJ297925核对《星空铁道与白的旅行》商品页。宣传影像放到标签上方，高级撤销/重置收进影像选项。播放器显式启用YouTube原生控件与中文界面，分辨率由YouTube自身决定；不使用失效的强制画质API。
 
-本轮隔离证据目录.artifacts/release-1.2.1-beta-20261019/。当前代码阶段服务Node36/36、workerd/SQLite7/7及客户端定向128/128；完整回归、最终WinUI、安装包/回退、日用切换及GitHub发布仍须后续凭据确认，不能视作已交付。所有测试仅合成Test Profile，不读取Production或游戏数据。后续以该目录最终report.md和completion.json确认实际完成范围。
+本轮隔离证据目录.artifacts/release-1.2.1-beta-20261019/。最终完整客户端4443/0/0（含既有本地合成Worker闭环）、服务Node36/36与workerd/SQLite7/7通过。真实IGDB复核31个既有人工审定编号全部成功，29个有影像、5个原有歧义仍保留。实际WinUI已播放Sabbat影像，并打开原生画质列表及选择720p；不是物理设备验收。补充发现并以先失败/后通过测试修复CSP脚本哈希的HTML换行规范化问题，不放宽CSP。最终安装包、回退、日用切换及GitHub发布须以对应回执确认，不能视作已交付。所有测试仅合成Test Profile，不读取Production或游戏数据。后续以该目录最终report.md和completion.json确认实际完成范围。
 
 
 ## IGDB 公网服务维护（2026-10-19）

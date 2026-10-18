@@ -98,6 +98,7 @@ public sealed partial class MainWindow
             // A bounded control selection, distinguished from physical keyboard input.
             choice.SelectedIndex = mode[^1] - '0';
         }
+        if (id == "GamePV" && mode == "inspect") await detailsPage.ProbeGameVideoForFixtureAsync();
         await Task.Delay(150);
         await File.WriteAllTextAsync(Path.Combine(fixtureDirectory, "acgn-control-evidence.json"), JsonSerializer.Serialize(new
         { before, focused = target is Control focusable ? focusable.FocusState.ToString() : null, details = detailsPage.BangumiEvidence, page = ViewModel.Page.ToString(),

@@ -15,6 +15,7 @@ public sealed partial class DetailsPage
         if (source is { Title.Length: 0 }) source = source.SteamId is not null || source.ExplicitIds.Length > 0 ? source with { Title = "游戏影像" } : null;
         gameVideos?.SetSource(source);
     }
+    internal Task ProbeGameVideoForFixtureAsync() => gameVideos?.ProbeForFixtureAsync() ?? Task.CompletedTask;
     internal object? GameVideoEvidence => gameVideos?.Evidence;
     internal void SuspendGameVideos() => gameVideos?.Suspend();
 }
