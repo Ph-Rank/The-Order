@@ -7,7 +7,7 @@ namespace TheOrder.Presentation;
 public sealed record RecognitionReviewCard(Guid Id, string GameId, string Title, string Status, string Summary);
 public sealed record RecognitionCandidateCard(string Id, string Title, string Summary, string Evidence, string Conflicts, bool CanApply);
 
-public sealed class RecognitionViewModel : ObservableState, IAsyncDisposable
+public sealed partial class RecognitionViewModel : ObservableState, IAsyncDisposable
 {
     private readonly OfflineLibraryClient offline;
     private readonly RecognitionQueue queue;
@@ -16,6 +16,7 @@ public sealed class RecognitionViewModel : ObservableState, IAsyncDisposable
     private readonly IRemoteCoverRegistry covers;
     private readonly OnlineAuthContext auth;
     private readonly WorkspaceViewModel workspace;
+    private readonly IMediaIdentityDecisions identityDecisions;
     private readonly CancellationTokenSource lifetime = new();
     private readonly HashSet<Task> pending = [];
     private CancellationTokenSource? batch, details;
@@ -31,16 +32,17 @@ public sealed class RecognitionViewModel : ObservableState, IAsyncDisposable
     private Guid? selectedId;
     private string manualId = "", selectedCandidate = "";
     public RecognitionViewModel(OfflineLibraryClient offline, RecognitionQueue queue, RecognitionReviewService reviews,
-        IRecognitionCatalog catalog, IRemoteCoverRegistry covers, OnlineAuthContext auth, WorkspaceViewModel workspace)
+        IRecognitionCatalog catalog, IRemoteCoverRegistry covers, OnlineAuthContext auth, WorkspaceViewModel workspace, IMediaIdentityDecisions? identityDecisions = null)
     {
         this.offline = offline; this.queue = queue; this.reviews = reviews; this.catalog = catalog; this.covers = covers; this.auth = auth; this.workspace = workspace;
+        this.identityDecisions = identityDecisions ?? new SessionMediaIdentityDecisions();
         authGeneration = auth.Generation; reviews.Changed += OnChanged; queue.Changed += OnChanged;
     }
     private bool useOnline = true, includePe = true;
     public bool UseOnline { get => useOnline; set => Set(ref useOnline, value); }
     // Match the Electron default: bounded, read-only VERSIONINFO evidence, never execution.
     public bool IncludePe { get => includePe; set => Set(ref includePe, value); }
-    public string ManualId { get => manualId; set => Set(ref manualId, value); }
+    public string ManualId { get => manualId; set { if (Set(ref manualId, value)) Changed(nameof(CanSaveManualPending)); } }
     public bool Busy => busy;
     public string Message { get; private set; } = UiText.Get("导入后自动识别。排序分严格大于 0.9、身份与版本一致且唯一领先时自动应用；歧义或证据不足的结果在作品详情中核对。");
     public string ProgressText { get; private set; } = UiText.Get("尚未开始识别。");
@@ -71,6 +73,8 @@ public sealed class RecognitionViewModel : ObservableState, IAsyncDisposable
     public bool CanApply => !busy && workspace.CanEdit && selectedId is { } id && reviews.Snapshot.FirstOrDefault(r => r.Id == id)?.Status == RecognitionReviewStatus.NeedsReview && Candidates.Any(c => c.Id == selectedCandidate && c.CanApply);
     public bool CanConfirmSelection => !busy && workspace.CanEdit && Candidates.Any(c => c.Id == selectedCandidate) &&
         SelectedReview?.Result?.Candidates.FirstOrDefault(c => c.Work.Id == selectedCandidate)?.Vetoed != true;
+    public bool CanLinkSelectedManually => !busy && workspace.CanEdit && HasSelection && Candidates.Any(c => c.Id == selectedCandidate);
+    public bool SelectedCandidateHasConflict => SelectedReview?.Result?.Candidates.FirstOrDefault(c => c.Work.Id == selectedCandidate)?.Vetoed == true;
     public string ConfirmSelectionText => SelectedReview?.Status == RecognitionReviewStatus.NeedsReview ? UiText.Get("确认应用所选候选") : UiText.Get("复核并应用所选候选");
     public ClientResult? LastDecision { get; private set; }
     public RecognitionJobState? LastJobState => queue.Snapshot.LastOrDefault()?.State;
@@ -133,6 +137,8 @@ public sealed class RecognitionViewModel : ObservableState, IAsyncDisposable
     public void Select(Guid id)
     {
         if (selectedId == id) return; CancelDetails(); selectedId = id; ChangeCandidate(""); RemoteCoverKey = null; RemoteLinks = []; DisplayedCandidateId = null; RemoteFacts = UiText.Get("选择候选后可查看完整详情。"); LastDecision = null; Refresh();
+        manualChoices = null; var game = SelectedGameId; var version = ++manualChoicesVersion;
+        if (game is not null) _ = Track(() => LoadManualChoicesAsync(game, version));
     }
     // An embedded review must never retain another game's candidate or detail request.
     public void SelectForGame(string? gameId)
@@ -344,7 +350,16 @@ public sealed class RecognitionViewModel : ObservableState, IAsyncDisposable
         finally { busy = false; Refresh(); }
         if (CanApply && selectedId == jobId && selectedCandidate == candidate) await ApplyCapturedAsync(jobId, candidate, game);
     });
-    public Task ManualLinkAsync() => SelectedGameId is { } id ? Mutate(c => reviews.ManualLinkAsync(id, ManualId.Trim(), c), id) : Task.CompletedTask;
+    public Task ManualLinkAsync()
+    {
+        if (SelectedGameId is not { } id) return Task.CompletedTask;
+        var target = ManualId.Trim(); return Mutate(c => reviews.ManualLinkAsync(id, target, c), id);
+    }
+    public Task ManualLinkSelectedAsync()
+    {
+        if (!CanLinkSelectedManually || SelectedGameId is not { } id) return Task.CompletedTask;
+        var target = selectedCandidate; return Mutate(c => reviews.ManualLinkAsync(id, target, c), id);
+    }
     public Func<string, string?, Task>? ReviewCompleted { get; set; }
     private Task Mutate(Func<CancellationToken, Task<ClientResult>> action, string? gameId) => Track(async () =>
     {
@@ -374,7 +389,8 @@ public sealed class RecognitionViewModel : ObservableState, IAsyncDisposable
     });
     public Task OpenDetailsAsync(string candidateId) => Track(async () =>
     {
-        if (selectedId is not { } review || !Candidates.Any(c => c.Id == candidateId)) return;
+        if (selectedId is not { } review || !CatalogWorkReference.TryParse(candidateId, out var parsed)) return;
+        candidateId = parsed;
         ChangeCandidate(candidateId); CancelDetails(); details = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         var token = details.Token; long generation = detailsGeneration, selection = candidateSelectionGeneration, epoch = auth.Generation;
         bool Current() => generation == detailsGeneration && selection == candidateSelectionGeneration && selectedId == review && selectedCandidate == candidateId && epoch == auth.Generation && !token.IsCancellationRequested;
@@ -404,7 +420,7 @@ public sealed class RecognitionViewModel : ObservableState, IAsyncDisposable
         }
     }
     private async Task Observe(Task task) { try { await task; } finally { lock (pending) pending.Remove(task); } }
-    private void Notify() { foreach (string name in new[] { nameof(Reviews), nameof(Candidates), nameof(SelectedReviewItem), nameof(SelectedCandidateItem), nameof(SelectedTitle), nameof(SelectedId), nameof(SelectedGameId), nameof(LocalFacts), nameof(SelectedMessage), nameof(RemoteFacts), nameof(RemoteCoverKey), nameof(RemoteLinks), nameof(ProgressText), nameof(Progress), nameof(HasRecognitionWork), nameof(Message), nameof(Busy), nameof(CanApply), nameof(CanConfirmSelection), nameof(ConfirmSelectionText), nameof(HasSelection), nameof(PersistenceError), nameof(LastDecision), nameof(LastJobState) }) Changed(name); }
+    private void Notify() { foreach (string name in new[] { nameof(Reviews), nameof(Candidates), nameof(SelectedReviewItem), nameof(SelectedCandidateItem), nameof(SelectedTitle), nameof(SelectedId), nameof(SelectedGameId), nameof(LocalFacts), nameof(SelectedMessage), nameof(RemoteFacts), nameof(RemoteCoverKey), nameof(RemoteLinks), nameof(ProgressText), nameof(Progress), nameof(HasRecognitionWork), nameof(Message), nameof(Busy), nameof(CanApply), nameof(CanConfirmSelection), nameof(CanLinkSelectedManually), nameof(SelectedCandidateHasConflict), nameof(ConfirmSelectionText), nameof(HasSelection), nameof(PersistenceError), nameof(LastDecision), nameof(LastJobState) }) Changed(name); }
     public async ValueTask DisposeAsync()
     {
         if (disposed) return; disposed = true; lifetime.Cancel(); CancelDetails();

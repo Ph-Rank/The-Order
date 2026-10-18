@@ -31,6 +31,9 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
     private readonly Button confirm = Button("确认使用此发行版"), reject = Button("排除此发行版"), chooseAgain = Button("重新选择"), showTracks = Button("查看曲目列表");
     private readonly TextBox searchQuery = new() { PlaceholderText = "专辑名，或 MusicBrainz 发行版 / 专辑组链接", MaxLength = 2000, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly Button search = Button("查找专辑");
+    private readonly Button retryCover = Button("重试封面");
+    private readonly Button addRelated = Button("添加相关发行版"), savePending = Button("保存为待核验"), restoreAutomatic = Button("恢复自动选择");
+    private readonly Expander userSelections = new() { Header = "我的关联与待核验选择", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly Grid searchRow = new() { ColumnSpacing = 8 };
     private readonly CreditColumnsPanel candidates = new();
     private readonly StackPanel discs = new() { Spacing = 12 }, personnel = new() { Spacing = 8 };
@@ -76,7 +79,12 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         originalTitle.Opacity = .7;
         var info = new StackPanel { Spacing = 10, Children = { type, title, originalTitle, artist, artistLinks, releaseFacts, choiceReason } }; SetColumn(info, 1); header.Children.Add(info);
         actions.Children.Add(ring); actions.Children.Add(cancel); actions.Children.Add(retry); actions.Children.Add(showTracks); actions.Children.Add(editions);
-        confirmActions.Children.Add(confirm); confirmActions.Children.Add(chooseAgain);
+        confirmActions.Children.Add(confirm); confirmActions.Children.Add(addRelated); confirmActions.Children.Add(chooseAgain);
+        actions.Children.Add(savePending);
+        retryCover.Visibility = Visibility.Collapsed; actions.Children.Add(retryCover); AutomationProperties.SetAutomationId(retryCover, "MusicAlbumRetryCover");
+        retryCover.Click += (_, _) => cover.RetryFailed();
+        cover.SourceStateChanged += () => retryCover.Visibility = Visible(active && !cover.HasImage && cover.SourceKey is not null && cover.SourceStatus is not ("loading" or "not-started"));
+        AutomationProperties.SetAutomationId(addRelated, "MusicAlbumAddRelated"); AutomationProperties.SetAutomationId(savePending, "MusicAlbumSavePending"); AutomationProperties.SetAutomationId(restoreAutomatic, "MusicAlbumRestoreAutomatic");
         actions.Children.Add(reject); AutomationProperties.SetAutomationId(reject, "MusicAlbumReject");
         ToolTipService.SetToolTip(reject, "取消关联并排除自动匹配；仍可手动核对后重新确认。");
         searchRow.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); searchRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
@@ -86,7 +94,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         credits.Content = personnel; summarySection.Children.Add(summary);
         raw.Content = rawBody; sourceBody.Children.Add(raw); sourceBody.Children.Add(refresh); sources.Content = sourceBody;
         var body = new StackPanel { Spacing = 24, MaxWidth = 1160, HorizontalAlignment = HorizontalAlignment.Stretch,
-            Children = { header, relation, status, actions, confirmActions, candidateSection, tracksSection, credits, summarySection, languageInfo, sources } };
+            Children = { header, relation, status, actions, confirmActions, userSelections, candidateSection, tracksSection, credits, summarySection, languageInfo, sources } };
         scroll = new() { Content = body, HorizontalContentAlignment = HorizontalAlignment.Stretch, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Children.Add(scroll);
         scroll.Loaded += (_, _) => QueueStart(); body.SizeChanged += (_, _) => { QueueStart(); RestoreAlbumPosition(); };
@@ -96,8 +104,22 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         scroll.KeyDown += (_, _) => UserInput();
         cancel.Click += (_, _) => model?.Cancel(); retry.Click += async (_, _) => await RefreshAsync(); refresh.Click += async (_, _) => await RefreshAsync();
         editions.Click += async (_, _) => { if (model is not null) await model.ChooseEditionAsync(); };
-        confirm.Click += async (_, _) => { if (model is not null) await model.ConfirmAsync(); };
-        reject.Click += async (_, _) => { if (model?.CanReject == true) await model.RejectAsync(); else if (model is not null) await model.RevokeAsync(); };
+        confirm.Click += async (_, _) =>
+        {
+            if (model?.CanConfirm != true) return;
+            var selected = model; var source = model.Source; var target = model.Preview;
+            if (MusicBrainzMatching.Assess(source!, target!.Album.Release).HasConflict)
+            {
+                var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "仍要使用这个发行版？",
+                    Content = "日期、目录编号或其他发行资料存在差异。请核对版本和曲目；原有个人资料会保留。", PrimaryButtonText = "仍要关联", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
+                if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            }
+            if (ReferenceEquals(model, selected) && model.Source == source && model.Preview == target && model.CanConfirm) await model.ConfirmAsync();
+        };
+        addRelated.Click += async (_, _) => { if (model?.CanAddRelated == true) await model.AddRelatedAsync(); };
+        savePending.Click += async (_, _) => { if (model?.CanSavePending == true) await model.SavePendingAsync(); };
+        restoreAutomatic.Click += async (_, _) => { if (model?.CanRestoreAutomatic == true) await model.RestoreAutomaticAsync(); };
+        reject.Click += async (_, _) => { if (model?.RelatedSelection == true && model.Displayed is { } selected) await model.RemoveUserLinkAsync(MediaIdentityDecisionRules.Target(selected.Album.Release.Id)); else if (model?.CanReject == true) await model.RejectAsync(); else if (model is not null) await model.RevokeAsync(); };
         chooseAgain.Click += (_, _) => model?.BackToEditions();
         showTracks.Click += (_, _) => tracksSection.StartBringIntoView();
         search.Click += async (_, _) => await SearchAsync();
@@ -134,7 +156,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
     private void StateChanged(object? sender, PropertyChangedEventArgs e) { if (active && !disposed) Render(); }
     private void Render()
     {
-        var album = model?.Displayed?.Album; var source = model?.SourceDetails?.Details; var item = model?.Item;
+        var album = model?.Displayed?.Album; var source = model?.RelatedSelection == true ? null : model?.SourceDetails?.Details; var item = model?.Item;
         var localizedTitle = album is not null ? ContentLanguage.MusicTitle(album, source, model?.State == MusicAlbumState.Ready) : source is not null ? ContentLanguage.BangumiTitle(source) : null;
         title.Text = localizedTitle?.Text is { Length: > 0 } selectedTitle ? selectedTitle : album?.Release.Title ?? source?.Title ?? item?.Title ?? "音乐";
         originalTitle.Text = localizedTitle?.OriginalText ?? "";
@@ -155,6 +177,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         artistLinks.Visibility = Visible(creditedArtists is { Length: > 0 });
         if (creditedArtists is { Length: > 0 }) artist.Visibility = Visibility.Collapsed;
         relation.Text = origin.Length == 0 ? relationLabel : $"与《{origin}》的关联 · {relationLabel}";
+        if (model?.RelatedSelection == true) relation.Text = $"与《{model.Source?.Title}》的关联 · 用户添加的相关发行版";
         status.Text = model?.Message ?? ""; status.Visibility = Visible(status.Text.Length > 0);
         ring.IsActive = model?.IsBusy == true; ring.Visibility = Visible(ring.IsActive);
         cancel.Visibility = Visible(model?.CanCancel == true); retry.Visibility = Visible(model?.State is MusicAlbumState.Failed or MusicAlbumState.Cancelled);
@@ -163,9 +186,13 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         showTracks.Visibility = Visible(album?.Discs.Any(x => x.Tracks.Length > 0) == true);
         actions.Visibility = Visible(actions.Children.OfType<FrameworkElement>().Any(x => x.Visibility == Visibility.Visible));
         confirmActions.Visibility = Visible(model?.State == MusicAlbumState.Preview); confirm.IsEnabled = model?.CanConfirm == true;
+        addRelated.IsEnabled = model?.CanAddRelated == true;
+        addRelated.Style = model?.CanConfirm == true ? null : (Style)Microsoft.UI.Xaml.Application.Current.Resources["AccentButtonStyle"];
+        savePending.Visibility = Visible(model?.PendingReference is not null && model?.Preview is null); savePending.IsEnabled = model?.CanSavePending == true;
+        RenderUserSelections();
         reject.Visibility = Visible(model?.Displayed is not null || model?.SavedUserTargetId is not null);
         reject.IsEnabled = model?.CanReject == true || model?.CanRevoke == true;
-        reject.Content = model?.Displayed is null || model?.State == MusicAlbumState.Ready ? "取消关联" : "排除此发行版";
+        reject.Content = model?.RelatedSelection == true ? "移除相关发行版" : model?.Displayed is null || model?.State == MusicAlbumState.Ready ? "取消关联" : "排除此发行版";
         candidateSection.Visibility = Visible(model?.State == MusicAlbumState.Choosing || model?.State == MusicAlbumState.Failed && source is not null);
         search.IsEnabled = searchQuery.IsEnabled = model?.CanLoad == true;
         if (!ReferenceEquals(shownSearch, model?.Match?.Search)) { shownSearch = model?.Match?.Search; RenderCandidates(); }
@@ -175,8 +202,29 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         languageInfo.Show(localizedTitle ?? ContentLanguage.Select([]), localizedSummary);
         summary.Text = localizedSummary.Text; summarySection.Visibility = Visible(summary.Text.Length > 0);
         RenderSources(album, item, source);
-        SetCover(album?.CoverUrl ?? source?.CoverUrl ?? item?.CoverUrl, source?.CoverUrl ?? item?.CoverUrl);
+        var bridgeCover = model?.RelatedSelection == true || model?.State == MusicAlbumState.Preview ? null : source?.CoverUrl ?? item?.CoverUrl;
+        SetCover(album?.CoverUrl ?? bridgeCover, bridgeCover);
         QueueStart();
+    }
+    private void RenderUserSelections()
+    {
+        if (userSelections.Content is StackPanel old) old.Children.Clear();
+        var panel = new StackPanel { Spacing = 10 };
+        foreach (var link in model?.UserLinks?.Items ?? [])
+        {
+            var row = new StackPanel { Spacing = 5 };
+            row.Children.Add(Text(14, link.Title));
+            row.Children.Add(Text(12, $"MusicBrainz · {link.Target.Resource} · {link.Target.Id} · " + (link.State == MediaUserLinkState.Pending ? "待核验（不融合资料）" : "相关发行版 → 独立资料")));
+            var commands = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 8 };
+            var open = Button(link.State == MediaUserLinkState.Pending ? "重试查看" : "查看发行版"); var remove = Button("移除关联");
+            open.IsEnabled = remove.IsEnabled = model?.CanLoad == true;
+            open.Click += async (_, _) => { if (model is not null) await model.OpenUserLinkAsync(link); };
+            remove.Click += async (_, _) => { if (model is not null) await model.RemoveUserLinkAsync(link.Target); };
+            commands.Children.Add(open); commands.Children.Add(remove); row.Children.Add(commands); panel.Children.Add(row);
+        }
+        restoreAutomatic.Visibility = Visible(model?.CanRestoreAutomatic == true); restoreAutomatic.IsEnabled = model?.CanRestoreAutomatic == true;
+        panel.Children.Add(restoreAutomatic); userSelections.Content = panel;
+        userSelections.Visibility = Visible(model?.UserLinks?.Items.Length > 0 || model?.CanRestoreAutomatic == true);
     }
     private void RenderReleaseFacts(MusicBrainzAlbum? album, BangumiSubjectDetails? source)
     {

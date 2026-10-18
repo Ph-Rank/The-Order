@@ -130,7 +130,7 @@ public sealed class BangumiAuthorizationTests
     }
     [Theory]
     [InlineData(302, BangumiAuthorizationFailure.InvalidResponse)]
-    [InlineData(403, BangumiAuthorizationFailure.Unauthorized)]
+    [InlineData(403, BangumiAuthorizationFailure.Forbidden)]
     [InlineData(429, BangumiAuthorizationFailure.RateLimited)]
     [InlineData(503, BangumiAuthorizationFailure.Server)]
     public async Task AccountStatusErrorsRemainDistinct(int status, BangumiAuthorizationFailure expected)

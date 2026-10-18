@@ -6,11 +6,12 @@ using System.Text.Json.Serialization;
 
 namespace TheOrder.Application;
 
-public enum BangumiAuthorizationFailure { InvalidToken, Unauthorized, Offline, Timeout, RateLimited, Server, InvalidResponse, Storage, NotConfigured, Denied, ServiceUnavailable }
+public enum BangumiAuthorizationFailure { InvalidToken, Unauthorized, Offline, Timeout, RateLimited, Server, InvalidResponse, Storage, NotConfigured, Denied, ServiceUnavailable, Forbidden }
 public sealed class BangumiAuthorizationException(BangumiAuthorizationFailure failure) : Exception(failure switch
 {
     BangumiAuthorizationFailure.InvalidToken => "请输入有效的番组计划访问令牌。",
     BangumiAuthorizationFailure.Unauthorized => "番组计划授权无效或已过期，请重新连接或更新手动令牌。",
+    BangumiAuthorizationFailure.Forbidden => "番组计划拒绝了本次访问，请稍后重试或检查账号权限；已保存授权保留。",
     BangumiAuthorizationFailure.Offline => "无法连接番组计划，请检查网络后重试。",
     BangumiAuthorizationFailure.Timeout => "番组计划验证超时，请重试。",
     BangumiAuthorizationFailure.RateLimited => "番组计划请求过于频繁，请稍后重试。",

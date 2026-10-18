@@ -3,7 +3,7 @@ using TheOrder.Application;
 namespace TheOrder.Presentation;
 
 public enum AniListDetailState { Idle, Loading, Choosing, Preview, Ready, Cancelled, Failed }
-public sealed class AniListDetailsViewModel(IBangumiSubjectDetailsReader subjects, IAniListReader reader) : ObservableState, IDisposable
+public sealed partial class AniListDetailsViewModel(IBangumiSubjectDetailsReader subjects, IAniListReader reader) : ObservableState, IDisposable
 {
     private sealed record Entry(AniListMedia? Media, AniListResult? Result, AniListResult[] Pages,
         AniListDetailState State, string Reason, string? Origin, string? Relation, double Offset, bool TrustedBridge, bool UnconfirmedPreview, string? BridgeFormat);
@@ -32,7 +32,7 @@ public sealed class AniListDetailsViewModel(IBangumiSubjectDetailsReader subject
     public bool HasUnconfirmedPreview => unconfirmedPreview;
     public bool HasTrustedBridge => active && !disposed && IsBridge && trustedBridge && !unconfirmedPreview;
     public bool CanLoad => active && !disposed && !IsBusy;
-    public bool CanConfirm => CanLoad && IsBridge && State == AniListDetailState.Preview && Source is not null && Displayed is not null && !AniListMatching.Assess(Source, Displayed.Details.Media).Conflict;
+    public bool CanConfirm => CanLoad && IsBridge && State == AniListDetailState.Preview && Source is not null && Displayed is not null && AniListMatching.ManualCompatible(Source, Displayed.Details.Media);
     public bool CanReject => CanLoad && IsBridge && Source is not null && Displayed is not null && State is AniListDetailState.Ready or AniListDetailState.Preview;
     public bool CanRevoke => CanLoad && IsBridge && Source is not null && SavedUserTargetId is not null;
     public bool CanMore => CanLoad && State is AniListDetailState.Ready or AniListDetailState.Preview && Displayed is not null && PeoplePages.LastOrDefault()?.Details is { PeoplePage: < 10 } d && (d.MoreCharacters || d.MoreStaff);
@@ -45,13 +45,15 @@ public sealed class AniListDetailsViewModel(IBangumiSubjectDetailsReader subject
         bridgeFormat = null;
         RejectedIds = [];
         SavedUserTargetId = null;
+        UserLinks = null; PendingReference = null; RelatedSelection = false;
         IncomingOrigin = IncomingRelation = null; SelectionReason = ""; State = AniListDetailState.Idle;
         RestoreOffset = 0; RestoreVersion++;
         return RunAsync(async token =>
         {
             if (item.Kind is not (BangumiRelationKind.Anime or BangumiRelationKind.Book)) throw new InvalidDataException("作品媒体类型不适用。");
             var bridge = await subjects.LoadAsync(item.Id, item.Kind, false, token); Require(token);
-            Bridge = bridge; Source = AniListSource.From(bridge.Details); Notify();
+            Bridge = bridge; Source = AniListSource.From(bridge.Details);
+            await ReadUserLinksAsync(token); Require(token); Notify();
             if (item.Kind == BangumiRelationKind.Book && bridge.Details.BookFacts is { IsSeries: false, Isbns.Length: > 0 }
                 && bridge.Details.ExternalLinks.Length == 0)
             { State = AniListDetailState.Ready; Message = "当前为单本出版资料，可查看出版信息与关联系列。"; return; }
@@ -61,6 +63,12 @@ public sealed class AniListDetailsViewModel(IBangumiSubjectDetailsReader subject
     public Task SearchAsync(string? query = null) => !CanLoad || Source is null || !IsBridge ? Task.CompletedTask
         : RunAsync(async token =>
         {
+            PendingReference = null; RelatedSelection = false;
+            if (query is not null && (query.Contains("://", StringComparison.Ordinal) || query.StartsWith("www.", StringComparison.OrdinalIgnoreCase)))
+            {
+                if (!AniListReference.TryParse(query.Trim(), out var reference)) throw new InvalidDataException("请粘贴完整的 https://anilist.co/anime/编号 或 /manga/编号 链接；也支持 MyAnimeList 作品链接。");
+                query = query.Trim(); PendingReference = reference;
+            }
             Displayed = null; Media = null; PeoplePages = []; trustedBridge = unconfirmedPreview = false; SelectionReason = "";
             await MatchCoreAsync(query, true, token);
         });
@@ -72,7 +80,7 @@ public sealed class AniListDetailsViewModel(IBangumiSubjectDetailsReader subject
             if (binding.IsUserDecision) SavedUserTargetId = binding.MediaId;
             var details = await reader.LoadAsync(binding.MediaId, binding.Kind, false, 1, token); Require(token);
             if (binding.NeedsReview || binding.ConfirmedFormat is { Length: > 0 } format && details.Details.Media.Format != format
-                || AniListMatching.Assess(Source!, details.Details.Media).Conflict)
+                || (binding.IsUserDecision ? !AniListMatching.ManualCompatible(Source!, details.Details.Media) : AniListMatching.Assess(Source!, details.Details.Media).Conflict))
             {
                 Display(details); trustedBridge = false; unconfirmedPreview = true; State = AniListDetailState.Preview;
                 SelectionReason = "条目预览 · 已保存关联需要复核";
@@ -92,6 +100,7 @@ public sealed class AniListDetailsViewModel(IBangumiSubjectDetailsReader subject
     public Task PreviewAsync(int id) => !CanLoad || !IsBridge || Candidates.SingleOrDefault(x => x.Id == id) is not { } candidate ? Task.CompletedTask
         : RunAsync(async token =>
         {
+            PendingReference = new(candidate.Id, candidate.Kind); RelatedSelection = false;
             var result = await reader.LoadAsync(candidate.Id, candidate.Kind, false, 1, token); Require(token);
             Display(result); trustedBridge = false; unconfirmedPreview = true;
             State = AniListDetailState.Preview; SelectionReason = "条目预览 · 尚未确认";
@@ -170,7 +179,8 @@ public sealed class AniListDetailsViewModel(IBangumiSubjectDetailsReader subject
         ? Item is { } item ? OpenAsync(item) : Task.CompletedTask : RunAsync(async token =>
         {
             var result = await reader.LoadAsync(media.Id, media.Kind, true, 1, token); Require(token); Display(result);
-            if (IsBridge && Source is { } source && (AniListMatching.Assess(source, result.Details.Media).Conflict
+            if (IsBridge && !RelatedSelection && Source is { } source && ((SavedUserTargetId == media.Id
+                ? !AniListMatching.ManualCompatible(source, result.Details.Media) : AniListMatching.Assess(source, result.Details.Media).Conflict)
                 || trustedBridge && bridgeFormat is { } savedFormat && result.Details.Media.Format != savedFormat))
             {
                 trustedBridge = false; unconfirmedPreview = true;

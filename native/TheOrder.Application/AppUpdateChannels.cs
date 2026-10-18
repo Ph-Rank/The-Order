@@ -19,6 +19,8 @@ public sealed partial record AppUpdateVersion(Version Core, int? Beta) : ICompar
 {
     public AppUpdateChannel Channel => Beta is null ? AppUpdateChannel.Stable : AppUpdateChannel.Beta;
     public string Text => Core.ToString(3) + (Beta is { } n ? $"-beta.{n}" : "");
+    // Installer bootstrap resource contract used by already published clients.
+    // This is not the payload's monotonically increasing Windows file revision.
     public Version FileVersion => new(Core.Major, Core.Minor, Core.Build, Beta ?? 0);
     public int CompareTo(AppUpdateVersion? other)
     {

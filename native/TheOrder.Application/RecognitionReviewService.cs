@@ -219,7 +219,9 @@ public sealed class RecognitionReviewService : IAsyncDisposable
     }
     public Task<ClientResult> ApplyAsync(Guid reviewId, string candidateId, CancellationToken cancellation) => DecideAsync(reviewId, null, candidateId, cancellation);
     public Task<ClientResult> ApplyAutomaticAsync(Guid reviewId, CancellationToken cancellation) => DecideAsync(reviewId, null, "", cancellation, automatic: true);
-    public Task<ClientResult> ManualLinkAsync(string gameId, string workId, CancellationToken cancellation) => DecideAsync(null, gameId, workId, cancellation);
+    public Task<ClientResult> ManualLinkAsync(string gameId, string workId, CancellationToken cancellation) => CatalogWorkReference.TryParse(workId, out var id)
+        ? DecideAsync(null, gameId, id, cancellation)
+        : Task.FromResult(new ClientResult(ClientOutcome.ValidationFailure, "请填写目录作品编号，或 KunGal 的 https://www.kungal.com/galgame/编号 链接。"));
     private async Task<ClientResult> DecideAsync(Guid? reviewId, string? manualGameId, string workId, CancellationToken cancellation, bool automatic = false)
     {
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(cancellation, lifetime.Token);

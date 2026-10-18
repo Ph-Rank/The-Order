@@ -30,6 +30,12 @@ public sealed class CoverPresenter : Grid
     public IImagePipeline? Pipeline {get;set;}
     internal string SourceStatus {get;private set;}="not-started";
     internal bool HasImage=>image.Source is not null;
+    internal event Action? SourceStateChanged;
+    internal void RetryFailed()
+    {
+        if (HasImage || SourceKey is null || SourceStatus == "loading") return;
+        requestedKey = null; requestedEdge = 0; Start();
+    }
     internal Task PendingImage { get; private set; } = Task.CompletedTask;
     public static readonly DependencyProperty SourceKeyProperty = DependencyProperty.Register(nameof(SourceKey), typeof(string), typeof(CoverPresenter), new PropertyMetadata(null, OnSourceChanged));
     public string? SourceKey { get => (string?)GetValue(SourceKeyProperty); set => SetValue(SourceKeyProperty, value); }
@@ -100,7 +106,7 @@ public sealed class CoverPresenter : Grid
         imageClip.Dispose(); imageClip = null;
         imageGeometry?.Dispose(); imageGeometry = null;
     }
-    private void Reset() { requestedKey = null; requestedEdge = 0; request.Clear(); image.Source = null; displayedPixels = null; croppedPixels = null; ApplyImageClip(); placeholder.Visibility = Visibility.Visible; SourceStatus=SourceKey is null?"no-source":"not-started"; }
+    private void Reset() { requestedKey = null; requestedEdge = 0; request.Clear(); image.Source = null; displayedPixels = null; croppedPixels = null; ApplyImageClip(); placeholder.Visibility = Visibility.Visible; SourceStatus=SourceKey is null?"no-source":"not-started"; ToolTipService.SetToolTip(this, SourceKey is null ? "来源尚未提供封面" : "正在准备封面"); SourceStateChanged?.Invoke(); }
     private void Start()
     {
         if (!loaded || SourceKey is null) { Reset(); return; }
@@ -116,9 +122,10 @@ public sealed class CoverPresenter : Grid
         else Reset();
         requestedKey = key; requestedEdge = edge;
         if(pipeline.TryGet(key,edge,out var pixels)&&pixels is not null)
-        {displayedPixels=pixels;image.Source=DisplayBitmaps.Get(pipeline,pixels);ApplyImageClip();placeholder.Visibility=Visibility.Collapsed;SourceStatus="memory";return;}
+        {displayedPixels=pixels;image.Source=DisplayBitmaps.Get(pipeline,pixels);ApplyImageClip();placeholder.Visibility=Visibility.Collapsed;SourceStatus="memory"; ToolTipService.SetToolTip(this, null); SourceStateChanged?.Invoke(); return;}
         var lease = request.Begin(key);
         SourceStatus="loading";
+        SourceStateChanged?.Invoke();
         PendingImage = LoadAsync(pipeline, key, edge, lease.Generation, lease.Cancellation);
     }
     private async Task LoadAsync(IImagePipeline pipeline, string key, int edge, long version, CancellationToken cancellation)
@@ -131,5 +138,13 @@ public sealed class CoverPresenter : Grid
             displayedPixels = pixels; image.Source = DisplayBitmaps.Get(pipeline, pixels); ApplyImageClip(); placeholder.Visibility = Visibility.Collapsed;
         }
         catch (Exception e) { if (request.IsCurrent(key, version)) { SourceStatus=e.GetType().Name; if (displayedPixels is null) placeholder.Visibility = Visibility.Visible; } }
+        finally
+        {
+            if (request.IsCurrent(key, version))
+            {
+                ToolTipService.SetToolTip(this, HasImage ? null : "封面暂时未能加载，可重试；其他资料保留。");
+                SourceStateChanged?.Invoke();
+            }
+        }
     }
 }

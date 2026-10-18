@@ -3,7 +3,7 @@ using TheOrder.Application;
 namespace TheOrder.Presentation;
 
 public enum MusicAlbumState { Idle, LoadingSource, Matching, LoadingAlbum, Choosing, Preview, Ready, Cancelled, Failed }
-public sealed class MusicAlbumViewModel(IBangumiSubjectDetailsReader subjects, IMusicBrainzReader music) : ObservableState, IDisposable
+public sealed partial class MusicAlbumViewModel(IBangumiSubjectDetailsReader subjects, IMusicBrainzReader music) : ObservableState, IDisposable
 {
     private CancellationTokenSource? operation;
     private long generation;
@@ -32,6 +32,7 @@ public sealed class MusicAlbumViewModel(IBangumiSubjectDetailsReader subjects, I
     {
         if (disposed) return Task.CompletedTask;
         Stop(); active = true; Item = item; SourceDetails = null; Source = null; Match = null; SavedUserTargetId = null; Album = Preview = null; SelectionReason = "";
+        UserLinks = null; PendingReference = null; relatedReleaseId = null;
         State = MusicAlbumState.Idle;
         if (item.Kind != BangumiRelationKind.Music || !BangumiRelationIdentityResolver.ValidSubjectId(item.Id))
         { State = MusicAlbumState.Failed; Message = "音乐条目身份无效，请返回重试。"; Notify(); return Task.CompletedTask; }
@@ -44,8 +45,13 @@ public sealed class MusicAlbumViewModel(IBangumiSubjectDetailsReader subjects, I
         query = query.Trim();
         if (!MusicBrainzValidation.Text(query, 2000, false)) return Task.CompletedTask;
         MusicAlbumSource search;
+        PendingReference = null;
         if (MusicBrainzReference.TryParse(query, out var reference))
-            search = bridge with { Facts = BangumiMusicFacts.Empty with { ExternalIds = [reference!] } };
+        {
+            if (reference!.Kind is not (MusicBrainzEntityKind.Release or MusicBrainzEntityKind.ReleaseGroup))
+            { Message = "这里请选择 MusicBrainz 发行版或专辑组链接；录音、作品与音乐人是独立资料。"; Notify(); return Task.CompletedTask; }
+            PendingReference = reference; search = bridge with { Facts = BangumiMusicFacts.Empty with { ExternalIds = [reference] } };
+        }
         else
         {
             if (Uri.TryCreate(query, UriKind.Absolute, out _)) { Message = "请填写专辑名，或 MusicBrainz 发行版／专辑组的链接。"; Notify(); return Task.CompletedTask; }
@@ -90,6 +96,7 @@ public sealed class MusicAlbumViewModel(IBangumiSubjectDetailsReader subjects, I
             if (!accepts()) return;
             if (!BangumiSubjectDetailsService.Valid(item.Id, item.Kind, details.Details)) throw new InvalidDataException();
             SourceDetails = details; Source = MusicAlbumSource.From(details.Details);
+            if (music is IMediaUserLinkReader links) { UserLinks = await links.ReadUserLinksAsync(MediaIdentityContext.From(Source), token); if (!accepts()) return; }
             State = MusicAlbumState.Matching; Message = "正在查找 MusicBrainz 发行版…"; Notify();
             var match = await music.MatchAsync(Source, refresh, token);
             if (!accepts()) return;
@@ -137,6 +144,7 @@ public sealed class MusicAlbumViewModel(IBangumiSubjectDetailsReader subjects, I
         if (!CanLoad || Match?.Search.Candidates.Any(x => x.Id == id) != true) return;
         await Request(async (token, accepts) =>
         {
+            PendingReference = new(MusicBrainzEntityKind.Release, id);
             Preview = null; State = MusicAlbumState.LoadingAlbum; Message = "正在读取所选发行版的曲目…"; Notify();
             var value = await music.LoadAlbumAsync(id, false, token);
             if (!accepts()) return; Validate(id, value);
@@ -146,7 +154,7 @@ public sealed class MusicAlbumViewModel(IBangumiSubjectDetailsReader subjects, I
             {
                 var assessment = MusicBrainzMatching.Assess(Source, value.Album.Release);
                 if (assessment.HasIdentityConflict)
-                    Message = "此发行版与来源的明确发行版或专辑组编号存在冲突，不能确认。请核对来源或选择其他发行版。";
+                    Message = "此版本与来源编号不同，不能确认为同一发行版；可以添加相关发行版，资料分别保留。";
                 else if (assessment.HasConflict)
                     Message = "此发行版的日期、目录编号或其他发行信息与来源不同。请核对版本和曲目后确认。";
             }
@@ -162,7 +170,7 @@ public sealed class MusicAlbumViewModel(IBangumiSubjectDetailsReader subjects, I
             State = MusicAlbumState.LoadingAlbum; Message = "正在保存发行版选择…"; Notify();
             await music.ConfirmAsync(source, preview.Album, token);
             if (!accepts()) return;
-            SavedUserTargetId = preview.Album.Release.Id;
+            relatedReleaseId = null; SavedUserTargetId = preview.Album.Release.Id;
             Match = Match! with { ConfirmedReleaseId = SavedUserTargetId, AutomaticReleaseId = null,
                 ConfirmedReleaseGroupId = preview.Album.Release.ReleaseGroupId, NeedsReview = false,
                 RejectedIds = Match!.RejectedIds.Where(id => id != SavedUserTargetId).ToArray() };

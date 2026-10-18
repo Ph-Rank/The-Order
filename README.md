@@ -12,7 +12,7 @@
 
 <p>
   <a href="#下载与安装"><img src="https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=flat-square" alt="Windows 10 / 11 x64"></a>
-  <a href="https://github.com/Ph-Rank/The-Order/releases/tag/v1.1.2"><img src="https://img.shields.io/badge/Stable-1.1.2-2EA44F?style=flat-square" alt="稳定版 1.1.2"></a>
+  <a href="https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.0"><img src="https://img.shields.io/badge/Stable-1.2.0-2EA44F?style=flat-square" alt="稳定版 1.2.0"></a>
   <a href="https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.0-beta.4"><img src="https://img.shields.io/badge/Beta-1.2.0--beta.4-DB8A26?style=flat-square" alt="公开测试版 1.2.0-beta.4"></a>
   <a href="https://t.me/+ONE-Lif0uZBiNzJh"><img src="https://img.shields.io/badge/Telegram-加入交流群-26A5E4?style=flat-square&amp;logo=telegram&amp;logoColor=white" alt="Telegram 交流群"></a>
 </p>
@@ -30,8 +30,8 @@
 
 | 版本 | 适合谁 | 下载 |
 | --- | --- | --- |
-| **稳定版 · 1.1.2** | 日常整理游戏、识别作品、记录游玩 | **[下载 Windows 安装包](https://github.com/Ph-Rank/The-Order/releases/download/v1.1.2/The-Order-1.1.2-Setup-x64.exe)** · [更新说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.1.2) |
-| **Public Beta · 1.2.0-beta.4** | 体验动画、音乐、漫画与轻小说的跨媒体浏览 | **[下载 Beta 安装包](https://github.com/Ph-Rank/The-Order/releases/download/v1.2.0-beta.4/The-Order-1.2.0-beta.4-Setup-x64.exe)** · [测试说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.0-beta.4) |
+| **正式版 · 1.2.0** | 游戏书架、游玩记录与五类 ACGN 专业资料 | **[下载 Windows 安装包](https://github.com/Ph-Rank/The-Order/releases/download/v1.2.0/The-Order-1.2.0-Setup-x64.exe)** · [更新说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.0) |
+| **历史 Beta · 1.2.0-beta.4** | 保留旧测试包；现已由 1.2.0 正式版接续 | **[下载 Beta 安装包](https://github.com/Ph-Rank/The-Order/releases/download/v1.2.0-beta.4/The-Order-1.2.0-beta.4-Setup-x64.exe)** · [测试说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.0-beta.4) |
 
 **同一个程序，可在「设置 → 程序更新 → 更新通道」中选择正式版或 Beta。** 切换时沿用当前书架，安装前自动备份。只有主动选择 Beta 才会收到测试版；也可切回兼容的正式版。
 
@@ -44,9 +44,9 @@
 - **把游戏整理成书架**：扫描文件夹、选择导入，支持同一作品的多个安装，以及封面 / 列表视图、搜索、筛选和愿望清单。
 - **补齐作品资料**：识别标题与版本，展示封面、简介、标签、人物和制作信息；有歧义的结果留给你核对。
 - **记录自己的游玩**：启动游戏、统计时长，保存状态、收藏、评分和笔记。移除书架条目不会删除游戏文件。
-- **按自己的习惯使用**：自选封面、保留个人名称，切换浅色 / 深色主题；Beta 支持统一资料语言偏好，缺少中文时自然回退。
+- **按自己的习惯使用**：自选封面、保留个人名称，切换浅色 / 深色主题；支持统一资料语言偏好，缺少中文时自然回退。
 
-### ACGN 跨媒体探索 · Beta
+### ACGN 跨媒体探索
 
 从一部游戏出发，继续了解它的改编动画、原声音乐、漫画和轻小说，在应用内浏览更深入的资料。
 
@@ -58,7 +58,7 @@
 | **漫画** | 作品资料、作者 / 作画、系列与单行本关系、出版信息 | AniList · Bangumi · NDL Search |
 | **轻小说** | 作者 / 插画师、系列与单卷、出版社、文库、ISBN 与出版版本 | Bangumi · AniList · NDL Search |
 
-Bangumi 连接跨媒体作品，各专业来源补充深度信息。不同季度、单卷和发行版本分别保留；不确定的对应关系可核对、确认或排除。
+Bangumi 连接跨媒体作品，各专业来源补充深度信息。不同季度、单卷和发行版本分别保留；不确定的对应关系可核对、确认或排除。资料差异可手动确认，不同媒体可添加为独立相关作品；网络失败的明确链接可待核验保存。
 
 ## 界面预览
 
@@ -67,7 +67,7 @@ Bangumi 连接跨媒体作品，各专业来源补充深度信息。不同季度
 ![The Order Galgame 详情：封面、个人记录与发行资料](docs/images/galgame-details.png)
 
 <details>
-<summary>展开查看 Beta 的动画、音乐与轻小说页面</summary>
+<summary>展开查看动画、音乐与轻小说页面</summary>
 
 ### 动画 · 逐集资料
 
@@ -83,14 +83,14 @@ Bangumi 连接跨媒体作品，各专业来源补充深度信息。不同季度
 
 </details>
 
-<sub>预览来自隔离演示书架；跨媒体页面为 Beta 功能。作品图片及资料的权利归各自权利人所有。</sub>
+<sub>预览来自隔离演示书架；跨媒体页面已进入 1.2.0 正式版。作品图片及资料的权利归各自权利人所有。</sub>
 
 ## 开始使用
 
 1. **安装并打开**：下载所选版本的 Setup，安装后从「The Order」入口启动，在设置中选择更新通道。
 2. **导入游戏**：选择游戏目录，核对扫描结果；有多个启动程序时，指定希望使用的程序。
 3. **完善书架**：补全资料、确认不确定的匹配，再开始游玩。作品目录默认可匿名浏览，部分功能可在设置中自行连接账号。
-4. **探索关联作品**：在 Beta 游戏详情中打开关联动画、OST、漫画或小说，继续查看专业资料。
+4. **探索关联作品**：在游戏详情中打开关联动画、OST、漫画或小说，继续查看专业资料。
 
 <details>
 <summary>安装、资料与使用边界</summary>

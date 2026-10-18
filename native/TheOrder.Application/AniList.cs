@@ -130,6 +130,16 @@ public interface IAniListReader
 public sealed record AniListAssessment(bool Conflict, string[] Evidence);
 public static class AniListMatching
 {
+    // Manual intent can acknowledge title/date discrepancies. Media, format,
+    // publication level and explicit identity boundaries still have meaning.
+    public static bool ManualCompatible(AniListSource source, AniListMedia media)
+    {
+        if (!source.IsValid || !AniListValidation.Media(media) || source.Kind != media.Kind || source.HasAmbiguousExternalIdentity) return false;
+        if (source.Kind == AniListMediaKind.Manga && source.BookLevel is BookEntityLevel.Volume or BookEntityLevel.Publication) return false;
+        if (source.ExpectedFormat is { } format && format != media.Format && !(format == "MANGA" && media.Format == "ONE_SHOT")) return false;
+        return source.ExternalLinks.All(x => AniListReference.TryParse(x, out var r) && r!.Kind == media.Kind
+            && (r.MyAnimeList ? media.MalId == r.Id : media.Id == r.Id));
+    }
     private static string Normalize(string value) => string.Concat(value.Normalize(NormalizationForm.FormKC).Where(char.IsLetterOrDigit)).ToUpperInvariant();
     // A title alone is never identity evidence. Automatic association requires
     // one compatible identity with exact multilingual title, format and full

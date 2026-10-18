@@ -8,7 +8,7 @@ namespace TheOrder.Platform.Windows;
 
 // A Native Profile user-data component. It shares the existing profile pins,
 // writer ownership and atomic file primitive, and has no remote-cache eviction.
-public sealed class IsolatedMediaIdentityDecisions(NativeConfiguration configuration,
+public sealed partial class IsolatedMediaIdentityDecisions(NativeConfiguration configuration,
     Func<PersistenceStage, Task>? persistenceProbe = null) : IMediaIdentityDecisions
 {
     public const string DirectoryName = "native-media-identities-v1";

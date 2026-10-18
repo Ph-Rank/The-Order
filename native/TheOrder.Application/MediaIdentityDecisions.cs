@@ -5,7 +5,7 @@ namespace TheOrder.Application;
 
 // User decisions, not an entity graph. Provider/resource namespaces are part of
 // identity; titles and remote-cache revisions are deliberately absent from Key.
-public enum MediaIdentityPurpose { AniListMedia, MusicRelease }
+public enum MediaIdentityPurpose { AniListMedia, MusicRelease, CatalogWork }
 public enum MediaIdentityDecisionKind { Confirmed, Rejected, Withdrawn }
 public enum MediaIdentityDecisionOrigin { User, LegacyConfirmation }
 public sealed record MediaIdentityReference(string Provider, string Resource, string Id)
@@ -15,13 +15,18 @@ public sealed record MediaIdentityReference(string Provider, string Resource, st
         ("Bangumi", "Subject") => BangumiRelationIdentityResolver.ValidSubjectId(Id),
         ("AniList", "Anime" or "Manga") => int.TryParse(Id, out var n) && n > 0 && Id == n.ToString(System.Globalization.CultureInfo.InvariantCulture),
         ("MusicBrainz", "Release") => MusicBrainzReference.ValidId(Id),
+        ("MusicBrainz", "ReleaseGroup") => MusicBrainzReference.ValidId(Id),
+        ("MyAnimeList", "Anime" or "Manga") => int.TryParse(Id, out var m) && m > 0 && Id == m.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        ("NextMoe", "Work") => Id is { Length: >= 1 and <= 20 } && Id[0] is >= '1' and <= '9' && Id.All(char.IsAsciiDigit),
+        ("Native", "LibraryEntry") => Id is { Length: >= 1 and <= 256 } && !string.IsNullOrWhiteSpace(Id) && !Id.Any(char.IsControl),
         _ => false
     };
 }
 public sealed record MediaIdentityAnchor(MediaIdentityReference Source, MediaIdentityPurpose Purpose, string Medium)
 {
     public string Key => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { Source, Purpose, Medium })));
-    public bool IsValid => Source is { IsValid: true, Provider: "Bangumi", Resource: "Subject" }
+    public bool IsValid => Source is { IsValid: true, Provider: "Native", Resource: "LibraryEntry" } && Purpose == MediaIdentityPurpose.CatalogWork && Medium == "Game"
+        || Source is { IsValid: true, Provider: "Bangumi", Resource: "Subject" }
         && (Purpose == MediaIdentityPurpose.AniListMedia && Medium is "Anime" or "Book"
             || Purpose == MediaIdentityPurpose.MusicRelease && Medium == "Music");
 }
@@ -34,6 +39,8 @@ public sealed record MediaIdentityContext(MediaIdentityAnchor Anchor, string Fin
         source.Fingerprint, source.Kind == AniListMediaKind.Anime ? "Work" : (source.BookLevel ?? BookEntityLevel.Unknown).ToString(), source.ExpectedFormat ?? "");
     public static MediaIdentityContext From(MusicAlbumSource source) => new(
         new(new("Bangumi", "Subject", source.BangumiId), MediaIdentityPurpose.MusicRelease, "Music"), source.Fingerprint, "Release", "");
+    public static MediaIdentityContext ForLibraryEntry(string id) => new(new(new("Native", "LibraryEntry", id), MediaIdentityPurpose.CatalogWork, "Game"),
+        Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("library-entry:" + id))), "Work", "GAME");
 }
 public sealed record MediaIdentityDecision(MediaIdentityReference Target, MediaIdentityDecisionKind Kind,
     MediaIdentityContext Context, string TargetFormat, string? TargetParentId, DateTimeOffset DecidedAtUtc,
@@ -54,6 +61,12 @@ public interface IMediaIdentityDecisions
 {
     Task<MediaIdentityDecisionDocument> ReadAsync(MediaIdentityContext source, CancellationToken cancellation);
     Task<MediaIdentityDecisionDocument> ApplyAsync(MediaIdentityDecision decision, long expectedRevision, CancellationToken cancellation);
+    Task<MediaUserLinks> ReadLinksAsync(MediaIdentityContext source, CancellationToken cancellation)
+        => Task.FromResult(MediaUserLinks.Empty(source.Anchor));
+    Task<MediaUserLinks> ChangeLinkAsync(MediaIdentityContext source, MediaUserLink? link, MediaIdentityReference target, long expectedRevision, CancellationToken cancellation)
+        => Task.FromException<MediaUserLinks>(new NotSupportedException("当前环境不能保存相关作品。"));
+    Task ResetAsync(MediaIdentityContext source, long expectedRevision, CancellationToken cancellation)
+        => Task.FromException(new NotSupportedException("当前环境不能恢复自动选择。"));
 }
 public interface IMediaIdentityDecisionOwner { IMediaIdentityDecisions IdentityDecisions { get; } }
 
@@ -93,7 +106,7 @@ public static class MediaIdentityDecisionRules
 
 // Used only by non-profile hosts and deterministic tests. The desktop composition
 // always supplies the Native Profile implementation; this has no disk claims.
-public sealed class SessionMediaIdentityDecisions : IMediaIdentityDecisions
+public sealed partial class SessionMediaIdentityDecisions : IMediaIdentityDecisions
 {
     private readonly object gate = new();
     private readonly Dictionary<string, MediaIdentityDecisionDocument> documents = [];

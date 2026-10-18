@@ -57,6 +57,25 @@ public sealed partial class RecognitionReview : UserControl, IImageHost
     private async void OnRerun(object sender, RoutedEventArgs e) => await ViewModel.RerunAsync();
     private async void OnIgnore(object sender, RoutedEventArgs e) => await ViewModel.IgnoreAsync();
     private async void OnApply(object sender, RoutedEventArgs e) => await ViewModel.ConfirmSelectionAsync();
+    private async void OnManualCandidate(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string id }) return;
+        ViewModel.SelectCandidate(id);
+        if (!ViewModel.CanLinkSelectedManually) return;
+        var game = ViewModel.SelectedGameId; var review = ViewModel.SelectedId;
+        var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "手动关联所选作品？",
+            Content = ViewModel.SelectedCandidateHasConflict ? "识别证据存在差异。请核对作品和版本；继续后按你的明确选择关联，个人名称、封面及笔记保留。" : "将这个目录作品关联到当前游戏，保留个人资料。",
+            PrimaryButtonText = ViewModel.SelectedCandidateHasConflict ? "仍要关联" : "确认关联", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary && ViewModel.SelectedGameId == game && ViewModel.SelectedId == review
+            && ViewModel.SelectedCandidateItem?.Id == id && ViewModel.CanLinkSelectedManually) await ViewModel.ManualLinkSelectedAsync();
+    }
     private async void OnManual(object sender, RoutedEventArgs e) => await ViewModel.ManualLinkAsync();
+    private async void OnSavePending(object sender, RoutedEventArgs e) => await ViewModel.SaveManualPendingAsync();
+    private async void OnOpenPending(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: MediaUserLink link }) { ViewModel.ManualId = link.Target.Id; await ViewModel.OpenDetailsAsync(link.Target.Id); }
+    }
+    private async void OnRemovePending(object sender, RoutedEventArgs e)
+    { if (sender is Button { Tag: MediaUserLink link }) await ViewModel.RemoveManualPendingAsync(link); }
 
 }

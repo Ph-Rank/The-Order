@@ -35,6 +35,9 @@ public sealed partial class MainWindow
         allowed |= new[] { "BangumiRelatedSubject", "NextMoeRelatedWork", "AniListCandidate-", "AniListRelation-", "MusicEdition-", "MusicDisc-",
             "MusicTrackDetails-", "MusicTrackRecording-", "MusicTrackWork-", "BookOpen-", "BookPreview-", "BookSaved-", "BangumiEpisodeDescription-", "WatchPlatform-", "MusicArtist-" }
             .Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal));
+        allowed |= id is "AniListAddRelated" or "AniListSavePending" or "AniListUserSelections" or "AniListRestoreAutomatic" or "AniListRetryCover"
+            or "MusicAlbumAddRelated" or "MusicAlbumSavePending" or "MusicAlbumRestoreAutomatic" or "MusicAlbumRetryCover";
+        allowed |= id.StartsWith("AniListUserLink-", StringComparison.Ordinal);
         allowed |= launchSettings || gameSettings;
         if (!allowed || id.Length > 200 || mode is not ("inspect" or "focus" or "invoke" or "expand" or "collapse" or "toggle" or "select0" or "select1" or "select2")) throw new InvalidDataException("Unsupported bounded control.");
         if ((mode == "toggle" || mode.StartsWith("select", StringComparison.Ordinal)) && !(launchSettings || gameSettings)) throw new InvalidDataException("Only launch settings accept Test value changes.");

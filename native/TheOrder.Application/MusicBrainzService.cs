@@ -3,7 +3,7 @@ namespace TheOrder.Application;
 // Public metadata remains disposable. User edition decisions use a stable typed
 // Bangumi source in a separate Native Profile component.
 public sealed class MusicBrainzService(IMusicBrainzProvider provider, IMusicBrainzCache? disk = null,
-    Func<DateTimeOffset>? clock = null, IMediaIdentityDecisions? identityDecisions = null) : IMusicBrainzReader
+    Func<DateTimeOffset>? clock = null, IMediaIdentityDecisions? identityDecisions = null) : IMusicBrainzReader, IMediaUserLinkReader
 {
     private readonly IMediaIdentityDecisions decisions = identityDecisions ?? (disk as IMediaIdentityDecisionOwner)?.IdentityDecisions ?? new SessionMediaIdentityDecisions();
     public static readonly TimeSpan SearchFreshFor = TimeSpan.FromHours(1), AlbumFreshFor = TimeSpan.FromDays(1), MaximumStaleAge = TimeSpan.FromDays(7);
@@ -69,6 +69,14 @@ public sealed class MusicBrainzService(IMusicBrainzProvider provider, IMusicBrai
         var context = MediaIdentityContext.From(source); var current = await ReadDecisions(context, cancellation).ConfigureAwait(false);
         await decisions.ApplyAsync(new(MediaIdentityDecisionRules.Target(release.Id), MediaIdentityDecisionKind.Rejected, context,
             "Release", release.ReleaseGroupId, Now, MediaIdentityDecisionOrigin.User, "用户排除此发行版 · 不再自动关联"), current.Revision, cancellation).ConfigureAwait(false);
+    }
+    public Task<MediaUserLinks> ReadUserLinksAsync(MediaIdentityContext source, CancellationToken cancellation) => decisions.ReadLinksAsync(source, cancellation);
+    public Task<MediaUserLinks> ChangeUserLinkAsync(MediaIdentityContext source, MediaUserLink? link, MediaIdentityReference target,
+        long expectedRevision, CancellationToken cancellation) => decisions.ChangeLinkAsync(source, link, target, expectedRevision, cancellation);
+    public async Task RestoreAutomaticAsync(MediaIdentityContext source, CancellationToken cancellation)
+    {
+        var current = await ReadDecisions(source, cancellation).ConfigureAwait(false);
+        await decisions.ResetAsync(source, current.Revision, cancellation).ConfigureAwait(false);
     }
     private async Task<MediaIdentityDecisionDocument> ReadDecisions(MediaIdentityContext context, CancellationToken cancellation)
     {

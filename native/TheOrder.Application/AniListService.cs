@@ -4,7 +4,7 @@ using System.Text;
 namespace TheOrder.Application;
 
 public sealed class AniListService(IAniListProvider provider, IAniListCache? disk = null,
-    Func<DateTimeOffset>? clock = null, IMediaIdentityDecisions? identityDecisions = null) : IAniListReader
+    Func<DateTimeOffset>? clock = null, IMediaIdentityDecisions? identityDecisions = null) : IAniListReader, IMediaUserLinkReader
 {
     private readonly IMediaIdentityDecisions decisions = identityDecisions ?? (disk as IMediaIdentityDecisionOwner)?.IdentityDecisions ?? new SessionMediaIdentityDecisions();
     public static readonly TimeSpan FreshFor = TimeSpan.FromHours(24), SearchFreshFor = TimeSpan.FromHours(6), MaximumStaleAge = TimeSpan.FromDays(14);
@@ -102,12 +102,12 @@ public sealed class AniListService(IAniListProvider provider, IAniListCache? dis
     }
     public async Task ConfirmAsync(AniListSource source, AniListDetails details, CancellationToken cancellation)
     {
-        if (!source.IsValid || !AniListValidation.Details(details) || AniListMatching.Assess(source, details.Media).Conflict)
+        if (!source.IsValid || !AniListValidation.Details(details) || !AniListMatching.ManualCompatible(source, details.Media))
             throw new InvalidDataException("作品类型或发行证据不一致，未保存此关联。");
         var context = MediaIdentityContext.From(source);
         var current = await ReadDecisions(context, cancellation).ConfigureAwait(false);
         await decisions.ApplyAsync(new(MediaIdentityDecisionRules.Target(details.Media), MediaIdentityDecisionKind.Confirmed, context,
-            details.Media.Format, null, Now, MediaIdentityDecisionOrigin.User, "用户核对确认 · Bangumi → AniList"), current.Revision, cancellation).ConfigureAwait(false);
+            details.Media.Format, null, Now, MediaIdentityDecisionOrigin.User, "用户核对确认 · Bangumi → AniList（手动选择，非自动匹配）"), current.Revision, cancellation).ConfigureAwait(false);
     }
     public async Task RejectAsync(AniListSource source, AniListMedia media, CancellationToken cancellation)
     {
@@ -124,6 +124,15 @@ public sealed class AniListService(IAniListProvider provider, IAniListCache? dis
             throw new IOException("已保存的关联已经改变，请重新读取后再解除。");
         await decisions.ApplyAsync(selected with { Kind = MediaIdentityDecisionKind.Rejected, Context = context, DecidedAtUtc = Now,
             Origin = MediaIdentityDecisionOrigin.User, Evidence = "用户解除已保存关联 · 不再自动接受" }, current.Revision, cancellation).ConfigureAwait(false);
+    }
+    public Task<MediaUserLinks> ReadUserLinksAsync(MediaIdentityContext source, CancellationToken cancellation)
+        => decisions.ReadLinksAsync(source, cancellation);
+    public Task<MediaUserLinks> ChangeUserLinkAsync(MediaIdentityContext source, MediaUserLink? link, MediaIdentityReference target,
+        long expectedRevision, CancellationToken cancellation) => decisions.ChangeLinkAsync(source, link, target, expectedRevision, cancellation);
+    public async Task RestoreAutomaticAsync(MediaIdentityContext source, CancellationToken cancellation)
+    {
+        var current = await ReadDecisions(source, cancellation).ConfigureAwait(false);
+        await decisions.ResetAsync(source, current.Revision, cancellation).ConfigureAwait(false);
     }
     private async Task<AniListBinding> SaveAutomaticProofAsync(AniListBinding binding, CancellationToken cancellation)
     {

@@ -22,7 +22,8 @@ public sealed class BangumiAccountProvider(HttpClient client, TimeSpan? operatio
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token).ConfigureAwait(false);
             var status = (int)response.StatusCode;
-            if (status is 401 or 403) throw Error(BangumiAuthorizationFailure.Unauthorized);
+            if (status == 401) throw Error(BangumiAuthorizationFailure.Unauthorized);
+            if (status == 403) throw Error(BangumiAuthorizationFailure.Forbidden);
             if (status == 429) throw Error(BangumiAuthorizationFailure.RateLimited);
             if (status >= 500) throw Error(BangumiAuthorizationFailure.Server);
             if (status != 200 || response.Content.Headers.ContentLength > 65536
