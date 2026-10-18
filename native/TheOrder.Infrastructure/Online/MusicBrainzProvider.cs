@@ -73,7 +73,7 @@ public sealed partial class MusicBrainzProvider(HttpClient http, MusicBrainzRate
     }
     private async Task<MusicBrainzSearchResult> BrowseEditions(string releaseGroupId, CancellationToken token)
     {
-        using var data = await GetJsonAsync("release?fmt=json&limit=25&release-group=" + releaseGroupId + "&inc=labels%2Bartist-credits%2Brelease-groups", token).ConfigureAwait(false);
+        using var data = await GetJsonAsync("release?fmt=json&limit=25&release-group=" + releaseGroupId + "&inc=labels%2Bartist-credits%2Brelease-groups%2Bmedia", token).ConfigureAwait(false);
         var result = MapSearch(data.RootElement, browse: true);
         if (result.Candidates.Any(x => x.ReleaseGroupId != releaseGroupId)) throw Invalid();
         return result with { Notice = "请选择此专辑的具体发行版。" };

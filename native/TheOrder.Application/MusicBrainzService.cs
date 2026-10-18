@@ -7,6 +7,7 @@ public sealed partial class MusicBrainzService(IMusicBrainzProvider provider, IM
 {
     private readonly IMediaIdentityDecisions decisions = identityDecisions ?? (disk as IMediaIdentityDecisionOwner)?.IdentityDecisions ?? new SessionMediaIdentityDecisions();
     public static readonly TimeSpan SearchFreshFor = TimeSpan.FromHours(1), AlbumFreshFor = TimeSpan.FromDays(1), MaximumStaleAge = TimeSpan.FromDays(7);
+    public const string EditionCachePrefix = "group-v2:"; // Browse includes media; legacy group pages omitted formats.
     private readonly object gate = new();
     private readonly SemaphoreSlim commits = new(1);
     private readonly Dictionary<string, MusicBrainzCacheValue> memory = [];
@@ -50,7 +51,7 @@ public sealed partial class MusicBrainzService(IMusicBrainzProvider provider, IM
     public async Task<MusicBrainzSearchResult> EditionsAsync(string releaseGroupId, CancellationToken cancellation)
     {
         if (!MusicBrainzReference.ValidId(releaseGroupId)) throw new InvalidDataException("MusicBrainz 专辑组编号无效。");
-        var key = "group:" + releaseGroupId;
+        var key = EditionCachePrefix + releaseGroupId;
         var result = await LoadAsync(key, false, SearchFreshFor, async token => new(key, Now,
             Search: await provider.EditionsAsync(releaseGroupId, token).ConfigureAwait(false)), cancellation).ConfigureAwait(false);
         return result.Value.Search! with { Notice = result.Warning ?? result.Value.Search!.Notice };

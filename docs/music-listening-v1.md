@@ -25,8 +25,10 @@ MusicBrainz所有操作沿用同一个单调时钟调度器，间隔至少1.1秒
 
 `.artifacts/music-listening-20261018/live`：6个Release样本，跨CLANNAD、樱之诗、魔法使之夜、Cowboy Bebop、Celeste及原神搜索对照。原神泛检索的首项不是已确认HOYO-MiX OST，不能当真实跨站匹配。另以精确标题与HOYO-MiX验证City of Winds and Idylls，独立记录于live-domestic。所有请求为匿名只读，有限页数，不拉全库。
 
-`live-csharp-transports.json`实际C#传输取得CLANNAD的Spotify来源关系与Apple JP目录候选。`coverage-replay.json`是冻结真实响应经当前解析器重放，不能称每项均重新联网通过。Apple UPC对樱之诗曾返回无关的Songs of the Seafarer，解析器排除；原始返回条数不是有效覆盖率。合成网易云/QQ路径测试与真实国内命中分开统计。
+`live-csharp-transports.json`实际C#传输取得CLANNAD的Spotify来源关系与Apple JP目录候选。`coverage-replay.json`是冻结真实响应经当前解析器重放，不能称每项均重新联网通过。Apple标题与音乐人搜索对樱之诗返回无关的Songs of the Seafarer，解析器排除；该样本没有UPC，不能称其为真实UPC错配。UPC错误返回及回退另由合成协议测试覆盖。原始返回条数不是有效覆盖率，合成网易云/QQ路径测试与真实国内命中分开统计。
 
 人工选择、错误版本、限流缓存、取消、迟到响应和持久化通过测试验证；首次缓存Key自序列化导致栈溢出已修复并保留失败日志。升级User-Agent为当前软件版本后，旧测试夹具仍写死1.1.0，改为验证真实构建版本与项目联系地址；未降低限流和安全断言。
+
+清空缓存后的真实WinUI联调还发现：原有发行版browse请求未包含media，真实响应缺少介质，而预填完整数据的夹具掩盖了数字版本被过滤的问题。现已补齐官方inc字段，以group-v2独立缓存键避免旧缺介质页遮蔽新查询；旧group键仍可校验、保留，不删除用户确认。两项请求形状/旧缓存反例均先实际失败，再修复通过。251项定向回归通过，早先4b69c9d开发包不可作为最终交付，最终包另行构建复验。
 
 实际UI与最终开发包状态以本轮completion和截图回执为准。界面用独立合成游戏入口及冻结的真实音乐数据；入口映射是明确测试夹具，不是跨站自动匹配证据。所有平台页面访问、播放、真实会员/地区、干净OS及长期稳定性均不在已通过范围。

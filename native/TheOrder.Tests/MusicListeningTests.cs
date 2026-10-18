@@ -19,13 +19,13 @@ internal static class OutletData
     public static AppleAlbumCandidate Apple(string id = "123") => new(id, "JP", "合成专辑", "合成音乐人", "https://music.apple.com/jp/album/synthetic/" + id, "2020-01-01", 12, "合成目录检索");
     public sealed class Provider : IMusicBrainzProvider, IMusicOutletProvider
     {
-        public int Calls; public bool Fail;
+        public int Calls, EditionCalls; public bool Fail;
         public MusicBrainzSearchResult Editions = new([], 0, false, null, null);
         public Func<MusicBrainzReference,MusicOutletSnapshot> Data = reference => Snapshot(reference.Id);
         public Func<MusicBrainzReference,Task<MusicOutletSnapshot>>? AsyncData;
         public Task<MusicOutletSnapshot> FetchOutletsAsync(MusicBrainzReference reference, CancellationToken cancellation)
         { Calls++; cancellation.ThrowIfCancellationRequested(); if (Fail) throw new MusicBrainzException(MusicBrainzFailure.RateLimited, "合成429"); return AsyncData is not null ? AsyncData(reference) : Task.FromResult(Data(reference)); }
-        public Task<MusicBrainzSearchResult> EditionsAsync(string id, CancellationToken token) => Task.FromResult(Editions);
+        public Task<MusicBrainzSearchResult> EditionsAsync(string id, CancellationToken token) { EditionCalls++; return Task.FromResult(Editions); }
         public Task<MusicBrainzSearchResult> SearchAsync(MusicAlbumSource source, CancellationToken token) => throw new NotSupportedException();
         public Task<MusicBrainzAlbum> FetchAlbumAsync(string id, CancellationToken token) => throw new NotSupportedException();
     }
@@ -192,6 +192,31 @@ public sealed class AppleMusicCatalogTests
 }
 public sealed class MusicListeningStateTests
 {
+    [Fact]
+    public async Task EditionBrowseIncludesMediaInsteadOfSilentlyLosingDigitalCandidates()
+    {
+        using var handler = new MusicTestData.Handler((request, _) =>
+        {
+            var row=System.Text.Json.Nodes.JsonNode.Parse(MusicTestData.AlbumJson)!.AsObject();
+            if(!Uri.UnescapeDataString(request.RequestUri!.Query).Contains("+media",StringComparison.Ordinal)) row.Remove("media");
+            return Task.FromResult(MusicTestData.Response("{\"release-count\":1,\"releases\":["+row.ToJsonString()+"]}"));
+        });
+        using var http=new HttpClient(handler); var time=new MusicTestData.Clock();
+        var result=await new MusicBrainzProvider(http,time.Rate()).EditionsAsync(MusicTestData.Group,default);
+        Assert.Equal("CD",Assert.Single(Assert.Single(result.Candidates).MediaFormats));
+    }
+    [Fact]
+    public async Task LegacyGroupCacheWithoutMediaCannotHideARealDigitalEdition()
+    {
+        var old=MusicTestData.Candidate(MusicTestData.Other) with { MediaFormats=[] };
+        var fresh=old with { MediaFormats=["Digital Media"] };
+        var provider=new OutletData.Provider { Editions=new([fresh],1,false,null,null) };
+        provider.Data=reference=>OutletData.Snapshot(reference.Id) with{Formats=["Digital Media"]};
+        var disk=new OutletData.Cache();disk.Values["group:"+MusicTestData.Group]=new("group:"+MusicTestData.Group,OutletData.Now,Search:new([old],1,false,null,null));
+        var result=await new MusicBrainzService(provider,disk,()=>OutletData.Now).LoadDigitalOutletsAsync(OutletData.Snapshot(),default);
+        Assert.Single(result.Editions);Assert.Equal(1,provider.EditionCalls);
+        Assert.Empty(disk.Values["group:"+MusicTestData.Group].Search!.Candidates[0].MediaFormats);
+    }
     [Fact]
     public async Task DigitalReleaseWhoseStatusChangedIsNotPresentedAsAnOfficialEdition()
     {

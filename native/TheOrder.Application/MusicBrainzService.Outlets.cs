@@ -20,6 +20,7 @@ public sealed partial class MusicBrainzService
             && x.Status == "Official" && x.MediaFormats.Length > 0 && x.MediaFormats.All(f => f == "Digital Media"))
             .OrderBy(x => x.Id, StringComparer.Ordinal).ToArray();
         var values = new List<MusicOutletResult>(); var warnings = new List<string>();
+        if (editions.Candidates.Any(x => x.MediaFormats.Length == 0)) warnings.Add("部分发行物没有提供介质，未推测为数字版。");
         // One bounded group page and at most two exact-release lookups. Never promote
         // a unique partial page into an equivalent release, or change the album choice.
         foreach (var edition in eligible.Take(2))

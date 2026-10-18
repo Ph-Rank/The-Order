@@ -264,14 +264,17 @@ public static class MusicBrainzValidation
         if (v.Rejected && (v.Key.StartsWith("apple:", StringComparison.Ordinal) && Hash(v.Key[6..])
             || System.Text.RegularExpressions.Regex.IsMatch(v.Key, @"^outlets:(1|2):[a-f0-9-]{36}$") && MusicBrainzReference.ValidId(v.Key[10..])))
             return v.Search is null && v.Album is null && v.Binding is null;
+        var groupPrefix = v.Key.StartsWith(MusicBrainzService.EditionCachePrefix, StringComparison.Ordinal) ? MusicBrainzService.EditionCachePrefix.Length
+            : v.Key.StartsWith("group:", StringComparison.Ordinal) ? 6 : 0;
+        var validGroup = groupPrefix > 0 && MusicBrainzReference.ValidId(v.Key[groupPrefix..]);
         return true
         && (v.Rejected ? v.Search is null && v.Album is null && v.Binding is null &&
                 (v.Key.StartsWith("release:", StringComparison.Ordinal) && MusicBrainzReference.ValidId(v.Key[8..])
-                    || v.Key.StartsWith("group:", StringComparison.Ordinal) && MusicBrainzReference.ValidId(v.Key[6..])
+                    || validGroup
                     || v.Key.StartsWith("search:", StringComparison.Ordinal) && Hash(v.Key[7..]))
             : v.Key.StartsWith("search:", StringComparison.Ordinal) && Hash(v.Key[7..]) && Search(v.Search) && v.Album is null && v.Binding is null
-            || v.Key.StartsWith("group:", StringComparison.Ordinal) && MusicBrainzReference.ValidId(v.Key[6..]) && Search(v.Search)
-                && v.Search!.Candidates.All(c => c.ReleaseGroupId == v.Key[6..]) && v.Album is null && v.Binding is null
+            || validGroup && Search(v.Search)
+                && v.Search!.Candidates.All(c => c.ReleaseGroupId == v.Key[groupPrefix..]) && v.Album is null && v.Binding is null
             || v.Key.StartsWith("release:", StringComparison.Ordinal) && Album(v.Album) && v.Album!.Release.Id == v.Key[8..]
                 && v.Album.FetchedAtUtc <= v.CachedAtUtc.AddMinutes(5) && v.Search is null && v.Binding is null
             || v.Key.StartsWith("binding:", StringComparison.Ordinal) && v.Binding is { } b && Hash(b.SourceFingerprint)
