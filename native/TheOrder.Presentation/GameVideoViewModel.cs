@@ -14,6 +14,12 @@ public sealed class GameVideoViewModel(GameVideoReader reader, IMediaIdentityDec
     public GameVideoSource? Source { get; private set; }
     public IgdbGame? Game { get; private set; }
     public IgdbGame[] Candidates { get; private set; } = [];
+    public IgdbGame[] PrimaryCandidates => Source is { } source ? Candidates
+        .Where(x => !IsRejected(x) && GameVideos.PrimaryCandidate(source, x))
+        .OrderBy(x => GameVideos.CandidateOrder(source, x)).ThenBy(x => x.ReleaseDate ?? "9999").ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.Id).ToArray() : [];
+    public IgdbGame[] OtherCandidates => Candidates.ExceptBy(PrimaryCandidates.Select(x => x.Id), x => x.Id)
+        .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.Id).ToArray();
+    public bool IsRejected(IgdbGame game) => mapping?.Rejects(new("IGDB", "Game", game.Id.ToString())) == true;
     public GameVideoItem[] Videos { get; private set; } = [];
     public string Message { get; private set; } = "";
     public bool Busy { get; private set; }
@@ -45,7 +51,9 @@ public sealed class GameVideoViewModel(GameVideoReader reader, IMediaIdentityDec
             if (!Current(run, source)) return;
             videoChoices = personalVideos;
             var choice = choices.Confirmed;
-            int? id = choice is not null ? int.Parse(choice.Target.Id) : source.ExplicitIds.Length == 1 ? source.ExplicitIds[0] : null;
+            // A catalog work can group an original and a remaster. A local
+            // installation app ID is more specific than its work-level IDs.
+            int? id = choice is not null ? int.Parse(choice.Target.Id) : source.InstallationSteamId is null && source.ExplicitIds.Length == 1 ? source.ExplicitIds[0] : null;
             if (source.ExplicitIds.Length > 1 && choice is null && search is null) { Message = "已有多个互相冲突的 IGDB 编号，请手动核对对应游戏。"; Rebuild(); return; }
             var query = new GameVideoQuery(search ?? source.Title, search is null ? source.SteamId : null, search is null ? id : null);
             var result = await reader.QueryAsync(query, refresh, token);
@@ -58,8 +66,16 @@ public sealed class GameVideoViewModel(GameVideoReader reader, IMediaIdentityDec
                     .Distinct(StringComparer.OrdinalIgnoreCase).Take(2);
                 foreach (var title in alternatives)
                 {
-                    if (result.Result.Games.Length > 0 || !result.Result.Complete || !Current(run, source)) break;
-                    result = await reader.QueryAsync(new(title), refresh, token);
+                    if (!Current(run, source) || source.SteamId is not null && result.Result.Games.Length > 0) break;
+                    try
+                    {
+                        var extra = await reader.QueryAsync(new(title), refresh, token);
+                        var merged = extra.Result.Games.Concat(result.Result.Games).DistinctBy(x => x.Id).ToArray();
+                        result = (new(merged.Take(20).ToArray(), result.Result.Complete && extra.Result.Complete && merged.Length <= 20,
+                            extra.Result.FetchedAtUtc > result.Result.FetchedAtUtc ? extra.Result.FetchedAtUtc : result.Result.FetchedAtUtc), result.Stale || extra.Stale);
+                    }
+                    catch (IOException) when (result.Result.Games.Length > 0)
+                    { result = (result.Result with { Complete = false }, result.Stale); }
                 }
             }
             if (!Current(run, source)) return;
@@ -71,18 +87,23 @@ public sealed class GameVideoViewModel(GameVideoReader reader, IMediaIdentityDec
                 Message = "游戏对应已被另一项操作修改，请刷新影像后重试。"; return;
             }
             Candidates = result.Result.Games; Complete = result.Result.Complete;
-            // A title search, even a complete single result, never confirms identity.
-            var exact = search is null && id is { } expected && Complete ? Candidates.SingleOrDefault(x => x.Id == expected) : null;
+            // Stage two: resolve the actual installed release, not merely the
+            // work title. A catalog Steam link alone is not local-version proof.
+            var editions = Candidates.Where(x => GameVideos.InstalledEditionMatches(source, x)).ToArray();
+            var installedEdition = search is null && id is null && Complete && !result.Stale && editions.Length == 1 ? editions[0] : null;
+            var exact = search is null && id is { } expected && Complete ? Candidates.SingleOrDefault(x => x.Id == expected) : installedEdition;
             if (exact is not null && !choices.Rejects(new("IGDB", "Game", exact.Id.ToString()))
                 && (choice is not null || !choices.Decisions.Any(x => x.Target.Id == exact.Id.ToString()))
                 && (choice is null || !MediaIdentityDecisionRules.NeedsReview(source.Context, choice)
-                    && choice.TargetFormat == exact.Kind && choice.TargetParentId == exact.VersionParent?.ToString()))
+                    && choice.TargetFormat == GameVideos.IdentityFormat(exact) && choice.TargetParentId == exact.VersionParent?.ToString()))
             {
                 Game = exact;
                 var selectedVideos = await decisions.ReadAsync(source.VideoContext(exact.Id), token);
                 if (!Current(run, source)) return;
                 videoChoices = selectedVideos;
-                Message = result.Stale ? "当前使用已缓存的游戏影像；在线读取失败，可重试。" : "作品级影像，不代表你本地的具体发行版本。";
+                Message = result.Stale ? "当前使用已缓存的游戏影像；在线读取失败，可重试。" : installedEdition is not null
+                    ? "已按本地安装的 Steam 编号对应游戏版本；视频仍以所选版本的来源记录为准。"
+                    : "作品级影像，不代表你本地的具体发行版本。";
             }
             else { Game = null; videoChoices = personalVideos; Message = Candidates.Length == 0 ? "尚未找到对应的 IGDB 游戏，可更换标题或手动添加视频。" : Complete ? "请选择并确认对应游戏；请核对原版、重制版、移植版与合集。" : "候选未完整读取，请手动核对，未自动确认。"; }
             if (!Current(run, source)) return;
@@ -101,7 +122,7 @@ public sealed class GameVideoViewModel(GameVideoReader reader, IMediaIdentityDec
         await Mutate(async token =>
         {
             var saved = await decisions.ApplyAsync(new(new("IGDB", "Game", candidate.Id.ToString()), MediaIdentityDecisionKind.Confirmed,
-                source.Context, candidate.Kind, candidate.VersionParent?.ToString(), DateTimeOffset.UtcNow, MediaIdentityDecisionOrigin.User,
+                source.Context, GameVideos.IdentityFormat(candidate), candidate.VersionParent?.ToString(), DateTimeOffset.UtcNow, MediaIdentityDecisionOrigin.User,
                 "用户确认 IGDB 游戏对应；作品级，未确认本地发行版本"), mapping.Revision, token);
             if (Source?.Fingerprint == source.Fingerprint && !token.IsCancellationRequested) { mapping = saved; committed = true; }
         });
@@ -110,13 +131,13 @@ public sealed class GameVideoViewModel(GameVideoReader reader, IMediaIdentityDec
     public async Task RejectGameAsync(IgdbGame candidate)
     {
         if (Source is not { } source || mapping is null || Busy) return;
-        await Mutate(async token => { var saved = await decisions.ApplyAsync(new(new("IGDB", "Game", candidate.Id.ToString()), MediaIdentityDecisionKind.Rejected, source.Context, candidate.Kind, candidate.VersionParent?.ToString(), DateTimeOffset.UtcNow, MediaIdentityDecisionOrigin.User, "用户排除 IGDB 游戏对应"), mapping.Revision, token); if (Source?.Fingerprint != source.Fingerprint || token.IsCancellationRequested) return; mapping = saved; Game = null; videoChoices = null; Rebuild(); });
+        await Mutate(async token => { var saved = await decisions.ApplyAsync(new(new("IGDB", "Game", candidate.Id.ToString()), MediaIdentityDecisionKind.Rejected, source.Context, GameVideos.IdentityFormat(candidate), candidate.VersionParent?.ToString(), DateTimeOffset.UtcNow, MediaIdentityDecisionOrigin.User, "用户排除 IGDB 游戏对应"), mapping.Revision, token); if (Source?.Fingerprint != source.Fingerprint || token.IsCancellationRequested) return; mapping = saved; Game = null; videoChoices = null; Rebuild(); });
     }
     public async Task WithdrawAsync()
     {
         if (Source is not { } source || mapping is null || Game is not { } game || Busy) return;
         var chosen = mapping.Confirmed ?? new(new("IGDB", "Game", game.Id.ToString()), MediaIdentityDecisionKind.Confirmed,
-            source.Context, game.Kind, game.VersionParent?.ToString(), DateTimeOffset.UtcNow, MediaIdentityDecisionOrigin.User, "用户撤销已有 IGDB 编号对应");
+            source.Context, GameVideos.IdentityFormat(game), game.VersionParent?.ToString(), DateTimeOffset.UtcNow, MediaIdentityDecisionOrigin.User, "用户撤销已有 IGDB 编号对应");
         await Mutate(async token => { var saved = await decisions.ApplyAsync(chosen with { Kind = MediaIdentityDecisionKind.Withdrawn, Context = source.Context, DecidedAtUtc = DateTimeOffset.UtcNow }, mapping.Revision, token); if (Source?.Fingerprint != source.Fingerprint || token.IsCancellationRequested) return; mapping = saved; Game = null; videoChoices = null; loaded = false; Rebuild(); });
     }
     public async Task ChooseVideoAsync(GameVideoItem item, bool reject)

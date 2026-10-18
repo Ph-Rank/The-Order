@@ -11,6 +11,8 @@ public sealed class GameVideoView : StackPanel, IDisposable
 {
     private readonly Expander section = new() { Header = "宣传影像 / PV", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel candidates = new() { Spacing = 8 }, videos = new() { Spacing = 8 };
+    private readonly StackPanel otherCandidates = new() { Spacing = 8 };
+    private readonly Expander otherVersions = new() { Header = "其他检索结果", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly TextBlock status = Text(13);
     private readonly TextBox query = new() { PlaceholderText = "原名或别名", MaxLength = 200 };
     private readonly TextBox manual = new() { PlaceholderText = "HTTPS YouTube 视频地址", MaxLength = 500 };
@@ -22,6 +24,7 @@ public sealed class GameVideoView : StackPanel, IDisposable
     public GameVideoView()
     {
         AutomationProperties.SetAutomationId(section, "GameVideosExpand"); AutomationProperties.SetAutomationId(status, "GameVideosStatus");
+        AutomationProperties.SetAutomationId(otherVersions, "GameVideosOtherCandidates"); otherVersions.Content = otherCandidates;
         AutomationProperties.SetAutomationId(query, "GameVideosQuery"); AutomationProperties.SetAutomationId(search, "GameVideosSearch");
         AutomationProperties.SetAutomationId(retry, "GameVideosRefresh"); AutomationProperties.SetAutomationId(cancel, "GameVideosCancel");
         AutomationProperties.SetAutomationId(manual, "GameVideosManualUrl"); AutomationProperties.SetAutomationId(add, "GameVideosManualAdd");
@@ -31,7 +34,7 @@ public sealed class GameVideoView : StackPanel, IDisposable
         var details = new Expander { Header = "对应游戏与用户视频", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Content = new StackPanel { Spacing = 8, Children = { searchRow, manual, add } } };
         var attribution = Text(12, "资料来源：IGDB · YouTube。数据库收录不等于官方发布；作品级影像不保证对应本地版本。"); attribution.Opacity = .7;
-        section.Content = new StackPanel { Spacing = 10, Children = { status, candidates, videos, player,
+        section.Content = new StackPanel { Spacing = 10, Children = { status, candidates, otherVersions, videos, player,
             new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6, Children = { retry, cancel } }, details, attribution } };
         Children.Add(section);
         section.Expanding += async (_, _) => { if (!syncing && model is not null) await model.LoadAsync(); };
@@ -51,6 +54,7 @@ public sealed class GameVideoView : StackPanel, IDisposable
         if (sourceKey != source?.Fingerprint)
         {
             StopPlayer(); syncing = true; section.IsExpanded = false; syncing = false; sourceKey = source?.Fingerprint;
+            otherVersions.IsExpanded = false;
             query.Text = source?.Title ?? ""; manual.Text = "";
         }
         model?.SetSource(source); Visibility = source is null ? Visibility.Collapsed : Visibility.Visible;
@@ -61,18 +65,24 @@ public sealed class GameVideoView : StackPanel, IDisposable
         if (model.Busy || !model.Videos.Any(x => x.VideoId == playing)) StopPlayer();
         status.Text = model.Message; status.Visibility = status.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         search.IsEnabled = add.IsEnabled = retry.IsEnabled = !model.Busy; cancel.Visibility = model.Busy ? Visibility.Visible : Visibility.Collapsed;
-        candidates.Children.Clear(); videos.Children.Clear();
+        candidates.Children.Clear(); otherCandidates.Children.Clear(); videos.Children.Clear(); otherVersions.Visibility = Visibility.Collapsed;
         if (model.Game is { } game)
         {
-            var row = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6, Children = { Text(13, game.Name + " · " + game.Kind + " · " + (game.ReleaseDate ?? "日期未注明")) } };
+            var row = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6, Children = { Text(13, game.Name + " · " + GameVideos.CandidateKind(game) + " · " + (game.ReleaseDate ?? "日期未注明")) } };
             var withdraw = Action("撤销游戏对应", "GameVideosWithdraw", () => model.WithdrawAsync()); row.Children.Add(withdraw); candidates.Children.Add(row);
+            if (game.ParentGame is { } main) candidates.Children.Add(Text(12, "所属游戏 · IGDB " + main));
         }
-        else foreach (var item in model.Candidates)
+        else
         {
-            var description = Text(13, item.Name + " · " + item.Kind + " · " + (item.ReleaseDate ?? "日期未注明") + "\n" + string.Join(" / ", item.Developers) + " · " + string.Join(" / ", item.Platforms)
-                + (item.VersionParent is { } parent ? "\n版本所属游戏 · IGDB " + parent : ""));
-            var actions = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6, Children = { Action("确认对应", "GameVideosConfirm-" + item.Id, () => model.ConfirmAsync(item)), Action("排除此游戏", "GameVideosReject-" + item.Id, () => model.RejectGameAsync(item)) } };
-            candidates.Children.Add(new StackPanel { Spacing = 6, Children = { description, actions } });
+            foreach (var item in model.PrimaryCandidates) candidates.Children.Add(Candidate(item));
+            var others = model.OtherCandidates;
+            if (others.Length > 0)
+            {
+                otherVersions.Header = "其他检索结果 · " + others.Length;
+                otherVersions.Visibility = Visibility.Visible;
+                otherCandidates.Children.Add(Text(12, "移植、合集、衍生作品或资料不足的结果在此核对；不会自动采用。"));
+                foreach (var item in others) otherCandidates.Children.Add(Candidate(item));
+            }
         }
         foreach (var item in model.Videos)
         {
@@ -86,6 +96,17 @@ public sealed class GameVideoView : StackPanel, IDisposable
             videos.Children.Add(new StackPanel { Spacing = 4, Children = { title, caption, row } });
         }
         if (model.Videos.Length > 0 || model.Game is not null) videos.Children.Add(Action("重置视频选择", "GameVideosReset", () => model.ResetVideoChoicesAsync()));
+    }
+    private StackPanel Candidate(IgdbGame item)
+    {
+        var title = Text(14, item.Name); title.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+        var detail = Text(12, GameVideos.CandidateKind(item) + " · " + (item.ReleaseDate ?? "日期未注明")
+            + (model?.IsRejected(item) == true ? " · 已排除" : "")
+            + "\n" + string.Join(" / ", item.Developers) + " · " + string.Join(" / ", item.Platforms)
+            + (item.VersionParent is { } parent ? "\n版本所属游戏 · IGDB " + parent : "")
+            + (item.ParentGame is { } main ? "\n所属游戏 · IGDB " + main : "")); detail.Opacity = .75;
+        var actions = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6, Children = { Action("使用此游戏", "GameVideosConfirm-" + item.Id, () => model!.ConfirmAsync(item)), Action("排除", "GameVideosReject-" + item.Id, () => model!.RejectGameAsync(item)) } };
+        return new StackPanel { Spacing = 5, Margin = new(0, 0, 0, 8), Children = { title, detail, actions } };
     }
     private Button Action(string text, string id, Func<Task> action)
     {

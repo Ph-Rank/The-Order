@@ -4,6 +4,7 @@ compatibility_date = "2026-08-01"
 workers_dev = false
 [vars]
 IGDB_ENABLED = "false"
+IGDB_DIAGNOSTICS = "false"
 [[durable_objects.bindings]]
 name = "IGDB_COORDINATOR"
 class_name = "IgdbCoordinator"

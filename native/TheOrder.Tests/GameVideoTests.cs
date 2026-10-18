@@ -87,6 +87,31 @@ public sealed class GameVideoTests
         Assert.Equal("Third alias", p.Queries[2].Title); Assert.Null(vm.Game); Assert.Single(vm.Candidates);
     }
     [Fact]
+    public async Task ATitleHitDoesNotHideAnOriginalFoundThroughAnExistingAlias()
+    {
+        var p = new Provider((q, _) => Task.FromResult(q.Id is { } id ? Result(Game(id)) : q.Title == "English alias" ? Result(Game(2)) : Result(Game() with { Kind = "Mod" })));
+        using var vm = new GameVideoViewModel(new(p), new SessionMediaIdentityDecisions());
+        vm.SetSource(Source() with { SteamId = null, Aliases = ["English alias"] }); await vm.LoadAsync();
+        Assert.Equal(2, p.Queries.Count); Assert.Equal(2, vm.Candidates.Length); Assert.Null(vm.Game); Assert.Empty(vm.Videos);
+        Assert.True(vm.Complete); await vm.ConfirmAsync(vm.Candidates.Single(x => x.Id == 2)); Assert.Equal(2, vm.Game!.Id);
+    }
+    [Fact]
+    public async Task FailedAliasReadRetainsEarlierCandidatesWithoutClaimingCompleteness()
+    {
+        var p = new Provider((q, _) => q.Title == "Unavailable alias" ? throw new GameVideoException("timeout") : Task.FromResult(Result(Game())));
+        using var vm = new GameVideoViewModel(new(p), new SessionMediaIdentityDecisions());
+        vm.SetSource(Source() with { SteamId = null, Aliases = ["Unavailable alias"] }); await vm.LoadAsync();
+        Assert.Single(vm.Candidates); Assert.False(vm.Complete); Assert.Null(vm.Game); Assert.False(vm.Busy);
+    }
+    [Fact]
+    public async Task AliasUnionHasABoundedCandidateCountAndCannotAssertCompletenessAfterTruncation()
+    {
+        var p = new Provider((q, _) => Task.FromResult(Result(Enumerable.Range(q.Title == "Another alias" ? 21 : 1, 20).Select(id => Game(id)).ToArray())));
+        using var vm = new GameVideoViewModel(new(p), new SessionMediaIdentityDecisions());
+        vm.SetSource(Source() with { SteamId = null, Aliases = ["Another alias"] }); await vm.LoadAsync();
+        Assert.Equal(20, vm.Candidates.Length); Assert.False(vm.Complete); Assert.Null(vm.Game); Assert.Empty(vm.Videos);
+    }
+    [Fact]
     public async Task ConflictingExplicitIdsCanBeResolvedOnlyThroughAnExplicitCandidateChoice()
     {
         var p = Fake(Game()); using var vm = new GameVideoViewModel(new(p), new SessionMediaIdentityDecisions());
@@ -167,6 +192,28 @@ public sealed class GameVideoTests
         changed.SetSource(Source()); await changed.LoadAsync();
         Assert.Null(changed.Game); Assert.Empty(changed.Videos); Assert.Single(changed.Candidates);
         Assert.Equal("Main Game", (await store.ReadAsync(Source().Context, default)).Confirmed!.TargetFormat);
+    }
+    [Fact]
+    public async Task ParentGameIsDistinctFromAnEditionParentAndChangesRequireReconfirmation()
+    {
+        var store = new SessionMediaIdentityDecisions(); var game = Game(2) with { Kind = "Port", ParentGame = 1 };
+        var p = new Provider((_, _) => Task.FromResult(Result(game)));
+        using var vm = new GameVideoViewModel(new(p), store); vm.SetSource(Source()); await vm.LoadAsync();
+        await vm.ConfirmAsync(Assert.Single(vm.Candidates));
+        var saved = (await store.ReadAsync(Source().Context, default)).Confirmed!;
+        Assert.Contains("parent_game=1", saved.TargetFormat); Assert.Null(saved.TargetParentId);
+        Assert.Equal(1, vm.Game!.ParentGame); Assert.Null(vm.Game.VersionParent);
+        game = game with { ParentGame = 3 }; await vm.LoadAsync(true);
+        Assert.Null(vm.Game); Assert.Empty(vm.Videos); Assert.Contains("parent_game=1", (await store.ReadAsync(Source().Context, default)).Confirmed!.TargetFormat);
+    }
+    [Fact]
+    public void OlderCachedGameWithoutParentGameStillDeserializesWithoutInventingAnEditionParent()
+    {
+        var json = JsonSerializer.Serialize(Game()).Replace(",\"ParentGame\":null", "");
+        var old = JsonSerializer.Deserialize<IgdbGame>(json)!;
+        Assert.Null(old.ParentGame); Assert.Null(old.VersionParent); Assert.True(GameVideos.Valid(old));
+        Assert.False(GameVideos.Valid(old with { ParentGame = old.Id }));
+        Assert.False(GameVideos.Valid(old with { ParentGame = -1 }));
     }
     [Fact]
     public async Task ReidentifyingLocalGameDoesNotReuseOldConfirmation()

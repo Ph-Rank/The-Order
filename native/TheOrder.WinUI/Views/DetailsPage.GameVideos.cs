@@ -10,9 +10,9 @@ public sealed partial class DetailsPage
     private void SynchronizeGameVideos(GameDetails? detail)
     {
         var entry = bangumiLibrary?.Invoke()?.Entries.FirstOrDefault(x => x.Id == detail?.Id);
-        var source = detail is null || ViewModel.IsDetailsLoading ? null : GameVideoSource.From(detail.Id, detail.Metadata,
-            entry?.Installations.Select(x => x.SteamAppId).OfType<string>());
-        if (source is { Title.Length: 0 }) source = source with { Title = detail!.Personal.Name };
+        var source = detail is null || ViewModel.IsDetailsLoading ? null : entry is null
+            ? GameVideoSource.From(detail.Id, detail.Metadata) : GameVideoSource.FromEntry(entry, detail.Metadata);
+        if (source is { Title.Length: 0 }) source = source.SteamId is not null || source.ExplicitIds.Length > 0 ? source with { Title = "游戏影像" } : null;
         gameVideos?.SetSource(source);
     }
     internal object? GameVideoEvidence => gameVideos?.Evidence;

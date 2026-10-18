@@ -44,6 +44,9 @@ queries, arbitrary URLs, user credentials, or YouTube search operations.
   candidate lookup; VNDB and DLsite mappings are not assumed.
 - The games request expands video record ID, owning game ID, original name and
   YouTube `video_id`, plus bounded identity and edition context.
+  The current Game Type field is `game_type.type`, not `game_type.name`.
+  `parent_game` and `version_parent` stay distinct; older cached game rows
+  without parent context are refetched.
 - At most 20 candidates are returned; the 21st row marks the result incomplete.
 - Requests across all installations serialize through one coordinator, at least
   275 ms apart, with one upstream request active and at most eight queued callers.
@@ -66,8 +69,13 @@ contract server, using the repository's already installed runtime. Its fake IDs
 are deliberately not a real title/video coverage fixture. Stop it with the
 documented artifact marker; never expose this fixture to public users.
 
-No real IGDB coverage or actual game video playback is asserted without an
-authorized API run. The desktop remains usable when this service is missing.
+The authorized 2026-10-18 local run completed all 36 frozen samples: 31 identities
+were manually reviewed, five original/version scopes remain unresolved, and 28
+reviewed targets have video relations. This is not automatic-match accuracy.
+Five sampled games actually played in WinUI, without public deployment. See
+`docs/igdb-game-videos-v1.md` and `.artifacts/igdb-live-20261018/` evidence. Local
+installation/version evidence and mock library inputs are reported separately.
+The desktop remains usable when this service is missing.
 
 The 36 samples in `test/samples.json` were frozen before IGDB queries. For future
 authorized measurement, set `IGDB_TEST_SERVICE_URL` to your own adapter, then run
@@ -76,3 +84,18 @@ authorized measurement, set `IGDB_TEST_SERVICE_URL` to your own adapter, then ru
 zero requests. Results require independent human identity/version review and
 service-side evidence of the actual upstream; a reachable HTTPS adapter alone
 does not prove a real IGDB run. This command never plays a video or binds a game.
+
+An optional `--plan=<json>` supplies one to three title/alias queries per sample.
+It must retain all 36 frozen IDs and labels; it cannot prefill IGDB or video IDs.
+Keep the original run and plan, and report later supplementary lookups separately.
+
+## Safe developer diagnostics
+
+Set `IGDB_DIAGNOSTICS=true` only for an isolated development run. The error body
+then contains a bounded `diagnostic` object: stage, HTTP status, whitelisted error
+kind and network code. Token acquisition, games HTTP/network, response parsing,
+mapping and internal adapter failures are distinct. The default remains false.
+No raw exception/stack, upstream response body, headers, credential values or
+authentication URLs are logged or returned. Do not enable verbose HTTP tracing
+to investigate credentials. The 2026-10-18 503 was an invalid games field, not a
+reason to change DNS/proxy settings or disable TLS validation.

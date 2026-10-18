@@ -1,5 +1,16 @@
 # The Order：当前实现与评审交接
 
+## IGDB真实API、PC候选及发行版核对（2026-10-18，当前增量）
+
+当前分支 codex/igdb-live-qualification-20261018，基于6665e5d及全部继承dirty。503已证实来自IGDB字段game_type.name错误，修正为game_type.type；同一Wrangler和凭据恢复200，无代理/DNS/TLS改动。新增默认关闭的阶段诊断，不输出凭据、原始错误或响应正文；保留parent_game与version_parent区别和旧缓存兼容。
+
+搜索不使用个人自定义名称，优先源内非机器英文正式名，再补日文原名/别名，最多三次。默认只优先显示标题对应的PC本篇/重制，Mod、合集、主机移植及未知结果折叠保留。作品级词条和当前安装分两轮核对；默认安装Steam编号与完整、非陈旧的唯一IGDB发行记录一致时直接显示PV，不写成伪造的人工确认。目录Steam链接、同名唯一候选和共用VNDB词条不能代替本地版本证据；非Steam缺少发行版证据仍需复核，尚未证明几乎全自动。
+
+冻结10部API10/10、人工复核9/10、有视频8/10；36部API36/36、人工复核31/36、有视频28/36，5部原版/版本歧义保留。31部包含一次单独标注的Little Busters英文别名补查；不是自动匹配准确率。首修构建实际播放5个目标，最终publish-live-v4另实播Steam版及重制版、检查PC默认候选和释放。合成本地库/安装输入、真实IGDB/YouTube分别记录；不称真实游戏扫描或物理验收。
+
+最终完整客户端4409 passed / 0 failed / 0 skipped；服务17/17；Release x64成功。缓存移走后重启确认和默认恢复，3份决定文件哈希不变。逐项证据及最终载荷在.artifacts/igdb-live-20261018/，详细规则见docs/igdb-game-videos-v1.md。开发GO、公开启用CONDITIONAL GO，仍无公开服务。Production、日用安装、版本、生产Bangumi Worker、GitHub均未修改；继承音乐/书籍dirty完整保留，提交只含本轮增量。
+
+
 ## IGDB 游戏宣传影像 v1（2026-10-18，最新开发增量）
 
 当前 `codex/igdb-game-videos-20261018` 从3ed4463及全部既有音乐/书籍dirty继续，仅增加游戏影像。NextMoe仍为主资料；IGDB提供候选和已关联YouTube记录。游戏详情按需加载，标题或Steam检索不自动确认，明确编号可精确读取。原版/重制/移植/合集需核对，作品级影像不声称对应本地发行版。确认/排除/撤销/默认复用Native Profile独立用户决定，缓存清理和重启不丢失；迟到结果、并发revision、错误缓存和变更后的版本身份均有回归。

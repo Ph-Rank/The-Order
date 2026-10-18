@@ -8,22 +8,45 @@ namespace TheOrder.Application;
 public sealed record IgdbExternal(string Source, string Id);
 public sealed record IgdbVideo(int Id, int GameId, string VideoId, string Name);
 public sealed record IgdbGame(int Id, string Name, string[] Aliases, string[] Developers, string[] Platforms,
-    string? ReleaseDate, string Kind, int? VersionParent, int[] Remakes, int[] Remasters, IgdbExternal[] ExternalIds, IgdbVideo[] Videos);
+    string? ReleaseDate, string Kind, int? VersionParent, int[] Remakes, int[] Remasters, IgdbExternal[] ExternalIds, IgdbVideo[] Videos)
+{
+    public int? ParentGame { get; init; }
+}
 public sealed record IgdbResult(IgdbGame[] Games, bool Complete, DateTimeOffset FetchedAtUtc);
 public sealed record GameVideoQuery(string Title, string? SteamId = null, int? Id = null);
 public sealed record GameVideoSource(string GameId, string? WorkId, string Title, string[] Aliases, string[] Developers,
     string? ReleaseDate, int[] ExplicitIds, string? SteamId)
 {
+    public string? InstallationSteamId { get; init; }
     public string Fingerprint => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { GameId, WorkId, ExplicitIds, SteamId })));
     public MediaIdentityContext Context => new(new(new("Native", "LibraryEntry", GameId), MediaIdentityPurpose.GameVideo, "Game"), Fingerprint, "Work", "GAME");
     public MediaIdentityContext VideoContext(int id) => new(new(new("Native", "LibraryEntry", GameId), MediaIdentityPurpose.GameVideoSelection, id > 0 ? "IGDB:" + id : "Manual"), Fingerprint, "WorkVideo", "YouTube");
+    public static GameVideoSource FromEntry(LibraryEntry entry, WorkMetadata? work)
+    {
+        var selected = entry.Installations.FirstOrDefault(x => x.Id == entry.PreferredInstallationId)
+            ?? (entry.Installations.Length == 1 ? entry.Installations[0] : null);
+        return From(entry.Id, work, selected?.SteamAppId is { } app ? [app] : []);
+    }
     public static GameVideoSource From(string id, WorkMetadata? work, IEnumerable<string>? installedSteamIds = null)
     {
         var refs = work?.References ?? [];
         var ids = refs.Where(x => x.Source.Equals("igdb", StringComparison.OrdinalIgnoreCase) && GameVideos.ValidId(x.Id)).Select(x => int.Parse(x.Id)).Distinct().Order().ToArray();
-        var steam = refs.Where(x => x.Source.Equals("steam", StringComparison.OrdinalIgnoreCase) && GameVideos.ValidId(x.Id)).Select(x => x.Id)
-            .Concat((installedSteamIds ?? []).Where(GameVideos.ValidId)).Distinct().ToArray();
-        return new(id, work?.Id, work?.OriginalTitle is { Length: > 0 } original ? original : work?.Title ?? "", work?.Aliases.ToArray() ?? [], work?.Developers.ToArray() ?? [], work?.ReleaseDate, ids, steam.Length == 1 ? steam[0] : null);
+        var installed = (installedSteamIds ?? []).Where(GameVideos.ValidId).Distinct().ToArray();
+        var linked = refs.Where(x => x.Source.Equals("steam", StringComparison.OrdinalIgnoreCase) && GameVideos.ValidId(x.Id)).Select(x => x.Id).Distinct().ToArray();
+        var steam = installed.Length == 1 ? installed[0] : installed.Length == 0 && linked.Length == 1 ? linked[0] : null;
+        var original = work?.OriginalTitle is { Length: > 0 } name ? name : work?.Title ?? "";
+        var evidence = (work?.TitleEvidence ?? []).Where(x => !x.IsMachine && x.Kind is "official" or "alias" or "latin").ToArray();
+        var excluded = (work?.TitleEvidence ?? []).Where(x => x.IsMachine || x.Kind == "abbreviation").Select(x => x.Text).Except(evidence.Select(x => x.Text)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var english = evidence.Where(x => x.Language is { } lang && (lang.Equals("en", StringComparison.OrdinalIgnoreCase) || lang.StartsWith("en-", StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(x => x.Kind == "official" ? 0 : 1).Select(x => x.Text);
+        var aliases = (work?.Aliases ?? []).Where(x => !excluded.Contains(x)).ToArray();
+        bool Latin(string x) => x.Count(c => char.IsLetter(c) && c <= '\u024F') >= 4 && !x.Any(c => char.IsLetter(c) && c > '\u024F');
+        var first = english.FirstOrDefault(x => x.Length is > 0 and <= 200)
+            ?? (Latin(original) ? original : aliases.FirstOrDefault(Latin)) ?? original;
+        var names = new[] { first, original }.Concat(english).Concat(evidence.Where(x => x.Language is "ja" or "ja-JP").Select(x => x.Text))
+            .Concat(aliases).Concat([work?.Title ?? ""]).Where(x => x.Length is > 0 and <= 200).Distinct(StringComparer.OrdinalIgnoreCase).Take(64).ToArray();
+        return new(id, work?.Id, names.FirstOrDefault() ?? "", names.Skip(1).ToArray(), work?.Developers.ToArray() ?? [], work?.ReleaseDate, ids, steam)
+        { InstallationSteamId = installed.Length == 1 ? installed[0] : null };
     }
 }
 public sealed class GameVideoException(string code) : IOException(code)
@@ -51,12 +74,40 @@ public static class GameVideos
         && AniListValidation.Text(game.Name, 500, false) && AniListValidation.Text(game.Kind, 100, false)
         && game.Aliases.Concat(game.Developers).Concat(game.Platforms).All(x => AniListValidation.Text(x, 500, false))
         && (game.ReleaseDate is null || DateOnly.TryParseExact(game.ReleaseDate, "yyyy-MM-dd", out _))
-        && (game.VersionParent is null or > 0) && game.Remakes.Concat(game.Remasters).All(x => x > 0)
+        && (game.VersionParent is null or > 0) && (game.ParentGame is null or > 0) && game.ParentGame != game.Id && game.Remakes.Concat(game.Remasters).All(x => x > 0)
         && game.ExternalIds.All(x => x is not null && AniListValidation.Text(x.Source, 100, false) && AniListValidation.Text(x.Id, 100, false))
         && game.Videos.All(x => x is { Id: > 0 } && x.GameId == game.Id && AniListPlayback.ValidTrailer(new("youtube", x.VideoId)) && AniListValidation.Text(x.Name, 500, false));
     public static bool Valid(IgdbResult? result) => result is { Games.Length: <= 20 } && result.FetchedAtUtc != default
         && result.Games.All(Valid) && result.Games.Select(x => x.Id).Distinct().Count() == result.Games.Length;
     public static string Key(GameVideoQuery query) => "igdb-v1:" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(query)));
+    public static string IdentityFormat(IgdbGame game) => game.Kind + (game.ParentGame is { } id ? "; parent_game=" + id : "");
+    // A presentation shortlist, never an identity decision. Keep the complete
+    // result available for manual review, including unknown platform/type data.
+    public static bool PrimaryCandidate(GameVideoSource source, IgdbGame game) =>
+        game.Platforms.Any(x => x.Equals("PC (Microsoft Windows)", StringComparison.OrdinalIgnoreCase) || x.Equals("Windows", StringComparison.OrdinalIgnoreCase) || x is "PC-98" or "PC-8800 Series" or "DOS")
+        && (SteamMatches(source, game) || game.Kind is "Main Game" or "Remake" or "Remaster" or "Expanded Game"
+            && new[] { source.Title }.Concat(source.Aliases).Any(x => TitleKey(x) is { Length: > 0 } key
+                && (key == TitleKey(game.Name) || game.Aliases.Any(alias => key == TitleKey(alias)))));
+    public static int CandidateOrder(GameVideoSource source, IgdbGame game) => SteamMatches(source, game) ? 0
+        : source.ReleaseDate is { Length: > 0 } date && game.ReleaseDate == date ? 1
+        : source.Developers.Any(x => game.Developers.Any(y => TitleKey(x) == TitleKey(y))) ? 2 : 3;
+    public static string CandidateKind(IgdbGame game) => game.Kind switch
+    {
+        "Main Game" => "游戏本篇", "Remake" => "重制版", "Remaster" => "高清重制版", "Port" => "移植版",
+        "Bundle" => "合集", "Mod" => "Mod", "Expanded Game" => "扩展版", "Standalone Expansion" => "独立扩展",
+        "Episode" => "分章作品", "Expansion" => "扩展内容", "DLC Add-on" => "追加内容", _ => game.Kind
+    };
+    public static bool SteamMatches(GameVideoSource source, IgdbGame game) => source.SteamId is { } steam
+        && game.ExternalIds.Any(x => x.Source.Equals("Steam", StringComparison.OrdinalIgnoreCase) && x.Id == steam);
+    public static bool InstalledEditionMatches(GameVideoSource source, IgdbGame game) => source.InstallationSteamId is { } installed
+        && installed == source.SteamId && SteamMatches(source, game)
+        && game.Kind is "Main Game" or "Remake" or "Remaster" or "Port" or "Expanded Game"
+        && game.Platforms.Any(x => x.Equals("PC (Microsoft Windows)", StringComparison.OrdinalIgnoreCase) || x.Equals("Windows", StringComparison.OrdinalIgnoreCase));
+    private static string TitleKey(string value)
+    {
+        try { return string.Concat(value.Normalize(NormalizationForm.FormKC).EnumerateRunes().Where(Rune.IsLetterOrDigit).Select(x => Rune.ToLowerInvariant(x).ToString())); }
+        catch (ArgumentException) { return ""; }
+    }
     public static string Classification(string name)
     {
         var text = name.ToLowerInvariant();

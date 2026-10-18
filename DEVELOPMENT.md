@@ -1,5 +1,16 @@
 # 开发与维护
 
+## IGDB真实API验收与版本核对（2026-10-18，当前增量）
+
+codex/igdb-live-qualification-20261018从6665e5d和原dirty继续。真实凭据仅在services/igdb-game-videos/.dev.vars（Git ignored），不复制/回显/打包；客户端只有固定服务地址。Wrangler本地仅127.0.0.1:8787，默认公开配置仍禁用、无路由，无部署。game_type.type是当前实际字段；IGDB_DIAGNOSTICS默认false，开发诊断仅返回白名单阶段/状态，不输出原异常或认证内容。
+
+最终Release x64载荷为.artifacts/igdb-live-20261018/publish-live-v4。仅经该目录Start-Test-V2.ps1 -Run ui-<全新名> -Payload <publish-live-v4绝对路径> -ExpectedVersion 1.2.0启动，固定自己的test-profile-ui-v2和Test标记，显式注入本地服务；不能裸启动默认Production。首修Start-Test.ps1使用另一个test-profile，旧证据单独保留。退出用Control.ps1 -Control <本轮ui目录> -Action exit并检查exitCode=0。不要使用先前build的截图替代最终构建验收。
+
+固定SDK10.0.401及锁依赖。最终完整含既有Worker合成契约4409/0/0，服务Node17/17；定向与各中间全套均为重叠阶段。全套入口沿用既有run-client-bridge.mjs --all-client-tests，仅把启动器输出改为本轮新目录；未改Bangumi Worker。真实覆盖36部、人工复核31、视频28不等于自动匹配或播放率；首修实际播放5部，最终构建复验本地Steam版自动对应/播放与重制版。测试目录安装和NextMoe输入是合成的，不读取Production和真实游戏。
+
+PC候选分组不写身份事实，用户可展开其他结果；英文/日文检索不生成译名。只把默认安装的Steam编号作为自动发行版证据，目录链接不等于当前安装；拒绝、撤销和并发revision保护保持。旧主库及人工确认无schema迁移，新增ParentGame可选；服务旧缓存缺字段重新获取。缓存移走/重启的用户决定哈希、失败与负对照、截图、源码及载荷清单均在.artifacts/igdb-live-20261018/。未推送、发布、提升版本或替换日用。
+
+
 ## IGDB 游戏宣传影像 v1（2026-10-18，最新增量）
 
 当前codex/igdb-game-videos-20261018基于3ed4463及全部继承dirty，只做IGDB游戏对应/影像、Native Profile决定、共享动画播放器复用。无新版本、真实资料迁移、日用替换、推送或发布。完整设计、凭据及样本口径见docs/igdb-game-videos-v1.md；独立Worker未部署，默认IGDB_ENABLED=false、无公开路由，不改生产Bangumi OAuth Worker。

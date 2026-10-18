@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import worker,{IgdbCoordinator,parseQuery,gameQuery,mapGame} from "../src/index.mjs";
-const fixtureGame=(id=1)=>({id,name:"Synthetic game",game_type:{name:"Remaster"},version_parent:2,platforms:[{name:"PC"}],external_games:[{uid:"123",external_game_source:{name:"Steam"}}],videos:[{id:10,game:id,name:"Launch Trailer",video_id:"abcdefghijk"}]});
+const fixtureGame=(id=1)=>({id,name:"Synthetic game",game_type:{type:"Remaster"},parent_game:99,version_parent:2,platforms:[{name:"PC"}],external_games:[{uid:"123",external_game_source:{name:"Steam"}}],videos:[{id:10,game:id,name:"Launch Trailer",video_id:"abcdefghijk"}]});
 const request=q=>new Request("https://fixture.test/v1/game-videos/query",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(q)});
 function host(handler,enabled=true){
   const map=new Map(),store={get:async k=>map.get(k),put:async(k,v)=>map.set(k,v),delete:async k=>map.delete(k),list:async({prefix,limit})=>new Map([...map].filter(([k])=>k.startsWith(prefix)).sort().slice(0,limit))};
@@ -17,12 +17,12 @@ test("Fixed query has bounded fields, escaped title, and exact ID predicates",()
   assert.throws(()=>parseQuery({title:"test",url:"http://127.0.0.1"}));
   for(const title of ["","x".repeat(201),"\n"] )assert.throws(()=>parseQuery({title}));
   for(const id of [-1,0,1.5,2147483648,"1"])assert.throws(()=>parseQuery({title:"x",id}));
-  const q=gameQuery(parseQuery({title:'foo"; fields *; "bar'}));assert.ok(q.includes('search "foo\\"; fields *; \\"bar"; limit 21;'));assert.ok(q.includes("videos.game"));
+  const q=gameQuery(parseQuery({title:'foo"; fields *; "bar'}));assert.ok(q.includes('search "foo\\"; fields *; \\"bar"; limit 21;'));assert.ok(q.includes("videos.game"));assert.ok(q.includes("game_type.type"));assert.ok(!q.includes("game_type.name"));
   assert.ok(gameQuery({title:"test",id:123}).includes("where id = 123; limit 1;"));
   assert.ok(gameQuery({title:"test",steamId:"123"}).includes('external_games.external_game_source.name = "Steam"'));assert.ok(!gameQuery({title:"test"}).includes("category"));
 });
 test("Game-video mapping retains original names, relation identity, and edition parent",()=>{
-  const game=mapGame(fixtureGame());assert.equal(game.versionParent,2);assert.equal(game.kind,"Remaster");assert.equal(game.videos[0].gameId,1);assert.equal(game.videos[0].name,"Launch Trailer");
+  const game=mapGame(fixtureGame());assert.equal(game.versionParent,2);assert.equal(game.parentGame,99);assert.equal(game.kind,"Remaster");assert.equal(game.videos[0].gameId,1);assert.equal(game.videos[0].name,"Launch Trailer");
   assert.throws(()=>mapGame({...fixtureGame(),videos:[{id:1,game:999,name:"Movie",video_id:"abcdefghijk"}]}));
   assert.deepEqual(mapGame({...fixtureGame(),videos:[{id:1,game:1,name:"Movie",video_id:"bad"}]}).videos,[]);
 });
@@ -109,4 +109,34 @@ test("Upstream timeout remains a retryable failure and recovery is not poisoned 
     assert.equal([...h.map.keys()].filter(k=>k.startsWith("v1:")).length,0);failing=false;
     assert.equal((await worker.fetch(request({title:"test"}),h.env)).status,200);
   });
+});
+test("Developer diagnostics identify token, upstream HTTP, network and mapping stages without secret echo",async()=>{
+  const cases=[
+    {stage:"token_http",http:401,handler:async()=>new Response("synthetic_secret synthetic_app_token",{status:401})},
+    {stage:"token_network",http:null,handler:async()=>{throw new TypeError("synthetic_secret synthetic_app_token");}},
+    {stage:"games_http",http:400,handler:async u=>u.includes("oauth2/token")?token():new Response("synthetic_secret synthetic_app_token",{status:400})},
+    {stage:"games_network",http:null,handler:async u=>{if(u.includes("oauth2/token"))return token();throw new TypeError("synthetic_secret synthetic_app_token");}},
+    {stage:"mapping",http:200,handler:async u=>u.includes("oauth2/token")?token():Response.json([{...fixtureGame(),videos:[{id:1,game:999,name:"bad",video_id:"abcdefghijk"}]}])},
+    {stage:"token_body",http:200,handler:async()=>new Response("synthetic_secret synthetic_app_token")}
+  ];
+  for(const item of cases){
+    const h=host();h.env.IGDB_DIAGNOSTICS="true";const old=console.warn,logs=[];console.warn=x=>logs.push(x);
+    try{await run(item.handler,async()=>{
+      const response=await worker.fetch(request({title:"test"}),h.env),value=await response.json();
+      assert.equal(response.status,503);assert.equal(value.diagnostic.stage,item.stage);assert.equal(value.diagnostic.http,item.http);
+      const text=JSON.stringify({value,logs});assert.ok(!text.includes("synthetic_secret"));assert.ok(!text.includes("synthetic_app_token"));assert.ok(!text.includes("synthetic_client"));
+    });}finally{console.warn=old;}
+  }
+});
+test("Public responses keep diagnostics private by default, including unexpected internal adapter errors",async()=>{
+  const h=host();h.map.set("quota-cooldown",{valueOf(){throw Error("synthetic_secret");}});
+  const r=await worker.fetch(request({title:"test"}),h.env);assert.equal(r.status,503);assert.deepEqual(await r.json(),{error:"upstream"});
+});
+test("Legacy cached results lacking game parent context are refetched without confusing edition parents",async()=>{
+  const h=host(),q={title:"test"};let calls=0;
+  h.map.set('v1:'+JSON.stringify(q),{until:Date.now()+10000,value:{games:[{id:1,name:"Synthetic game",kind:"Port"}],complete:true,fetchedAtUtc:new Date().toISOString()}});
+  await run(async u=>u.includes("oauth2/token")?token():(calls++,Response.json([fixtureGame()])),async()=>{
+    const value=await(await worker.fetch(request(q),h.env)).json();assert.equal(value.games[0].parentGame,99);assert.equal(value.games[0].versionParent,2);
+  });assert.equal(calls,1);
+  assert.throws(()=>mapGame({...fixtureGame(),parent_game:1}));
 });

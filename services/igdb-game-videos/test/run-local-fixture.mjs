@@ -6,7 +6,7 @@ const require=createRequire(new URL("../../bangumi-auth-worker/package.json",imp
 const {Miniflare,Response:LocalResponse}=require("miniflare");
 const root=resolve(process.argv[2]??"");
 if(!root.endsWith(join(".artifacts","igdb-game-pv-20261018")))throw Error("Owned synthetic evidence root required");
-const records=id=>({id,name:id===1?"IGDB 合成验收游戏":"IGDB 合成验收游戏 REMASTERED",game_type:{name:id===1?"Main Game":"Remaster"},
+const records=id=>({id,name:id===1?"IGDB 合成验收游戏":"IGDB 合成验收游戏 REMASTERED",game_type:{type:id===1?"Main Game":"Remaster"},
   version_parent:id===2?1:undefined,alternative_names:[{name:"Synthetic game"}],first_release_date:1072915200,platforms:[{name:"PC"}],involved_companies:[{developer:true,company:{name:"Synthetic test studio"}}],
   videos:[{id:100+id,game:id,name:"Synthetic Launch Trailer (not a real IGDB record)",video_id:"abcdefghijk"},{id:200+id,game:id,name:"Synthetic OP (not a real IGDB record)",video_id:"12345678901"},{id:300+id,game:id,name:"Duplicate original name",video_id:"abcdefghijk"}]});
 let grants=0,queries=0;
