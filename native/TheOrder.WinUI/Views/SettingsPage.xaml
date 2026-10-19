@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?><Page x:Class="TheOrder.WinUI.Views.SettingsPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:l="using:TheOrder.WinUI.Localization" xmlns:p="using:TheOrder.Presentation" xmlns:views="using:TheOrder.WinUI.Views">
+ <Page.Resources>
+  <DataTemplate x:Key="MigrationRowTemplate" x:DataType="p:LibraryMigrationRow">
+   <StackPanel Spacing="4" Margin="0,8" HorizontalAlignment="Stretch">
+    <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+    <TextBlock Text="{x:Bind Action}" TextWrapping="Wrap" />
+    <TextBlock Text="{x:Bind Detail}" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
+   </StackPanel>
+  </DataTemplate>
+ </Page.Resources>
  <Grid x:Name="SettingsRoot" SizeChanged="OnSettingsSizeChanged">
  <ScrollViewer HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
   <StackPanel x:Name="SettingsColumn" Padding="{StaticResource PagePadding}" Spacing="16" MaxWidth="900" HorizontalAlignment="Left">
@@ -134,6 +143,18 @@
      </StackPanel>
      <TextBlock Text="{x:Bind Recognition.PersistenceError, Mode=OneWay}" Visibility="{x:Bind VisibleText(Recognition.PersistenceError), Mode=OneWay}" TextWrapping="Wrap" Foreground="{ThemeResource WarningTextBrush}" />
      <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8"><Button Click="OnMissing" AutomationProperties.AutomationId="RecognizeMissing" l:Localize.Content="补全缺失资料" /><Button Click="OnCancelRecognition" Visibility="{x:Bind Visible(Recognition.HasRecognitionWork), Mode=OneWay}" AutomationProperties.AutomationId="RecognitionCancel" l:Localize.Content="取消本轮识别" /></views:TagFlowPanel>
+    </StackPanel>
+   </Border>
+   <Border Style="{StaticResource SurfaceStyle}" Padding="20">
+    <StackPanel Spacing="12" AutomationProperties.AutomationId="LibraryMigrationSection">
+     <TextBlock Text="从其他管理器导入" Style="{StaticResource SectionTitleStyle}" />
+     <TextBlock Text="导入 PotatoVN 的游戏书架、个人资料与游玩时长。选择导出 ZIP 后，先预览再确认。" TextWrapping="Wrap" Style="{StaticResource SecondaryTextStyle}" />
+     <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8">
+      <Button x:Name="MigrationSelect" Content="选择 PotatoVN 备份 ZIP…" Click="OnImportManager" AutomationProperties.AutomationId="ImportManagerZip" />
+      <Button x:Name="MigrationCancel" Content="取消" Click="OnCancelMigration" Visibility="Collapsed" AutomationProperties.AutomationId="CancelManagerImport" />
+     </views:TagFlowPanel>
+     <ProgressBar x:Name="MigrationProgress" IsIndeterminate="True" Visibility="Collapsed" AutomationProperties.AutomationId="ManagerImportProgress" />
+     <TextBlock Text="{x:Bind Migration.Message, Mode=OneWay}" Visibility="{x:Bind VisibleText(Migration.Message), Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="ManagerImportMessage" />
     </StackPanel>
    </Border>
    <Border Style="{StaticResource SurfaceStyle}" Padding="20">

@@ -45,6 +45,8 @@ internal static class Composition
         services.AddSingleton<ILibraryBackupStore, WindowsLibraryBackupStore>();
         services.AddSingleton<LibraryBackupService>();
         services.AddSingleton<LibraryBackupViewModel>();
+        services.AddSingleton<ILibraryMigrationSource>(_ => new WindowsLibraryMigrationSource(new TheOrder.Infrastructure.Migration.PotatoVnImportAdapter()));
+        services.AddSingleton<LibraryMigrationService>();
         services.AddSingleton<IFilesystemIdentity, WindowsFilesystemIdentity>();
         services.AddSingleton<LaunchPolicy>();
         services.AddSingleton<IGlobalLaunchDefaultsStore, GlobalLaunchDefaultsStore>();

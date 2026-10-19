@@ -87,7 +87,7 @@ public sealed class WindowsLibraryBackupStore(NativeConfiguration configuration,
     {
         var value = Decode<Snapshot>(ReadBounded(Path.Combine(root, SnapshotFile(id)), MaximumEnvelopeBytes));
         Identity(value.Version, value.ProfileId, value.StoreId, profile);
-        if (value.Id != id || value.Document is null || value.Document.Length is < 1 or > MaximumDocumentBytes || value.Reason is not ("自动" or "恢复前")
+        if (value.Id != id || value.Document is null || value.Document.Length is < 1 or > MaximumDocumentBytes || value.Reason is not ("自动" or "恢复前" or "导入前")
             || value.CreatedAt.Offset != TimeSpan.Zero || value.CreatedAt.Year < 2000
             || value.Checksum != Convert.ToHexString(SHA256.HashData(value.Document))
             || codec.Decode(value.Document).Length != value.Entries
@@ -121,7 +121,7 @@ public sealed class WindowsLibraryBackupStore(NativeConfiguration configuration,
     public Task<LibraryBackupWrite> SaveSnapshotAsync(ReadOnlyMemory<byte> document, int entries, string reason, CancellationToken cancellation)
     {
         var bytes = document.ToArray();
-        if (bytes.Length is < 1 or > MaximumDocumentBytes || reason is not ("自动" or "恢复前")) throw new InvalidDataException("备份内容无效。");
+        if (bytes.Length is < 1 or > MaximumDocumentBytes || reason is not ("自动" or "恢复前" or "导入前")) throw new InvalidDataException("备份内容无效。");
         return Run(async (root, profile) =>
         {
             _ = ReadPreferences(root, profile); _ = Records(root, profile);

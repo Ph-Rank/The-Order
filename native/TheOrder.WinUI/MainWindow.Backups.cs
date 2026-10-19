@@ -6,6 +6,31 @@ namespace TheOrder.WinUI;
 
 public sealed partial class MainWindow
 {
+    private async Task<ClientResult> ImportManagerLibraryAsync(LibraryMigrationPreview preview, LibraryMigrationService service, CancellationToken cancellation)
+    {
+        if (commandsBlocked || !ViewModel.CanEdit || !await ResolveUnsavedAsync())
+            return new(ClientOutcome.ReadOnly, "请先处理未保存的修改或等待当前操作完成。" );
+        cancellation.ThrowIfCancellationRequested();
+        recognition.CancelAll();
+        if (nextMoeSettings.Automatic)
+        {
+            await nextMoeSettings.PauseAutomaticAsync();
+            if (nextMoeSettings.Automatic) return new(ClientOutcome.ValidationFailure, "自动同步未能暂停，请稍后重试。" );
+        }
+        await nextMoeSettings.DrainAsync();
+        nextMoeSettings.PauseCommands(true);
+        try
+        {
+            var result = await ViewModel.ExecuteFileMutationAsync(async token =>
+            {
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, cancellation);
+                return await service.ApplyAsync(preview, linked.Token);
+            });
+            if (result.IsCommitted) await backups.ReloadAfterRestoreAsync();
+            return result;
+        }
+        finally { nextMoeSettings.PauseCommands(commandsBlocked); }
+    }
     private async Task<string?> PickBackupDestination()
     {
         var picker = new FileSavePicker(AppWindow.Id)

@@ -1,5 +1,11 @@
 # 开发与维护
 
+## 设置页 ZIP 迁移入口（2026-10-19）
+
+当前 `codex/migration-settings-20261019` 基于保留统计及 CLI 的 `c8d6ffd`。用户已授权在设置页选择 PotatoVN 导出 ZIP、预览后导入当前打开的书架，并替换本机程序；不是授权代理读取或迁移真实用户库。本轮仍不使用 Computer Use、不操作桌面、不启动真实游戏、不推送或发布。测试仅隔离 Test Profile，应用内 service 复用既有 writer/备份/事务；没有提供 CLI Production 开关或新用户数据库。
+
+相关回归为 `LibraryMigrationSettingsTests`、原 `MigrationTests`、备份及统计测试，完整测试继续用现有本地合成 Worker 入口。构建 Release x64，安装前冻结源码与载荷并使用全新 artifact；包先做隔离安装与 headless `--validate-only`，不能裸启动默认 Profile。实际日用替换仅在确切进程退出、旧程序哈希备份及新包校验均通过后执行；不读 Profile 或路由文件内容。全部新回执在 `.artifacts/migration-settings-20261019/`，用户步骤在 `docs/migration-trial.md`。旧版本回退前需在新版本恢复「导入前」备份，避免旧 codec 只读含迁移来源的书架。
+
 ## 本机迁移工具随附候选（2026-10-19）
 
 `codex/local-migration-daily-20261019` 保留已验收统计快照并继承 `7821269` 迁移内核，不修改原统计工作树、Production 或公开附件。沿用固定 SDK/锁文件，分别自包含 publish WinUI 和 MigrationTool；不要用迁移分支的旧 UI 覆盖现有统计版，也不要把测试启动或 GUI 自动化附加到本轮替换。

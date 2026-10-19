@@ -4,10 +4,32 @@ namespace TheOrder.Application;
 
 public sealed partial class TransactionalLibrary
 {
-    // No public production entry point. The Windows gateway grants access only to its marked Test profiles.
+    internal Task<LibraryMigrationPreview> PreviewActiveMigrationAsync(ImportDataset dataset, CancellationToken cancellation = default)
+        => Enqueue(() =>
+        {
+            if (current.Access != LibraryAccess.ValidWritable) throw new LibraryReadOnlyException(current.ReadOnlyReason!);
+            var plan = MigrationResolver.Preview(dataset, current.Entries, codec, cancellation, ImportHash.Text(epoch.ToString()));
+            return Task.FromResult(new LibraryMigrationPreview(epoch, current, plan));
+        }, cancellation);
+    internal Task<CommitResult<MigrationCommit>> ApplyActiveMigrationAsync(LibraryMigrationPreview preview,
+        Func<ReadOnlyMemory<byte>, int, CancellationToken, Task> backup, CancellationToken cancellation = default)
+    {
+        ArgumentNullException.ThrowIfNull(preview); ArgumentNullException.ThrowIfNull(backup);
+        byte[] rollback = []; int count = 0;
+        return ApplyMigrationCoreAsync(preview.Plan, cancellation, () =>
+        {
+            if (preview.Owner != epoch || !ReferenceEquals(preview.Baseline, current)) throw new StaleLibraryRequestException();
+            rollback = codec.Encode([.. current.Entries.Select(PortableSessionHistory)], now()); count = current.Entries.Length;
+        }, () => backup(rollback, count, cancellation));
+    }
+    // CLI remains restricted by its marked Test-only Windows gateway.
     internal Task<CommitResult<MigrationCommit>> ApplyMigrationAsync(MigrationPlan plan, CancellationToken cancellation = default)
+        => ApplyMigrationCoreAsync(plan, cancellation);
+    private Task<CommitResult<MigrationCommit>> ApplyMigrationCoreAsync(MigrationPlan plan, CancellationToken cancellation,
+        Action? verifyConsent = null, Func<Task>? backup = null)
         => Mutate(games =>
         {
+            verifyConsent?.Invoke();
             ImportModel.Validate(plan.Dataset);
             if (ImportHash.Snapshot(games, codec) != plan.TargetDigest) throw new StaleLibraryRequestException();
             if (pendingOwnedSessions.Count != 0 || games.Any(e => e.Sessions.Any(s => s.Native is { IsTerminal: false })))
@@ -26,5 +48,5 @@ public sealed partial class TransactionalLibrary
                 }
             }
             return (result.ToImmutable(), new MigrationCommit(created, filled, plan.Rows.Length - created - filled, plan.Id));
-        }, cancellation, skipUnchanged: true);
+        }, cancellation, skipUnchanged: true, verifyBeforeCommit: backup);
 }

@@ -20,6 +20,7 @@ public sealed partial class SettingsPage : Page
     public AppUpdateViewModel Updates { get; }
     public NextMoeSettingsViewModel NextMoe { get; }
     public LibraryBackupViewModel Backups { get; }
+    public LibraryMigrationViewModel Migration { get; }
     public BangumiSettingsViewModel Bangumi { get; }
     public Func<VerifiedAppUpdate, Task<bool>>? InstallUpdate { get; set; }
     public string AppVersion => "The Order " + AppReleaseIdentity.Version;
@@ -45,9 +46,11 @@ public sealed partial class SettingsPage : Page
         if (synchronizing || MaterialChoice.SelectedIndex < 0) return;
         if (ChangeMaterialMode is { } change) await change((MaterialMode)MaterialChoice.SelectedIndex);
     }
-    public SettingsPage(WorkspaceViewModel viewModel, OnlineViewModel online, RecognitionViewModel recognition, CatalogBrowseSettings browsing, LanguageSettings languages, ContentLanguageSettings contentLanguages, AppUpdateViewModel updates, NextMoeSettingsViewModel nextMoe, LibraryBackupViewModel backups, BangumiSettingsViewModel bangumi, GlobalLaunchSettings launchDefaults)
+    public SettingsPage(WorkspaceViewModel viewModel, OnlineViewModel online, RecognitionViewModel recognition, CatalogBrowseSettings browsing, LanguageSettings languages, ContentLanguageSettings contentLanguages, AppUpdateViewModel updates, NextMoeSettingsViewModel nextMoe, LibraryBackupViewModel backups, BangumiSettingsViewModel bangumi, GlobalLaunchSettings launchDefaults, LibraryMigrationViewModel migration)
     {
-        ViewModel = viewModel; Online = online; Recognition = recognition; Browsing = browsing; Languages = languages; ContentLanguages = contentLanguages; Updates = updates; NextMoe = nextMoe; Backups = backups; Bangumi = bangumi; LaunchDefaults = launchDefaults; InitializeComponent();
+        ViewModel = viewModel; Online = online; Recognition = recognition; Browsing = browsing; Languages = languages; ContentLanguages = contentLanguages; Updates = updates; NextMoe = nextMoe; Backups = backups; Bangumi = bangumi; LaunchDefaults = launchDefaults; Migration = migration; InitializeComponent();
+        Loaded += (_, _) => { Migration.PropertyChanged += OnMigrationState; ViewModel.PropertyChanged += OnMigrationState; SynchronizeMigration(); };
+        Unloaded += (_, _) => { Migration.PropertyChanged -= OnMigrationState; ViewModel.PropertyChanged -= OnMigrationState; CancelMigrationDialog(); Migration.Clear(); };
         Loaded += (_, _) => Bangumi.RefreshState();
         Unloaded += (_, _) => { Bangumi.Cancel(); BangumiToken.Password = ""; BangumiEditor.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed; };
         Loaded += (_, _) => { Backups.PropertyChanged += OnBackupState; SynchronizeBackups(); };

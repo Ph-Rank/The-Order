@@ -1,5 +1,11 @@
 # The Order：当前实现与评审交接
 
+## 设置页 ZIP 迁移入口（2026-10-19，当前授权增量）
+
+从 `c8d6ffd` 转到 `codex/migration-settings-20261019`，用户已明确授权图形入口及本机替换，继续禁止 Computer Use、桌面操作、真实游戏和发布。设置页新增「从其他管理器导入 → 选择 PotatoVN 备份 ZIP…」，预览后显式「备份并导入」到当前书架。复用现有迁移内核及打开的事务 writer，强制导入前备份/回读、精确预览时效、会话保护和冲突跳过；CLI 仍为 Test-only。统计及已有媒体功能保留，原统计工作树不改动。
+
+验证使用公开合成 PotatoVN 格式及独立 Native Test Profile，没有读取私人导出或 Production。WinUI Release x64 编译通过；原生图形点击未运行，不能把无界面测试称为 UI 验收。具体最终回归、源码冻结、安装和回退证据见 `.artifacts/migration-settings-20261019/`；实际替换须以 `installation-receipt.json` 和 `completion.json` 为准。步骤在 `docs/migration-trial.md`；下面 CLI-only 段落保留为上一节点历史。
+
 ## 本机迁移工具候选（2026-10-19，无桌面操作）
 
 用户授权仅替换本机程序并提供试导入步骤，继续禁止 Computer Use、桌面操作及真实游戏。独立 `codex/local-migration-daily-20261019` 从已提交迁移分支 `7821269` 继续；把已验收且已日用的统计 17 份代码/说明快照保留到本候选，来源 19 份文件（包括两份交接文档）逐文件哈希核对，原统计工作树不修改。没有新建图形导入向导，也没有开放 Production 迁移。
