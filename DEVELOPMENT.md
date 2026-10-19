@@ -1,5 +1,15 @@
 # 开发与维护
 
+## 跨管理器迁移内核 v1：仅无界面 Test（2026-10-19）
+
+独立分支 `codex/library-migration-20261019` 基于 `0227ea3`，代码检查点 `5c13f59`；不要在原统计工作区重放、覆盖未提交文件或据此替换日用程序。没有版本升级或 Production 迁移。本分支新增 `native/TheOrder.MigrationTool`，复用现有 Native Profile、事务和时长台账，不启动 WinUI 或其他管理器。
+
+固定 .NET 10.0.401 SDK，从分支根目录执行 `dotnet restore native/TheOrder.MigrationTool/TheOrder.MigrationTool.csproj --locked-mode`、`dotnet run --project native/TheOrder.MigrationTool -c Release --no-restore -- help`。`preview --source <明确导出文件>` 为默认只读流程；`init-test --target <全新目录>` 创建专用合成 Test Profile；带目标重新预览后，只有 `apply --source ... --target ... --commit <planId>` 才提交。来源时区明确时可加 `--source-time-zone Asia/Shanghai`，预览/提交参数必须一致；报告目录必须全新。`demo --out <全新目录>` 自行生成已知格式合成资料，完成预览、提交、重启读取和重复导入。完整命令见 `docs/migration-v1.md`，没有 Production 或强制绕过入口。
+
+完整无界面客户端回归沿用 `services/bangumi-auth-worker/test/run-client-bridge.mjs --all-client-tests`，仅本地合成上游；设置 `THE_ORDER_TEST_DOTNET` 为固定 SDK exe、`THE_ORDER_TEST_RESULTS_DIR` 为本轮新目录。既有 ProfileProbe 回归还要求根目录 `.artifacts/native-phase1/tools/dotnet/dotnet.exe` 可用，本轮只在新工作树的 ignored 目录建立指向已有 SDK 的路径别名；加密合成测试所需 Electron 用根锁文件 `npm ci`，Worker 用其目录锁文件 `npm ci`，没有升级依赖或运行旧 Electron 主程序。不要清除跳过条件来声称服务闭环通过。
+
+本轮完整客户端 4513/0/0，其中迁移 70 项；独立 CLI 检查 28 项。公开合成夹具 5 条和一万条合成库均实际写入原生 Test，重复导入没有时长增量或库字节变化；完整证据位于 `.artifacts/migration-v1/`。首次缺依赖的失败和跳过日志完整保留。新谱系为 `nativeExtras v3`，只在已提交迁移条目上出现；旧格式条目不升级。旧客户端对未知扩展的既有保护是只读，本轮未执行旧程序读写测试，不得宣称真实用户升级/回退已验收。下一阶段需真实脱敏导出、统计 UI 对导入按日累计的说明及明确的用户资料准入；本轮结束后不自动开发向导。
+
 ## 1.2.1 Beta 1 发布候选（2026-10-19）
 
 维护分支 codex/public-beta-1.2.1-20261019。已将接手时未提交、但已在日用版验收的音乐/书籍增量单独提交为ccd15ee；未混入reports或research_notes。版本按现有更新器协议采用1.2.1-beta.1（数字1.2.1.1），GitHub必须Pre-release，不修改稳定latest及旧附件。
