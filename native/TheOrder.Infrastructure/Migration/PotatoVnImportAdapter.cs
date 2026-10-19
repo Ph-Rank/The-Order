@@ -109,7 +109,7 @@ public sealed class PotatoVnImportAdapter(TimeZoneInfo? sourceTimeZone = null) :
         if (days.Select(d => d.Date).Distinct().Count() != days.Count || days.Sum(x => x.Seconds) > total)
         { review = true; days.Clear(); issues.Add(new(key, "PlayedTime", "SOURCE_TOTAL_DAILY_CONFLICT")); }
         var playType = Integer(Prop(o, "PlayType"), 0, 100);
-        var status = playType switch { 0 or 5 => "planned", 1 => "playing", 2 => "completed", 3 => "paused", 4 => "dropped", _ => "planned" };
+        var status = playType switch { 0 => "planned", 1 => "playing", 2 => "completed", 3 => "paused", 4 => "dropped", 5 => "wish", _ => "planned" };
         if (playType > 5) { review = true; issues.Add(new(key, "PlayType", "UNKNOWN_STATE_REQUIRES_REVIEW")); }
         var rate = Integer(Prop(o, "MyRate"), 0, 10);
         var tags = Array(Prop(Prop(o, "Tags"), "Value")).Select(x => Text(x, 200)).Where(x => x.Length > 0).Distinct(StringComparer.Ordinal).Take(101).ToImmutableArray();

@@ -44,7 +44,7 @@ public sealed class LibraryMigrationService(OfflineLibraryClient library, ILibra
                 var restored = await backups.ReadSnapshotAsync(saved.Record.Id, token).ConfigureAwait(false);
                 if (!bytes.Span.SequenceEqual(restored)) throw new InvalidDataException("IMPORT_BACKUP_VERIFICATION_FAILED");
             }, cancellation).ConfigureAwait(false);
-            var message = $"已导入 {result.Value.Created} 部，补全 {result.Value.Filled} 部；跳过 {result.Value.Skipped} 部。"
+            var message = $"已导入 {result.Value.Created} 部，更新 {result.Value.Filled} 部；跳过 {result.Value.Skipped} 部。"
                 + (result.Value.Created + result.Value.Filled > 0 ? "导入前备份已保存。" : "书架没有变化。" );
             if (result.Warning is not null || result.CancellationAfterCommit)
                 return new(ClientOutcome.CommittedWithWarning, message + " 修改已保存，请勿重复提交；可在备份与恢复中检查。" );

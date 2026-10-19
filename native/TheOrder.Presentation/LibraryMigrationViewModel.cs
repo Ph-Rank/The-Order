@@ -18,7 +18,7 @@ public sealed class LibraryMigrationViewModel(ILibraryMigrationService service) 
     public string Message { get; private set; } = "";
     public ImmutableArray<LibraryMigrationRow> Rows { get; private set; } = [];
     public string Summary => Preview is { } p
-        ? $"备份共 {p.Dataset.RawCount} 部 · 新增 {p.Added} · 补全 {p.Filled} · 待核对 {p.Review} · 已导入 {p.AlreadyImported}"
+        ? $"备份共 {p.Dataset.RawCount} 部 · 新增 {p.Added} · 更新 {p.Filled} · 待核对 {p.Review} · 已导入 {p.AlreadyImported}"
         : "";
     public Task PreviewAsync(string selectedFile)
     {
@@ -33,7 +33,7 @@ public sealed class LibraryMigrationViewModel(ILibraryMigrationService service) 
             Rows = [.. preview.Rows.Select(r => new LibraryMigrationRow(games[r.RecordKey].Name, Action(r), Detail(r)))];
             Message = preview.Dataset.RawCount == 0 ? "备份中的书架为空。"
                 : !preview.CanApply ? "没有可直接导入的条目。已导入或需要核对的条目均不会重复写入。"
-                : $"将新增 {preview.Added} 部，补全 {preview.Filled} 部；其余 {preview.Skipped} 部跳过。";
+                : $"将新增 {preview.Added} 部，更新 {preview.Filled} 部；其余 {preview.Skipped} 部跳过。";
             if (!preview.Dataset.Issues.IsEmpty || preview.Dataset.Games.Any(g => !g.Issues.IsEmpty))
                 Message += " 部分字段无法可靠转换，已保留现有资料并跳过这些字段。";
         });
@@ -76,8 +76,10 @@ public sealed class LibraryMigrationViewModel(ILibraryMigrationService service) 
     }
     public async ValueTask DisposeAsync() { stopping = true; Cancel(); await pending; Notify(); }
     private static string Action(ImportRow row) => row.Action switch
-    { ImportAction.Create => "新增", ImportAction.FillMissing => "补全缺项", ImportAction.AlreadyImported => "已导入 · 跳过", _ => row.Match == ImportMatch.Conflict ? "存在冲突 · 跳过" : "待核对 · 跳过" };
-    private static string Detail(ImportRow row) => row.Reasons.Any(r => r is "NOTES_CONFLICT" or "RATING_CONFLICT" or "PLAYTIME_OVERLAP_CONFLICT")
+    { ImportAction.Create => "新增", ImportAction.FillMissing => row.Fields.Contains("status") ? "更新进度" : "补全缺项", ImportAction.AlreadyImported => "已导入 · 跳过", _ => row.Match == ImportMatch.Conflict ? "存在冲突 · 跳过" : "待核对 · 跳过" };
+    private static string Detail(ImportRow row) => row.Action == ImportAction.FillMissing && row.Fields.Contains("status") && row.StatusBefore is { } before && row.StatusAfter is { } after
+        ? $"进度：{StatusNames.Display(before)} → {StatusNames.Display(after)}。其他有冲突的资料保留现有记录。"
+        : row.Reasons.Any(r => r is "NOTES_CONFLICT" or "RATING_CONFLICT" or "PLAYTIME_OVERLAP_CONFLICT")
         ? "笔记、评分或时长与书架不同，保留现有记录。"
         : row.Reasons.Contains("SOURCE_RECORD_CHANGED_OR_DUPLICATED") ? "来源记录发生变化或重复，保留现有记录。"
         : row.Action == ImportAction.Create ? "保留来源身份与历史时长，不自动绑定在线作品。"

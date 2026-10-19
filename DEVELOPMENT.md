@@ -1,5 +1,11 @@
 # 开发与维护
 
+## 六种进度与本机候选（2026-10-19）
+
+`codex/progress-status-20261019` 基于 `99d1a34`，继承设置页 ZIP、统计和媒体成果。集中定义 GameProgress，保留既有 planned 的磁盘值用于未设置；wish 由 NativeExtras v4 表示，兼容主字段仍为 planned，旧 NativeCodec 进入只读。不能直接往旧 JSON status 写未知 wish 或批量改真实资料。测试包括六乘六进度组合、旧迁移重放、其他字段冲突、真实 Native Test 持久化重启、旧日用程序集兼容探针及云端 unset/wish 区分。最终仍需完整本地合成 Worker 回归、WinUI 编译和新标准 Setup 隔离验证；没有桌面交互验收。
+
+本轮原始失败、夹具修订、源码冻结、候选与程序回退凭据保留在 `.artifacts/progress-status-20261019/`。用户只授权替换程序；不读取真实书架、凭据或其他管理器私人数据。日用实例未退出时不可覆盖或强杀，不能把上一轮备份当当前程序备份，须核对当前已安装载荷并保存新回退点。步骤及数据格式回退说明继续维护 `docs/migration-trial.md`。
+
 ## 设置页 ZIP 迁移入口（2026-10-19）
 
 实际已用源码 `3461478` 构建的标准 Setup 完成本机替换：完整回归 4564/0/0、117 项定向、29 项启动检查、隔离 Setup 和安装目录 8 步 CLI 闭环通过。安装的 929 份载荷、3 份入口附件及更新基包均核对，回退程序 662 份已备份，5 份未知/路由文件未改动。没有启动正常 WinUI 或访问真实资料。`.artifacts/migration-settings-20261019/installation-receipt.json`、`completion.json` 为本轮事实；下方准备及 CLI-only 描述按历史节点理解。最终文档提交不是另一份程序构建。

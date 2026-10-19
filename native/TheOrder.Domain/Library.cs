@@ -57,6 +57,6 @@ public sealed record LibrarySummary(string Id, string Name, string Progress, int
     public override string ToString() => Name;
     public string Subtitle => $"{Progress} · {Installations} 个安装 · {TotalPlaySeconds / 60} 分钟";
     public static LibrarySummary From(LibraryEntry entry) => new(entry.Id, entry.Name,
-        entry.Status switch { "playing" => "在玩", "completed" => "已完成", "paused" => "暂停", "dropped" => "搁置", _ => "计划游玩" },
+        GameProgress.Label(entry.Status),
         entry.Installations.Length, entry.EffectivePlaySeconds);
 }

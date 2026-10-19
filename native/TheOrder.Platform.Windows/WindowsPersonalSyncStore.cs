@@ -85,7 +85,7 @@ public sealed class WindowsPersonalSyncStore(NativeConfiguration configuration) 
     private static bool Date(string value) => value is { Length: > 0 and <= 40 } && DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _);
     private static bool Cursor(string? value) => value is null || value.Length is > 4 and <= 512 && value.StartsWith("cur_", StringComparison.Ordinal)
         && value[4..].All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '~' or '-');
-    private static bool LocalState(string value) => value is "planned" or "playing" or "completed" or "paused" or "dropped";
+    private static bool LocalState(string value) => TheOrder.Domain.GameProgress.Valid(value);
     private static bool CloudState(string? value, string? completion) => value is null ? completion is null : value is "wish" or "doing" or "done" or "on_hold" or "dropped"
         && completion is null or "one_route" or "main" or "all" && (value != "wish" || completion is null);
     private static bool Write(PersonalWrite? value, PersonalSyncKind kind, bool before) => value is not null && Id(value.WorkId) && (kind switch {

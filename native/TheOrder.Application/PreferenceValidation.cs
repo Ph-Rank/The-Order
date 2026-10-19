@@ -7,7 +7,7 @@ public static class PreferenceValidation
 {
     public static readonly string[] Sorts = ["added", "recent", "name", "rating", "playtime"];
     public static readonly string[] Views = ["all", "local", "wishlist", "unmatched", "unconfigured"];
-    public static readonly string[] Statuses = ["all", "planned", "playing", "completed", "paused", "dropped"];
+    public static readonly string[] Statuses = ["all", .. TheOrder.Domain.GameProgress.Ordered];
     public static void Validate(ClientPreferences preferences)
     {
         if (!Enum.IsDefined(preferences.Theme) || preferences.Layout is not ("grid" or "list") || !Sorts.Contains(preferences.Sort) || preferences.Filters.Length > 50) throw new InvalidDataException(UiText.Get("界面偏好格式不正确。"));

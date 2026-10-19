@@ -33,6 +33,8 @@ public sealed record ImportRow(string RecordKey, ImportMatch Match, ImportAction
     ImmutableArray<string> Reasons, ImmutableArray<string> Fields)
 {
     public ImmutableArray<string> CandidateKeys { get; init; } = [];
+    public string? StatusBefore { get; init; }
+    public string? StatusAfter { get; init; }
 }
 public sealed class MigrationPlan
 {
@@ -40,7 +42,7 @@ public sealed class MigrationPlan
         ImmutableArray<MigrationOperation> operations)
     {
         Dataset = dataset; TargetDigest = targetDigest; TargetScope = targetScope; Rows = rows; Operations = operations;
-        Id = ImportHash.Of(new { policy = 1, dataset.Manager, dataset.Format, dataset.DocumentDigest, dataset.SourceTimeZone,
+        Id = ImportHash.Of(new { policy = 2, dataset.Manager, dataset.Format, dataset.DocumentDigest, dataset.SourceTimeZone,
             normalized = ImportHash.Of(dataset.Games), targetDigest, targetScope, rows });
     }
     public string Id { get; }
@@ -102,7 +104,7 @@ public static class ImportModel
         foreach (var g in d.Games)
         {
             if (g is null || string.IsNullOrWhiteSpace(g.SourceId) || g.SourceId.Length > 200 || string.IsNullOrWhiteSpace(g.Name) || g.Name.Length > 2000
-                || g.Notes.Length > 20000 || g.Notes.Contains('\0') || g.Status is not ("planned" or "playing" or "completed" or "paused" or "dropped")
+                || g.Notes.Length > 20000 || g.Notes.Contains('\0') || !GameProgress.Valid(g.Status)
                 || g.Rating is { } rating && (!double.IsFinite(rating) || rating is < 0 or > 10)
                 || g.TotalSeconds is < 0 or > 1_000_000_000_000 || g.PlayCount is < 0 or > 1_000_000_000
                 || g.Installations.IsDefault || g.Installations.Length > 100 || g.Days.IsDefault || g.Days.Length > 10000

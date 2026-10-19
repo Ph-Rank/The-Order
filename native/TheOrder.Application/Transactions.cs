@@ -346,7 +346,7 @@ public sealed partial class TransactionalLibrary : IDisposable, IAsyncDisposable
                 {
                     Installations = e.Installations.AddRange(target.Installations), PreferredInstallationId = e.PreferredInstallationId ?? target.PreferredInstallationId,
                     Categories = [.. e.Categories.Concat(target.Categories).Distinct(StringComparer.Ordinal)], CustomTags = [.. e.CustomTags.Concat(target.CustomTags).Distinct(StringComparer.Ordinal)],
-                    Favorite = e.Favorite || target.Favorite, PersonalRating = e.PersonalRating ?? target.PersonalRating, Status = e.Status == "planned" ? target.Status : e.Status,
+                    Favorite = e.Favorite || target.Favorite, PersonalRating = e.PersonalRating ?? target.PersonalRating, Status = GameProgress.Higher(e.Status, target.Status),
                     Notes = target.Notes.Length > 0 && target.Notes != e.Notes ? string.Join("\n\n", new[] { e.Notes, target.Notes }.Where(s => s.Length > 0)) : e.Notes,
                     Sessions = sessions.ToImmutable(), TotalPlaySeconds = e.TotalPlaySeconds + target.TotalPlaySeconds - duplicateSeconds, PlayCount = e.PlayCount + target.PlayCount - duplicateCount,
                     ManualPlaytime = MetadataMixing.MergeLedger(e.ManualPlaytime, target.ManualPlaytime),

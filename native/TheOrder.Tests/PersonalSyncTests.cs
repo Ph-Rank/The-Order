@@ -140,12 +140,13 @@ public sealed class PersonalSyncTests
         Assert.Equal(before.Notes, f.Library.Entries.Single().Notes); f.Library.Entries = [f.Library.Entries[0] with { Status = "paused" }];
         await f.Apply(new(State: PersonalSyncDirection.Upload)); Assert.Equal("on_hold", f.Cloud.States.Single().State); Assert.Equal("main", f.Cloud.States.Single().Completion);
     }
-    [Theory] [InlineData("planned", "wish")] [InlineData("playing", "doing")] [InlineData("completed", "done")] [InlineData("paused", "on_hold")] [InlineData("dropped", "dropped")]
+    [Theory] [InlineData("wish", "wish")] [InlineData("playing", "doing")] [InlineData("completed", "done")] [InlineData("paused", "on_hold")] [InlineData("dropped", "dropped")]
     public void StateVocabularyIsExplicit(string local, string cloud)
     { Assert.Equal(cloud, PersonalSyncPlanning.CloudStatus(local)); Assert.Equal(local, PersonalSyncPlanning.LocalStatus(cloud)); }
     [Fact] public async Task WishCompletionRemovalIsExplicitConflict()
     {
         var f = new Fixture(); await f.Login(); f.Cloud.States = [new("200", "done", "all", "2026-10-11T01:00:00Z")];
+        f.Library.Entries = [f.Library.Entries[0] with { Status = "wish" }];
         var preview = await f.Sync.PreviewAsync(new(State: PersonalSyncDirection.Upload), default); Assert.True(preview.Rows.Single().Conflict);
         Assert.Null(preview.Rows.Single().Upload!.Completion); await f.Sync.ApplyAsync(preview, PersonalSyncCoordinator.DefaultChoices(preview), false, null, default);
         Assert.Equal("all", f.Cloud.States.Single().Completion); Assert.Equal(0, f.Cloud.Writes);

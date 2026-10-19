@@ -5,8 +5,8 @@ namespace TheOrder.Application;
 // Pure, inspectable three-way decisions. Scores/titles are never identity inputs.
 public static class PersonalSyncPlanning
 {
-    public static string CloudStatus(string local) => local switch { "planned" => "wish", "playing" => "doing", "completed" => "done", "paused" => "on_hold", "dropped" => "dropped", _ => throw new OnlineException(OnlineFailure.InvalidRequest) };
-    public static string LocalStatus(string cloud) => cloud switch { "wish" => "planned", "doing" => "playing", "done" => "completed", "on_hold" => "paused", "dropped" => "dropped", _ => throw new OnlineException(OnlineFailure.InvalidResponse) };
+    public static string? CloudStatus(string local) => local switch { "planned" => null, "wish" => "wish", "playing" => "doing", "completed" => "done", "paused" => "on_hold", "dropped" => "dropped", _ => throw new OnlineException(OnlineFailure.InvalidRequest) };
+    public static string LocalStatus(string cloud) => cloud switch { "wish" => "wish", "doing" => "playing", "done" => "completed", "on_hold" => "paused", "dropped" => "dropped", _ => throw new OnlineException(OnlineFailure.InvalidResponse) };
     public static PersonalSyncRow Time(LibraryEntry local, long? remoteMinutes, SyncWorkCheckpoint? basis,
         ImportedPersonalFacts? imported, PersonalSyncDirection direction)
     {
@@ -63,16 +63,19 @@ public static class PersonalSyncPlanning
         bool different = state != cloud?.State;
         bool conflict = different && (basis is null ? direction == PersonalSyncDirection.Bidirectional && cloud is not null
             : local.Status != basis.LocalState && (cloud?.State != basis.CloudState || cloud?.Completion != basis.Completion));
-        var completion = state == "wish" ? null : cloud?.Completion;
+        var completion = state is "wish" or null ? null : cloud?.Completion;
         var explanation = "安装信息不参与状态转换；不推断通关程度，上传保留已有通关程度。";
         if (state == "wish" && cloud?.Completion is not null && direction != PersonalSyncDirection.Import
             && (direction == PersonalSyncDirection.Upload || basis is null || local.Status != basis.LocalState))
         { conflict = true; explanation = "改为想玩会清除云端通关程度，必须明确选择并确认。"; }
         var facts = cloud is null ? null : new ImportedPersonalFacts(work, State: cloud.State, Completion: cloud.Completion, FetchedAt: cloud.UpdatedAt);
+        var importedStatus = cloud is null ? null : GameProgress.Higher(local.Status, LocalStatus(cloud.State));
+        if (state is null) explanation = "未设置不上传，也不会清除云端记录。导入时按进度优先级保留较高状态。";
+        else if (cloud is not null && importedStatus != LocalStatus(cloud.State)) explanation += " 导入不会降低当前进度。";
         return new("state:" + local.Id, PersonalSyncKind.State, work, local.Id, local.Name, StatusNames.Display(local.Status),
             cloud is null ? "尚无记录" : StatusNames.Display(LocalStatus(cloud.State)) + (cloud.Completion is null ? "" : " · " + cloud.Completion),
-            conflict, explanation, new(work, State: state, Completion: completion), facts, cloud is null ? null : LocalStatus(cloud.State),
-            Recommended: cloud is not null && basis is not null && local.Status == basis.LocalState && (cloud.State != basis.CloudState || cloud.Completion != basis.Completion)
+            conflict, explanation, state is null ? null : new(work, State: state, Completion: completion), facts, importedStatus,
+            Recommended: state is null ? cloud is null ? PersonalSyncChoice.Skip : PersonalSyncChoice.Import : cloud is not null && basis is not null && local.Status == basis.LocalState && (cloud.State != basis.CloudState || cloud.Completion != basis.Completion)
                 ? PersonalSyncChoice.Import : PersonalSyncChoice.Upload);
     }
     public static bool SameTime(CloudPlaytime? a, CloudPlaytime? b) => a?.Minutes == b?.Minutes;

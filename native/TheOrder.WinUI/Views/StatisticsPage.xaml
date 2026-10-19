@@ -62,7 +62,7 @@
        <StackPanel Spacing="4"><TextBlock FontSize="18" FontWeight="SemiBold" l:Localize.Text="书架进度" /><TextBlock Style="{StaticResource MetadataTextStyle}" l:Localize.Text="当前状态 · 不随时间区间变化" /></StackPanel>
        <Grid Height="170" HorizontalAlignment="Center" Width="170">
         <views:StatisticsStatusChart x:Name="StatusChart" Track="{ThemeResource DividerBrush}" LabelBrush="{ThemeResource TextPrimaryBrush}" AutomationProperties.AutomationId="StatisticsStatusChart" />
-        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4" IsHitTestVisible="False"><TextBlock x:Name="CompletionValue" FontSize="27" FontWeight="SemiBold" HorizontalAlignment="Center" /><TextBlock Style="{StaticResource MetadataTextStyle}" HorizontalAlignment="Center" l:Localize.Text="已完成" /></StackPanel>
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4" IsHitTestVisible="False"><TextBlock x:Name="CompletionValue" FontSize="27" FontWeight="SemiBold" HorizontalAlignment="Center" /><TextBlock Style="{StaticResource MetadataTextStyle}" HorizontalAlignment="Center" l:Localize.Text="玩过" /></StackPanel>
        </Grid>
        <StackPanel x:Name="StatusLegend" Spacing="8" />
       </StackPanel>

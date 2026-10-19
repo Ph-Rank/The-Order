@@ -44,7 +44,7 @@ public sealed partial class SettingsPage
             var rows = new ListView { ItemsSource = Migration.Rows, ItemTemplate = (DataTemplate)Resources["MigrationRowTemplate"],
                 SelectionMode = ListViewSelectionMode.None, MaxHeight = 320, MinHeight = 80 };
             Grid.SetRow(rows, 1); content.Children.Add(rows);
-            var notice = new TextBlock { Text = Migration.Message + "\n\n导入前自动备份当前书架。有冲突的条目跳过；现有笔记、评分和记录不会覆盖，游戏文件及账号不迁移。", TextWrapping = TextWrapping.Wrap };
+            var notice = new TextBlock { Text = Migration.Message + "\n\n导入前自动备份。进度取较高状态，笔记、评分和时长冲突保留原值；身份待核对的条目跳过。游戏文件及账号不迁移。", TextWrapping = TextWrapping.Wrap };
             Grid.SetRow(notice, 2); content.Children.Add(notice);
             var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "导入 PotatoVN 书架",
                 Content = content, PrimaryButtonText = "备份并导入", IsPrimaryButtonEnabled = preview.CanApply,

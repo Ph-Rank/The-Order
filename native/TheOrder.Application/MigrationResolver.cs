@@ -35,8 +35,16 @@ public static class MigrationResolver
             var prior = origins.GetValueOrDefault((dataset.Manager, g.SourceId)) ?? [];
             if (prior.Count != 0)
             {
-                if (prior.Count == 1 && prior[0].MigrationOrigins.Single(o => o.Manager == dataset.Manager && o.RecordId == g.SourceId).RecordDigest == ImportHash.Of(g))
-                    Row(ImportMatch.Confirmed, ImportAction.AlreadyImported, prior[0], ["SAME_SOURCE_RECORD_ALREADY_IMPORTED"]);
+                if (prior.Count == 1 && SameRecordExceptProgress(prior[0].MigrationOrigins.Single(o => o.Manager == dataset.Manager && o.RecordId == g.SourceId), g))
+                {
+                    var previous = prior[0];
+                    if (GameProgress.Higher(previous.Status, g.Status) != previous.Status)
+                    {
+                        Row(ImportMatch.Confirmed, ImportAction.FillMissing, previous, ["HIGHER_PROGRESS_ONLY_PREVIOUS_DATA_PRESERVED"], ["status"]);
+                        operations.Add(new(g, previous.Id, previous.Id, ["status"]));
+                    }
+                    else Row(ImportMatch.Confirmed, ImportAction.AlreadyImported, previous, ["SAME_SOURCE_RECORD_ALREADY_IMPORTED"]);
+                }
                 else Row(ImportMatch.Conflict, ImportAction.Skip, null, ["SOURCE_RECORD_CHANGED_OR_DUPLICATED"]);
                 continue;
             }
@@ -57,8 +65,18 @@ public static class MigrationResolver
                 if (e.Notes.Length != 0 && g.Notes.Length != 0 && e.Notes != g.Notes) { conflicts.Add("NOTES_CONFLICT"); blocked.Add("notes"); }
                 if (e.PersonalRating is { } a && g.Rating is { } b && a != b) { conflicts.Add("RATING_CONFLICT"); blocked.Add("rating"); }
                 if (e.EffectivePlaySeconds > 0 && g.TotalSeconds > 0 && e.EffectivePlaySeconds != g.TotalSeconds) { conflicts.Add("PLAYTIME_OVERLAP_CONFLICT"); blocked.Add("history"); }
-                if (conflicts.Count != 0) { Row(ImportMatch.Conflict, ImportAction.Skip, e, conflicts.ToImmutable(), blocked.ToImmutable()); continue; }
+                if (conflicts.Count != 0)
+                {
+                    if (!conflicts.Contains("LIVE_HISTORY_CONFLICT") && GameProgress.Higher(e.Status, g.Status) != e.Status)
+                    {
+                        Row(ImportMatch.Confirmed, ImportAction.FillMissing, e, [.. conflicts, "HIGHER_PROGRESS_ONLY_OTHER_CONFLICTS_PRESERVED"], ["status", "lineage"]);
+                        operations.Add(new(g, e.Id, e.Id, ["status", "lineage"]));
+                    }
+                    else Row(ImportMatch.Conflict, ImportAction.Skip, e, conflicts.ToImmutable(), blocked.ToImmutable());
+                    continue;
+                }
                 var fields = ImmutableArray.CreateBuilder<string>();
+                if (GameProgress.Higher(e.Status, g.Status) != e.Status) fields.Add("status");
                 if (e.Notes.Length == 0 && g.Notes.Length != 0) fields.Add("notes");
                 if (e.PersonalRating is null && g.Rating is not null) fields.Add("rating");
                 if (!e.Favorite && g.Favorite == true) fields.Add("favorite");
@@ -67,7 +85,7 @@ public static class MigrationResolver
                 if (e.LastPlayedAt is null && g.LastPlayed is not null) fields.Add("lastPlayed");
                 if (e.TotalPlaySeconds == 0 && e.ManualPlaytime.IsEmpty && e.Sessions.IsEmpty && e.PlayCount == 0 && g.TotalSeconds > 0) fields.Add("history");
                 else if (g.TotalSeconds > 0) reasons.Add("EXISTING_HISTORY_PRESERVED_NOT_ADDED");
-                if (g.Status != e.Status) reasons.Add("EXISTING_STATUS_PRESERVED");
+                if (g.Status != e.Status) reasons.Add(fields.Contains("status") ? "HIGHER_PROGRESS_SELECTED" : "HIGHER_EXISTING_PROGRESS_PRESERVED");
                 if (g.Name != e.Name) reasons.Add("EXISTING_NAME_PRESERVED");
                 reasons.Add("EXTERNAL_ID_AND_EXACT_INSTALLATION");
                 fields.Add("lineage");
@@ -87,7 +105,9 @@ public static class MigrationResolver
             }
             void Row(ImportMatch match, ImportAction action, LibraryEntry? e, ImmutableArray<string> why, ImmutableArray<string> fields = default, ImmutableArray<string> candidates = default)
                 => rows.Add(new(key, match, action, e is null ? null : ImportHash.Text(e.Id)[..20], why, fields.IsDefault ? [] : fields)
-                { CandidateKeys = candidates.IsDefault ? e is null ? [] : [ImportHash.Text(e.Id)[..20]] : candidates });
+                { CandidateKeys = candidates.IsDefault ? e is null ? [] : [ImportHash.Text(e.Id)[..20]] : candidates,
+                    StatusBefore = e?.Status ?? GameProgress.Default,
+                    StatusAfter = action == ImportAction.Create ? g.Status : e is not null ? !fields.IsDefault && fields.Contains("status") ? GameProgress.Higher(e.Status, g.Status) : e.Status : null });
         }
         // A preview is a validated plan, including the real target codec and document-size limit.
         var projected = target.ToDictionary(e => e.Id, StringComparer.Ordinal);
@@ -102,6 +122,12 @@ public static class MigrationResolver
     public static ImmutableArray<ImportedIdentity> Identities(LibraryEntry entry)
         => [.. (entry.Metadata?.References.Where(r => r.Source is "vndb" or "bangumi" or "nextmoe" or "steam").Select(r => new ImportedIdentity(r.Source, r.Id)) ?? [])
             .Concat(entry.MigrationOrigins.SelectMany(o => o.Identities)).Where(MigrationLineage.Identity).Distinct()];
+    private static bool SameRecordExceptProgress(MigrationOrigin origin, ImportGame game)
+    {
+        if (origin.RecordDigest == ImportHash.Of(game)) return true;
+        // Includes the v1 mapper that collapsed PotatoVN's 想玩 into planned. No other changed fact is admitted.
+        return GameProgress.Ordered.Where(status => status != game.Status).Any(status => origin.RecordDigest == ImportHash.Of(game with { Status = status }));
+    }
     private static string Name(string value) => value.Trim().Normalize(NormalizationForm.FormKC).ToUpperInvariant();
     private static Dictionary<K, List<LibraryEntry>> Index<K>(IEnumerable<(K Key, LibraryEntry Entry)> data) where K : notnull
     {
@@ -140,11 +166,12 @@ internal static class MigrationProjection
             var fields = operation.Fields;
             e = old with
             {
+                Status = fields.Contains("status") ? GameProgress.Higher(old.Status, g.Status) : old.Status,
                 Notes = fields.Contains("notes") ? g.Notes : old.Notes,
                 PersonalRating = fields.Contains("rating") ? g.Rating : old.PersonalRating,
                 Favorite = old.Favorite || fields.Contains("favorite"),
-                Categories = [.. old.Categories.Concat(g.Categories).Distinct(StringComparer.Ordinal)],
-                CustomTags = [.. old.CustomTags.Concat(g.Tags).Distinct(StringComparer.Ordinal)],
+                Categories = fields.Contains("categories") ? [.. old.Categories.Concat(g.Categories).Distinct(StringComparer.Ordinal)] : old.Categories,
+                CustomTags = fields.Contains("tags") ? [.. old.CustomTags.Concat(g.Tags).Distinct(StringComparer.Ordinal)] : old.CustomTags,
                 LastPlayedAt = fields.Contains("lastPlayed") ? NativeSession.Format(g.LastPlayed!.Value) : old.LastPlayedAt,
                 TotalPlaySeconds = fields.Contains("history") ? reportedTotal : old.TotalPlaySeconds,
                 Sessions = fields.Contains("history") ? history : old.Sessions,
@@ -158,7 +185,9 @@ internal static class MigrationProjection
             g.OriginalName, g.Aliases, g.Identities, [.. operation.Fields.Select(f => new ImportedField(f, sourceFields[f], ImportHash.Of(new { f, value = Value(e, f), g.OriginalName, g.Aliases, g.Identities })))],
             g.Precision switch { ImportTimePrecision.DailyAggregate => "daily-aggregate", ImportTimePrecision.Sessions => "sessions", _ => "undated-total" },
             g.TotalSeconds, g.PlayCount, g.LocalLastPlayed, g.LocalAddedAt, g.Edition, dataset.SourceTimeZone);
-        return e with { MigrationOrigins = e.MigrationOrigins.Add(origin) };
+        var previous = e.MigrationOrigins.FirstOrDefault(o => o.Manager == dataset.Manager && o.RecordId == g.SourceId);
+        return e with { MigrationOrigins = previous is null ? e.MigrationOrigins.Add(origin)
+            : e.MigrationOrigins.Replace(previous, origin with { Fields = [.. previous.Fields.Where(f => !operation.Fields.Contains(f.Target)), .. origin.Fields] }) };
     }
     private static object? Value(LibraryEntry e, string field) => field switch
     {

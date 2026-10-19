@@ -43,8 +43,7 @@ public static class StatisticsDashboardBuilder
         var games = days.GroupBy(x => x.GameId, StringComparer.Ordinal)
             .Select(x => new StatisticsGame(x.Key, x.First().Name, x.Sum(y => y.Seconds)))
             .Where(x => x.Seconds != 0).OrderByDescending(x => x.Seconds).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.Id, StringComparer.Ordinal).ToImmutableArray();
-        var statusDefinitions = new[] { ("planned", "未开始"), ("playing", "在玩"), ("completed", "已完成"), ("paused", "暂停"), ("dropped", "搁置") };
-        var statuses = statusDefinitions.Select(x => new StatisticsStatus(x.Item1, x.Item2, entries.Count(e => e.Status == x.Item1))).ToImmutableArray();
+        var statuses = GameProgress.Ordered.Select(key => new StatisticsStatus(key, GameProgress.Label(key), entries.Count(e => e.Status == key))).ToImmutableArray();
         var weekdays = new[] { "周一", "周二", "周三", "周四", "周五", "周六", "周日" }
             .Select((name, index) => new StatisticsWeekday(name, byDay.Where(x => ((int)x.Key.DayOfWeek + 6) % 7 == index).Sum(x => x.Value))).ToImmutableArray();
         var windows = Windows(start, today, request.Period, out var interval);

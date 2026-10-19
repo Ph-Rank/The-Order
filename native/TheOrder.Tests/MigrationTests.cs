@@ -89,7 +89,7 @@ public sealed class MigrationTests(ITestOutputHelper output)
     }
     [Theory]
     [InlineData(0, "planned")][InlineData(1, "playing")][InlineData(2, "completed")]
-    [InlineData(3, "paused")][InlineData(4, "dropped")][InlineData(5, "planned")]
+    [InlineData(3, "paused")][InlineData(4, "dropped")][InlineData(5, "wish")]
     public async Task SourceStatesUseExplicitDictionary(int state, string expected)
     { var s = Source(); s["PlayType"] = state; Assert.Equal(expected, Assert.Single((await One(s)).Games).Status); }
     [Fact]
@@ -182,7 +182,7 @@ public sealed class MigrationTests(ITestOutputHelper output)
     [InlineData("notes")][InlineData("rating")][InlineData("time")]
     public async Task PersonalFieldConflictsStayInPreview(string field)
     {
-        var d = await One(); var e = SameIdentity(d.Games[0]);
+        var d = await One(); var e = SameIdentity(d.Games[0]) with { Status = "completed" };
         e = field switch { "notes" => e with { Notes = "keep private note" }, "rating" => e with { PersonalRating = 3 }, _ => e with { TotalPlaySeconds = 8000 } };
         var row = Assert.Single(Plan(d, e).Rows); Assert.Equal(ImportMatch.Conflict, row.Match); Assert.Equal(ImportAction.Skip, row.Action);
     }
@@ -317,7 +317,7 @@ public sealed class MigrationTests(ITestOutputHelper output)
         var d=await One();using var p=new MemoryPersistence();await using var lib=TransactionalLibrary.Open(Codec,p,()=>Date);await lib.ApplyMigrationAsync(Plan(d));
         var tree=JsonNode.Parse(p.Main!)!;Assert.Equal(3,(int)tree["games"]![0]!["nativeExtras"]!["version"]!);
         Assert.NotEmpty(Assert.Single(Codec.Decode(p.Main!)).MigrationOrigins);
-        tree["games"]![0]!["nativeExtras"]!["version"]=4;
+        tree["games"]![0]!["nativeExtras"]!["version"]=5;
         Assert.Equal(LibraryAccess.ValidReadOnly,Codec.Inspect(Encoding.UTF8.GetBytes(tree.ToJsonString()),Date).Access);
         var legacy=Codec.Encode([Entry() with {GuidePaths=[@"Q:\guide.txt"]}],Date);
         Assert.DoesNotContain("migrationOrigins",Encoding.UTF8.GetString(legacy));

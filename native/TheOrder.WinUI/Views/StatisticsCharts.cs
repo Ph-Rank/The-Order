@@ -102,7 +102,7 @@ public sealed class StatisticsStatusChart : Grid
     public Brush ColorFor(int index)
     {
         if (new Windows.UI.ViewManagement.AccessibilitySettings().HighContrast) return LabelBrush ?? new SolidColorBrush(Colors.White);
-        Color[] colors = [Color.FromArgb(255, 128, 140, 157), Color.FromArgb(255, 66, 153, 225), Color.FromArgb(255, 24, 165, 139), Color.FromArgb(255, 213, 151, 46), Color.FromArgb(255, 198, 104, 127)];
+        Color[] colors = [Color.FromArgb(255, 24, 165, 139), Color.FromArgb(255, 66, 153, 225), Color.FromArgb(255, 158, 126, 211), Color.FromArgb(255, 213, 151, 46), Color.FromArgb(255, 198, 104, 127), Color.FromArgb(255, 128, 140, 157)];
         return new SolidColorBrush(colors[index % colors.Length]);
     }
     private void Draw()

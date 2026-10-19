@@ -537,7 +537,7 @@ public sealed partial class LibraryPage : Page, IImageHost
             var ids = Active.SelectedItems.Cast<GameSummary>().Select(i => i.Id).ToImmutableArray();
             if (ids.Length is < 1 or > 1000)
             { await new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = UiText.Get("请选择作品"), Content = UiText.Get("批量修改支持 1 至 1000 个条目。"), CloseButtonText = UiText.Get("知道了") }.ShowAsync(); return; }
-            var status = new ComboBox { Header = UiText.Get("游玩状态"), ItemsSource = new[] { UiText.Get("保持不变"), UiText.Get("未开始"), UiText.Get("在玩"), UiText.Get("已完成"), UiText.Get("搁置"), UiText.Get("放弃") }, SelectedIndex = 0 };
+            var status = new ComboBox { Header = UiText.Get("游玩状态"), ItemsSource = new[] { UiText.Get("保持不变") }.Concat(TheOrder.Domain.GameProgress.Ordered.Select(StatusNames.Display)).ToArray(), SelectedIndex = 0 };
             var favorite = new ComboBox { Header = UiText.Get("收藏"), ItemsSource = new[] { UiText.Get("保持不变"), UiText.Get("收藏"), UiText.Get("取消收藏") }, SelectedIndex = 0 };
             var categories = new TextBox { Header = UiText.Get("分类（逗号或换行分隔）") }; var tags = new TextBox { Header = UiText.Get("个人标签（逗号或换行分隔）") };
             var remove = new CheckBox { Content = UiText.Get("移除这些分类和标签（默认追加）") };

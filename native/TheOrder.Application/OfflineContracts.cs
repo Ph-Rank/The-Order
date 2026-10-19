@@ -41,7 +41,7 @@ public static class LastPlayedNames
 }
 public static class StatusNames
 {
-    public static string Display(string value) => value switch { "planned" => UiText.Get("未开始"), "playing" => UiText.Get("在玩"), "completed" => UiText.Get("已完成"), "paused" => UiText.Get("搁置"), "dropped" => UiText.Get("放弃"), _ => UiText.Get("全部状态") };
+    public static string Display(string value) => TheOrder.Domain.GameProgress.Valid(value) ? UiText.Get(TheOrder.Domain.GameProgress.Label(value)) : UiText.Get("全部状态");
 }
 public sealed record LibraryQueryResult(ImmutableArray<GameSummary> Items, int Total, ImmutableArray<string> Categories, ImmutableArray<string> Tags);
 public sealed record PersonalInput(string Name, string Status, string Rating, bool Favorite, string Notes, string Categories, string Tags);
