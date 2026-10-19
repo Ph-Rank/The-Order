@@ -1,0 +1,20 @@
+{
+  "repository": "GoldenPotato137/PotatoVN",
+  "schema": 1,
+  "files": [
+    {
+      "name": "data.categoryGroups.json",
+      "sha256": "E89FB40FDD655FD2581FFA3A0DA20F895A70977904DC2EF92BEC11D5D08BA807"
+    },
+    {
+      "name": "data.galgames.json",
+      "sha256": "6C33773673722F3456E12414439221C24BEDAC9B0AAFDB1DEB9BAF64A72222AC"
+    },
+    {
+      "name": "data.galgameSources.json",
+      "sha256": "A942BF3ABCF820993CA51CC51873E513B7BF70DE941F930C4342E9A3D5B9F815"
+    }
+  ],
+  "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+  "kind": "unmodified public synthetic fixture, not a real user export"
+}

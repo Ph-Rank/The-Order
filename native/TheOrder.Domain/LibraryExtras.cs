@@ -22,6 +22,7 @@ public static class LibraryExtras
     public static readonly ImmutableArray<string> MetadataFields = ["description", "releaseDate", "developers", "tags", "ratings", "characters", "cover"];
     public static void Validate(LibraryEntry entry)
     {
+        MigrationLineage.Validate(entry.MigrationOrigins);
         if (entry.GuidePaths.IsDefault || entry.GuidePaths.Length > 20 || entry.GuidePaths.Distinct(StringComparer.OrdinalIgnoreCase).Count() != entry.GuidePaths.Length) throw new InvalidDataException("攻略记录无效。");
         foreach (var guide in entry.GuidePaths) Path(guide);
         if (entry.ManualPlaytime.IsDefault || entry.ManualPlaytime.Length > 10000 || entry.ManualPlaytime.Any(x => x is null) || entry.ManualPlaytime.Select(x => x.Id).Distinct(StringComparer.Ordinal).Count() != entry.ManualPlaytime.Length)

@@ -131,12 +131,13 @@ public sealed partial class TransactionalLibrary : IDisposable, IAsyncDisposable
             });
         }
     }
-    private Task<CommitResult<T>> Mutate<T>(Func<ImmutableArray<LibraryEntry>, (ImmutableArray<LibraryEntry> Entries, T Result)> operation, CancellationToken cancellation, string? forceNewGeneration = null, Action? precommit = null, Func<Task>? verifyBeforeCommit = null, bool sessionMutation = false, bool renewGenerations = false)
+    private Task<CommitResult<T>> Mutate<T>(Func<ImmutableArray<LibraryEntry>, (ImmutableArray<LibraryEntry> Entries, T Result)> operation, CancellationToken cancellation, string? forceNewGeneration = null, Action? precommit = null, Func<Task>? verifyBeforeCommit = null, bool sessionMutation = false, bool renewGenerations = false, bool skipUnchanged = false)
         => Enqueue(async () =>
         {
             if (current.Access != LibraryAccess.ValidWritable) throw new LibraryReadOnlyException(current.ReadOnlyReason!);
             var previous = current.Entries;
             var (candidate, result) = operation(previous);
+            if (skipUnchanged && candidate == previous) { cancellation.ThrowIfCancellationRequested(); return new CommitResult<T>(result, false, null); }
             if (!sessionMutation) ProtectSessionBindings(previous, candidate, forceNewGeneration);
             // Round-trip validates and canonicalizes the complete candidate before any I/O.
             var serialized = codec.Encode(candidate, now());
@@ -349,6 +350,7 @@ public sealed partial class TransactionalLibrary : IDisposable, IAsyncDisposable
                     Notes = target.Notes.Length > 0 && target.Notes != e.Notes ? string.Join("\n\n", new[] { e.Notes, target.Notes }.Where(s => s.Length > 0)) : e.Notes,
                     Sessions = sessions.ToImmutable(), TotalPlaySeconds = e.TotalPlaySeconds + target.TotalPlaySeconds - duplicateSeconds, PlayCount = e.PlayCount + target.PlayCount - duplicateCount,
                     ManualPlaytime = MetadataMixing.MergeLedger(e.ManualPlaytime, target.ManualPlaytime),
+                    MigrationOrigins = MigrationLineage.Merge(e.MigrationOrigins, target.MigrationOrigins),
                     GuidePaths = [.. e.GuidePaths.Concat(target.GuidePaths).Distinct(StringComparer.OrdinalIgnoreCase)],
                     MetadataMix = MetadataMixing.Merge(work, e.MetadataMix, target.MetadataMix),
                     LastPlayedAt = target.LastPlayedAt is not null && (e.LastPlayedAt is null || string.CompareOrdinal(target.LastPlayedAt, e.LastPlayedAt) > 0) ? target.LastPlayedAt : e.LastPlayedAt,

@@ -7,6 +7,7 @@
   <Project Path="TheOrder.Tests/TheOrder.Tests.csproj" />
   <Project Path="TheOrder.LaunchFixture/TheOrder.LaunchFixture.csproj" />
   <Project Path="TheOrder.ProfileProbe/TheOrder.ProfileProbe.csproj" />
+  <Project Path="TheOrder.MigrationTool/TheOrder.MigrationTool.csproj" />
   <Project Path="TheOrder.UpdateTool/TheOrder.UpdateTool.csproj" />
   <Project Path="TheOrder.Performance/TheOrder.Performance.csproj" />
   <Project Path="TheOrder.WinUI/TheOrder.WinUI.csproj" />

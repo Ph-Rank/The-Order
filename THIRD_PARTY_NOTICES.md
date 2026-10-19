@@ -1,5 +1,15 @@
 # Attribution
 
+## PotatoVN migration format fixtures
+
+The unmodified public synthetic JSON under `native/fixtures/migration/potatovn/public-1.8.0/`
+comes from GoldenPotato137/PotatoVN commit `d877bbe166e5b71d6520784f9d268e6df7eb4487`,
+`GalgameManager.Test/TestData/1.8.0/`, under Apache-2.0. The upstream license and a
+fixture-specific NOTICE are retained beside those files. These fixtures contain
+no private export or artwork. The independently implemented migration adapter
+uses the public JSON format; no manager binary, database engine or importer code
+is bundled. See [migration v1](docs/migration-v1.md).
+
 ## Native Windows application
 
 `native/` is part of The Order and retains the repository's AGPL-3.0-or-later source license. It uses .NET 10, Microsoft Windows App SDK / WinUI 3, and Microsoft.Extensions components under their respective upstream licenses; exact direct and transitive versions and package hashes are recorded in `native/**/packages.lock.json`. Windows App SDK's package license is supplied by Microsoft, not relicensed as application source. See [Windows App SDK](https://github.com/microsoft/WindowsAppSDK), [.NET](https://github.com/dotnet/runtime), and the corresponding NuGet package license metadata. xUnit and Microsoft.NET.Test.Sdk are development-only dependencies, not shipped application code.

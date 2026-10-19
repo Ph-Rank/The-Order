@@ -1,0 +1,497 @@
+{
+  "date": "2026-10-19",
+  "purpose": "Pinned public metadata format research; third party source not executed",
+  "schema": 1,
+  "evidence": [
+    {
+      "bytes": 5157,
+      "repository": "GoldenPotato137/PotatoVN",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager/Models/BgTasks/ExportTask.cs",
+      "sha256": "71772A31526008B6E3DAB3086E0C26812FBD41C7DE2602F65B601EC8C3F8C468",
+      "ref": "v1.10.2.0",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "manager": "potatovn",
+      "path": "GalgameManager/Models/BgTasks/ExportTask.cs"
+    },
+    {
+      "bytes": 30185,
+      "repository": "GoldenPotato137/PotatoVN",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager.WinApp.Base/Models/Galgame.cs",
+      "sha256": "ED3C8D9467313EC8F7EBAEB0381869D69500EFDDB4B9916B44BBFAF40F92248B",
+      "ref": "v1.10.2.0",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "manager": "potatovn",
+      "path": "GalgameManager.WinApp.Base/Models/Galgame.cs"
+    },
+    {
+      "bytes": 2309,
+      "repository": "GoldenPotato137/PotatoVN",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager.WinApp.Base/Models/Category.cs",
+      "sha256": "9B29A6A7B75CB092129A667B92EB32D326E3236DF9A4CF8C8B58215640194AB8",
+      "ref": "v1.10.2.0",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "manager": "potatovn",
+      "path": "GalgameManager.WinApp.Base/Models/Category.cs"
+    },
+    {
+      "bytes": 166,
+      "repository": "GoldenPotato137/PotatoVN",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager.WinApp.Base/Enums/RssType.cs",
+      "sha256": "140E2348233C397774C0DEE6FE0575BABD617B0A3C5EFAEA1140E3DD31B234D1",
+      "ref": "v1.10.2.0",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "manager": "potatovn",
+      "path": "GalgameManager.WinApp.Base/Enums/RssType.cs"
+    },
+    {
+      "bytes": 28395,
+      "repository": "GoldenPotato137/PotatoVN",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager/Services/LocalSettingsService.cs",
+      "sha256": "0298B8198AD791BCB0755111F695652A0C696BBD7BEBFBA5AE87051585D71D22",
+      "ref": "v1.10.2.0",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "manager": "potatovn",
+      "path": "GalgameManager/Services/LocalSettingsService.cs"
+    },
+    {
+      "path": "GalgameManager/Services/GalgameCollectionService.cs",
+      "status": "FETCH_FAILED",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "http": 404,
+      "manager": "potatovn"
+    },
+    {
+      "bytes": 29396,
+      "repository": "GoldenPotato137/PotatoVN",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager/Services/CategoryService.cs",
+      "sha256": "AC705F56C3BDC715A82B3E26CC4BE68F5578F03DD6EE39631FCBC07EFF9AB8F9",
+      "ref": "v1.10.2.0",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "manager": "potatovn",
+      "path": "GalgameManager/Services/CategoryService.cs"
+    },
+    {
+      "bytes": 1534,
+      "repository": "ximu3/vnite",
+      "url": "https://raw.githubusercontent.com/ximu3/vnite/36df84c5ded93b24fa86a269fb3f93f473316061/src/main/features/database/services/backup.ts",
+      "sha256": "9187984D947CD9379513E05D4978708B8E6805685376F251AAF5F9E5889C0EB3",
+      "ref": "main",
+      "commit": "36df84c5ded93b24fa86a269fb3f93f473316061",
+      "manager": "vnite",
+      "path": "src/main/features/database/services/backup.ts"
+    },
+    {
+      "bytes": 182,
+      "repository": "ximu3/vnite",
+      "url": "https://raw.githubusercontent.com/ximu3/vnite/36df84c5ded93b24fa86a269fb3f93f473316061/src/main/core/database/index.ts",
+      "sha256": "45A43A6222ADE52F845A58FC0DF8E84203BDC868EFF5B4524FF23DAFA12467C4",
+      "ref": "main",
+      "commit": "36df84c5ded93b24fa86a269fb3f93f473316061",
+      "manager": "vnite",
+      "path": "src/main/core/database/index.ts"
+    },
+    {
+      "bytes": 9289,
+      "repository": "ximu3/vnite",
+      "url": "https://raw.githubusercontent.com/ximu3/vnite/36df84c5ded93b24fa86a269fb3f93f473316061/src/main/core/database/migrations.ts",
+      "sha256": "E1CD17D5A0383538649DBFFC69E800F4987A6E48A10ADE884C9E1E41C8AEE07B",
+      "ref": "main",
+      "commit": "36df84c5ded93b24fa86a269fb3f93f473316061",
+      "manager": "vnite",
+      "path": "src/main/core/database/migrations.ts"
+    },
+    {
+      "bytes": 6326,
+      "repository": "ximu3/vnite",
+      "url": "https://raw.githubusercontent.com/ximu3/vnite/36df84c5ded93b24fa86a269fb3f93f473316061/src/types/models/game.ts",
+      "sha256": "5E404398A88C3ECB0592645E5BC96F6104A3DB590430CF4518C4F2B9AD03091D",
+      "ref": "main",
+      "commit": "36df84c5ded93b24fa86a269fb3f93f473316061",
+      "manager": "vnite",
+      "path": "src/types/models/game.ts"
+    },
+    {
+      "bytes": 5187,
+      "repository": "ximu3/vnite",
+      "url": "https://raw.githubusercontent.com/ximu3/vnite/36df84c5ded93b24fa86a269fb3f93f473316061/package.json",
+      "sha256": "8D19E492D8B020210E5906604A96BF4D78BB5B262E18E12137C5D01781C5CD85",
+      "ref": "main",
+      "commit": "36df84c5ded93b24fa86a269fb3f93f473316061",
+      "manager": "vnite",
+      "path": "package.json"
+    },
+    {
+      "bytes": 13529,
+      "repository": "huoshen80/ReinaManager",
+      "url": "https://raw.githubusercontent.com/huoshen80/ReinaManager/97de1ac4bd7f6eedb9198560e5df21ea71a4f636/src-tauri/src/backup/database.rs",
+      "sha256": "1817E3187F4A03FDA8F469EBE8C45ACAB1EA6BFE28AC25CF1E19B1BE0587A01D",
+      "ref": "main",
+      "commit": "97de1ac4bd7f6eedb9198560e5df21ea71a4f636",
+      "manager": "reina",
+      "path": "src-tauri/src/backup/database.rs"
+    },
+    {
+      "bytes": 1018,
+      "repository": "huoshen80/ReinaManager",
+      "url": "https://raw.githubusercontent.com/huoshen80/ReinaManager/97de1ac4bd7f6eedb9198560e5df21ea71a4f636/src-tauri/src/backup/archive.rs",
+      "sha256": "354A9099A57929354829E784082E26A59423A7196226683B04B662CF147E36FE",
+      "ref": "main",
+      "commit": "97de1ac4bd7f6eedb9198560e5df21ea71a4f636",
+      "manager": "reina",
+      "path": "src-tauri/src/backup/archive.rs"
+    },
+    {
+      "bytes": 2546,
+      "repository": "huoshen80/ReinaManager",
+      "url": "https://raw.githubusercontent.com/huoshen80/ReinaManager/97de1ac4bd7f6eedb9198560e5df21ea71a4f636/src-tauri/src/entity/games.rs",
+      "sha256": "DE003C1E259ED322FFA0A308989A1344F2B3C5AD059A1F475C54D468D3C963C0",
+      "ref": "main",
+      "commit": "97de1ac4bd7f6eedb9198560e5df21ea71a4f636",
+      "manager": "reina",
+      "path": "src-tauri/src/entity/games.rs"
+    },
+    {
+      "bytes": 1079,
+      "repository": "huoshen80/ReinaManager",
+      "url": "https://raw.githubusercontent.com/huoshen80/ReinaManager/97de1ac4bd7f6eedb9198560e5df21ea71a4f636/src-tauri/migration/src/m20260131_000006_migrate_clear_to_play_status.rs",
+      "sha256": "B2927905AF1C89864B93607909CE6D432D59A03C6E00EA52D50B4518D966A922",
+      "ref": "main",
+      "commit": "97de1ac4bd7f6eedb9198560e5df21ea71a4f636",
+      "manager": "reina",
+      "path": "src-tauri/migration/src/m20260131_000006_migrate_clear_to_play_status.rs"
+    },
+    {
+      "bytes": 15167,
+      "repository": "huoshen80/ReinaManager",
+      "url": "https://raw.githubusercontent.com/huoshen80/ReinaManager/97de1ac4bd7f6eedb9198560e5df21ea71a4f636/src-tauri/migration/src/m20260712_000015_split_game_local_path.rs",
+      "sha256": "E955F38E680FEF23BC0C819741F7120570F25623842CB00DD0D5D004353DBB56",
+      "ref": "main",
+      "commit": "97de1ac4bd7f6eedb9198560e5df21ea71a4f636",
+      "manager": "reina",
+      "path": "src-tauri/migration/src/m20260712_000015_split_game_local_path.rs"
+    },
+    {
+      "bytes": 3991,
+      "repository": "huoshen80/ReinaManager",
+      "url": "https://raw.githubusercontent.com/huoshen80/ReinaManager/97de1ac4bd7f6eedb9198560e5df21ea71a4f636/src-tauri/Cargo.toml",
+      "sha256": "98C16E58CE1B2391E61D4CBA1E366AD06280E6E64AA51E3C63E600D4610EA2D8",
+      "ref": "main",
+      "commit": "97de1ac4bd7f6eedb9198560e5df21ea71a4f636",
+      "manager": "reina",
+      "path": "src-tauri/Cargo.toml"
+    },
+    {
+      "bytes": 19012,
+      "repository": "JosefNemec/Playnite",
+      "url": "https://raw.githubusercontent.com/JosefNemec/Playnite/d1dc225369491671fdb9c5815767dd4d2226ca34/source/Playnite/Backup.cs",
+      "sha256": "D022F5B3493542EDB12E267C6B2BEF02251812738C96654E76333633F0BEB11E",
+      "ref": "master",
+      "commit": "d1dc225369491671fdb9c5815767dd4d2226ca34",
+      "manager": "playnite",
+      "path": "source/Playnite/Backup.cs"
+    },
+    {
+      "bytes": 65502,
+      "repository": "JosefNemec/Playnite",
+      "url": "https://raw.githubusercontent.com/JosefNemec/Playnite/d1dc225369491671fdb9c5815767dd4d2226ca34/source/Playnite/Database/GameDatabase.cs",
+      "sha256": "4B7807EE50396890199E3F07D7B409A79FEE68AE65E8DB6BB4907B61011981D6",
+      "ref": "master",
+      "commit": "d1dc225369491671fdb9c5815767dd4d2226ca34",
+      "manager": "playnite",
+      "path": "source/Playnite/Database/GameDatabase.cs"
+    },
+    {
+      "bytes": 67857,
+      "repository": "JosefNemec/Playnite",
+      "url": "https://raw.githubusercontent.com/JosefNemec/Playnite/d1dc225369491671fdb9c5815767dd4d2226ca34/source/PlayniteSDK/Models/Game.cs",
+      "sha256": "CA0EFBD05D88461F12A4DAFAD545AA66D0EF9E0490BC1C748CE4BB97C30E112C",
+      "ref": "master",
+      "commit": "d1dc225369491671fdb9c5815767dd4d2226ca34",
+      "manager": "playnite",
+      "path": "source/PlayniteSDK/Models/Game.cs"
+    },
+    {
+      "bytes": 654,
+      "repository": "JosefNemec/Playnite",
+      "url": "https://raw.githubusercontent.com/JosefNemec/Playnite/d1dc225369491671fdb9c5815767dd4d2226ca34/tests/Extensions/Plugins/LibraryExporter/LibraryExporter.psm1",
+      "sha256": "CE42AB56FF4FDCAF142834F6C85577F046ED60287FC20646EA8795CD2C725947",
+      "ref": "master",
+      "commit": "d1dc225369491671fdb9c5815767dd4d2226ca34",
+      "manager": "playnite",
+      "path": "tests/Extensions/Plugins/LibraryExporter/LibraryExporter.psm1"
+    },
+    {
+      "bytes": 4792,
+      "repository": "Saramanda9988/LunaBox",
+      "url": "https://raw.githubusercontent.com/Saramanda9988/LunaBox/99c2d21d7ca77462868616d75211998c47400e2d/packages/backend/go.mod",
+      "sha256": "E6947D33E90F309327F0FFA6AC59F62D639C4A1D39FF1FCFC031D67298958774",
+      "ref": "main",
+      "commit": "99c2d21d7ca77462868616d75211998c47400e2d",
+      "manager": "lunabox",
+      "path": "packages/backend/go.mod"
+    },
+    {
+      "bytes": 63142,
+      "repository": "Saramanda9988/LunaBox",
+      "url": "https://raw.githubusercontent.com/Saramanda9988/LunaBox/99c2d21d7ca77462868616d75211998c47400e2d/packages/backend/service/backup_service.go",
+      "sha256": "D704438E14FC5F580700F581411FB51D9BCED4E58BA4B7E139EC6139EA1C46F2",
+      "ref": "main",
+      "commit": "99c2d21d7ca77462868616d75211998c47400e2d",
+      "manager": "lunabox",
+      "path": "packages/backend/service/backup_service.go"
+    },
+    {
+      "bytes": 3800,
+      "repository": "Saramanda9988/LunaBox",
+      "url": "https://raw.githubusercontent.com/Saramanda9988/LunaBox/99c2d21d7ca77462868616d75211998c47400e2d/packages/backend/models/game.go",
+      "sha256": "650112B6191181EFDB1FA3865E1D0E19A6DB124341EB55EA80193ED6AB75FFD7",
+      "ref": "main",
+      "commit": "99c2d21d7ca77462868616d75211998c47400e2d",
+      "manager": "lunabox",
+      "path": "packages/backend/models/game.go"
+    },
+    {
+      "bytes": 53904,
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager/Services/GalgameCollectionService/GalgameCollectionService.cs",
+      "path": "GalgameManager/Services/GalgameCollectionService/GalgameCollectionService.cs",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "D3FDE2E716023F26C2F79AD0763C76ACDD6BD4CD05F75F315CB2FA6E484D91D4",
+      "manager": "potatovn"
+    },
+    {
+      "bytes": 29030,
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager/Services/GalgameSourceCollectionService.cs",
+      "path": "GalgameManager/Services/GalgameSourceCollectionService.cs",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "5E99944D276DCA2154084D795E94619DA852CD1AA0E0F46C04A6947CF34770F8",
+      "manager": "potatovn"
+    },
+    {
+      "bytes": 2973,
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager/Models/LocalSettingStatus.cs",
+      "path": "GalgameManager/Models/LocalSettingStatus.cs",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "4ABBCF298D7A1EF534BE5BD7EC2C7269CEDCFBCF519D019881402DF53B8EC8B2",
+      "manager": "potatovn"
+    },
+    {
+      "bytes": 19208,
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager/Enums/KeyValues.cs",
+      "path": "GalgameManager/Enums/KeyValues.cs",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "80EFEC9D398C4BFAE46EAB7334AF013C36D47D76AF5AD5D0789593EE4BA732A1",
+      "manager": "potatovn"
+    },
+    {
+      "bytes": 207,
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager.WinApp.Base/Enums/PlayType.cs",
+      "path": "GalgameManager.WinApp.Base/Enums/PlayType.cs",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "66A37EFF7BADCEE23441168CDDFE5BC9B99BCC923B9D1FE1C9D5D2019DB5E336",
+      "manager": "potatovn"
+    },
+    {
+      "bytes": 5381,
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager.WinApp.Base/Helpers/GamePortablePath.cs",
+      "path": "GalgameManager.WinApp.Base/Helpers/GamePortablePath.cs",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "268AE097BDCE5D2C8FE58AE8AA648668A0ABCBA4444E2B7EFC0B47C885E87014",
+      "manager": "potatovn"
+    },
+    {
+      "bytes": 7664,
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager.WinApp.Base/Models/Sources/GalgameAndPath.cs",
+      "path": "GalgameManager.WinApp.Base/Models/Sources/GalgameAndPath.cs",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "E63991F5963B687E5954577E773666E1639179529C8DDAE628BE94BB44AC76BA",
+      "manager": "potatovn"
+    },
+    {
+      "bytes": 1584,
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager.WinApp.Base/Models/LockableProperty.cs",
+      "path": "GalgameManager.WinApp.Base/Models/LockableProperty.cs",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "056664BA55719109386DBDAC56837A171BB2229E72E214BE06607A792A26F912",
+      "manager": "potatovn"
+    },
+    {
+      "bytes": 1151,
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager/Models/CategoryGroup.cs",
+      "path": "GalgameManager/Models/CategoryGroup.cs",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "B248BD07D6CAB8EA29823A00DEBBD7BECDFD46A91CBB20E74E60BD33096258B4",
+      "manager": "potatovn"
+    },
+    {
+      "bytes": 4156,
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager.Test/TestData/1.8.0/data.galgames.json",
+      "path": "GalgameManager.Test/TestData/1.8.0/data.galgames.json",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "6C33773673722F3456E12414439221C24BEDAC9B0AAFDB1DEB9BAF64A72222AC",
+      "manager": "potatovn"
+    },
+    {
+      "bytes": 3311,
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager.Test/TestData/1.8.0/data.categoryGroups.json",
+      "path": "GalgameManager.Test/TestData/1.8.0/data.categoryGroups.json",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "E89FB40FDD655FD2581FFA3A0DA20F895A70977904DC2EF92BEC11D5D08BA807",
+      "manager": "potatovn"
+    },
+    {
+      "bytes": 1932,
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager/Helpers/JsonConverters/GalgameSourceConverter.cs",
+      "manager": "potatovn",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "8928917AE773B5CA8F688512DAECDB0D4FDC836F69D9590A4057D4A706F433EA",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "path": "GalgameManager/Helpers/JsonConverters/GalgameSourceConverter.cs"
+    },
+    {
+      "bytes": 1326,
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager/Helpers/JsonConverters/GalgameAndUidConverter.cs",
+      "manager": "potatovn",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "36B863F5EEA756EBB2C24C2ADF9E35DC8481A1820A3CC7D1EDFF7F4637CAB872",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "path": "GalgameManager/Helpers/JsonConverters/GalgameAndUidConverter.cs"
+    },
+    {
+      "bytes": 4621,
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager.WinApp.Base/Models/GalgameUid.cs",
+      "manager": "potatovn",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "F1AB7D60EB814116EE301DB9E9822D8013BE64DC9FE025AE1AE388AC79B6026B",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "path": "GalgameManager.WinApp.Base/Models/GalgameUid.cs"
+    },
+    {
+      "bytes": 13234,
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager.WinApp.Base/Models/Sources/GalgameSourceBase.cs",
+      "manager": "potatovn",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "63B1C0D4AD26D36AE1F4EA05ADE4146B2D30FFE8EC6BF6E66454E65AA663191A",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "path": "GalgameManager.WinApp.Base/Models/Sources/GalgameSourceBase.cs"
+    },
+    {
+      "bytes": 5208,
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager/Models/Sources/GalgameFolderSource.cs",
+      "manager": "potatovn",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "B4360608C2068307A822D0D1DC111F9F93107C132178A9F0AC1F0DA8E9D018F6",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "path": "GalgameManager/Models/Sources/GalgameFolderSource.cs"
+    },
+    {
+      "bytes": 1645,
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager/Models/Sources/SteamSource.cs",
+      "manager": "potatovn",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "AEDA5ECC829ECC8745CE5A0E6D0D8F72A75EC45CA33FE4007417DE61BFF2C613",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "path": "GalgameManager/Models/Sources/SteamSource.cs"
+    },
+    {
+      "bytes": 1440,
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager.Test/TestData/1.8.0/data.galgameSources.json",
+      "manager": "potatovn",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "A942BF3ABCF820993CA51CC51873E513B7BF70DE941F930C4342E9A3D5B9F815",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "path": "GalgameManager.Test/TestData/1.8.0/data.galgameSources.json"
+    },
+    {
+      "bytes": 117,
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/GalgameManager/Enums/CategoryGroupType.cs",
+      "manager": "potatovn",
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "8F85F26CCF47948BBE52FE0ECD68C33C37900739BB18118CBD30E026B5BE57F6",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "path": "GalgameManager/Enums/CategoryGroupType.cs"
+    },
+    {
+      "repository": "ximu3/vnite",
+      "sha256": "46B732B051456382C03227F34E51779A4E8B2C6B2E67A23490E566E456F296A5",
+      "manager": "vnite",
+      "commit": "36df84c5ded93b24fa86a269fb3f93f473316061",
+      "url": "https://raw.githubusercontent.com/ximu3/vnite/36df84c5ded93b24fa86a269fb3f93f473316061/src/main/core/database/BaseDBManager.ts",
+      "path": "src/main/core/database/BaseDBManager.ts"
+    },
+    {
+      "repository": "ximu3/vnite",
+      "sha256": "852D6CFEBBC15E4E27D1343FA5D7F6E5068AF821E8ED6726EEEDB0246F4F138A",
+      "manager": "vnite",
+      "commit": "36df84c5ded93b24fa86a269fb3f93f473316061",
+      "url": "https://raw.githubusercontent.com/ximu3/vnite/36df84c5ded93b24fa86a269fb3f93f473316061/src/main/core/database/layers/GameDBManager.ts",
+      "path": "src/main/core/database/layers/GameDBManager.ts"
+    },
+    {
+      "repository": "GoldenPotato137/PotatoVN",
+      "sha256": "A4D6D2731384BCC56F385B7CEA4447023230C6D884A53D4973DF6639F162DC94",
+      "manager": "potatovn",
+      "commit": "d877bbe166e5b71d6520784f9d268e6df7eb4487",
+      "url": "https://raw.githubusercontent.com/GoldenPotato137/PotatoVN/d877bbe166e5b71d6520784f9d268e6df7eb4487/LICENSE",
+      "path": "LICENSE"
+    },
+    {
+      "path": "src/main/features/game/services/record.ts",
+      "repository": "ximu3/vnite",
+      "sha256": "F474FA9B2641F3ED35FAD3BFE6B6BB4A7471120B2EFBCB8C24E5DFBFCB656564",
+      "commit": "36df84c5ded93b24fa86a269fb3f93f473316061",
+      "url": "https://raw.githubusercontent.com/ximu3/vnite/36df84c5ded93b24fa86a269fb3f93f473316061/src/main/features/game/services/record.ts",
+      "manager": "vnite"
+    },
+    {
+      "path": "src-tauri/src/entity/game_sessions.rs",
+      "repository": "huoshen80/ReinaManager",
+      "sha256": "CAB8D2CA6BD0DB188552D416E1F879C0C2B080DF02B75170C83A006F89A962C5",
+      "commit": "97de1ac4bd7f6eedb9198560e5df21ea71a4f636",
+      "url": "https://raw.githubusercontent.com/huoshen80/ReinaManager/97de1ac4bd7f6eedb9198560e5df21ea71a4f636/src-tauri/src/entity/game_sessions.rs",
+      "manager": "reina"
+    },
+    {
+      "path": "src-tauri/src/entity/game_statistics.rs",
+      "repository": "huoshen80/ReinaManager",
+      "sha256": "EAAF664E228482C53C81767C8291826ABB11BC40D937E642DB67FEB28EA0E47D",
+      "commit": "97de1ac4bd7f6eedb9198560e5df21ea71a4f636",
+      "url": "https://raw.githubusercontent.com/huoshen80/ReinaManager/97de1ac4bd7f6eedb9198560e5df21ea71a4f636/src-tauri/src/entity/game_statistics.rs",
+      "manager": "reina"
+    },
+    {
+      "path": "src-tauri/src/entity/game_sources.rs",
+      "repository": "huoshen80/ReinaManager",
+      "sha256": "C813F2A3F22128768D8B9B0FEE89F78A958ABCA6F6A27BC1B43F5FC81C212852",
+      "commit": "97de1ac4bd7f6eedb9198560e5df21ea71a4f636",
+      "url": "https://raw.githubusercontent.com/huoshen80/ReinaManager/97de1ac4bd7f6eedb9198560e5df21ea71a4f636/src-tauri/src/entity/game_sources.rs",
+      "manager": "reina"
+    },
+    {
+      "path": "src-tauri/src/entity/custom_data.rs",
+      "repository": "huoshen80/ReinaManager",
+      "sha256": "BE81C1CC950D0B151FD071953E0CAC9C379E16701E55151D871E4F1A934758F5",
+      "commit": "97de1ac4bd7f6eedb9198560e5df21ea71a4f636",
+      "url": "https://raw.githubusercontent.com/huoshen80/ReinaManager/97de1ac4bd7f6eedb9198560e5df21ea71a4f636/src-tauri/src/entity/custom_data.rs",
+      "manager": "reina"
+    },
+    {
+      "path": "packages/backend/models/play_session.go",
+      "repository": "Saramanda9988/LunaBox",
+      "sha256": "6E221383371AB864D61060EC681978611C6F73399B053477F7F4F280F7CD908C",
+      "commit": "99c2d21d7ca77462868616d75211998c47400e2d",
+      "url": "https://raw.githubusercontent.com/Saramanda9988/LunaBox/99c2d21d7ca77462868616d75211998c47400e2d/packages/backend/models/play_session.go",
+      "manager": "lunabox"
+    }
+  ]
+}

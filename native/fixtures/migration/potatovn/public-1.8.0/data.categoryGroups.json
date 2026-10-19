@@ -1,0 +1,98 @@
+[
+  {
+    "Id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "Name": "开发商",
+    "Categories": [
+      {
+        "Name": "ASa Project",
+        "Id": "11111111-1111-1111-1111-111111111111",
+        "GalgamesX": [
+          {"BangumiId": "118063", "VndbId": "16339", "PvnId": null, "Name": "TestGame1", "CnName": ""}
+        ],
+        "ImagePath": "",
+        "LastPlayed": "2024-04-11T00:00:00",
+        "LastClicked": "0001-01-01T00:00:00"
+      },
+      {
+        "Name": "シルキーズプラスDOLCE",
+        "Id": "22222222-2222-2222-2222-222222222222",
+        "GalgamesX": [
+          {"BangumiId": "210068", "VndbId": "20860", "PvnId": null, "Name": "TestGame2", "CnName": ""}
+        ],
+        "ImagePath": "",
+        "LastPlayed": "2024-02-05T00:00:00",
+        "LastClicked": "0001-01-01T00:00:00"
+      },
+      {
+        "Name": "SAGA PLANETS",
+        "Id": "33333333-3333-3333-3333-333333333333",
+        "GalgamesX": [
+          {"BangumiId": "225784", "VndbId": "21852", "PvnId": null, "Name": "TestGame3", "CnName": ""}
+        ],
+        "ImagePath": "",
+        "LastPlayed": "0001-01-01T00:00:00",
+        "LastClicked": "0001-01-01T00:00:00"
+      },
+      {
+        "Name": "ensemble",
+        "Id": "44444444-4444-4444-4444-444444444444",
+        "GalgamesX": [
+          {"BangumiId": "143834", "VndbId": "18149", "PvnId": null, "Name": "TestGame4", "CnName": ""}
+        ],
+        "ImagePath": "",
+        "LastPlayed": "2024-05-24T00:00:00",
+        "LastClicked": "0001-01-01T00:00:00"
+      },
+      {
+        "Name": "チュアブルソフト",
+        "Id": "55555555-5555-5555-5555-555555555555",
+        "GalgamesX": [
+          {"BangumiId": "131836", "VndbId": "17376", "PvnId": null, "Name": "TestGame5", "CnName": ""}
+        ],
+        "ImagePath": "",
+        "LastPlayed": "2023-10-08T00:00:00",
+        "LastClicked": "0001-01-01T00:00:00"
+      }
+    ],
+    "Type": 0
+  },
+  {
+    "Id": "b2c3d4e5-f678-90ab-cdef-123456789012",
+    "Name": "游玩状态",
+    "Categories": [
+      {
+        "Name": "未设置",
+        "Id": "00000000-0000-0000-0000-000000000001",
+        "GalgamesX": [
+          {"BangumiId": "225784", "VndbId": "21852", "PvnId": null, "Name": "TestGame3", "CnName": ""}
+        ],
+        "ImagePath": "",
+        "LastPlayed": "0001-01-01T00:00:00",
+        "LastClicked": "0001-01-01T00:00:00"
+      },
+      {
+        "Name": "玩过",
+        "Id": "00000000-0000-0000-0000-000000000002",
+        "GalgamesX": [
+          {"BangumiId": "118063", "VndbId": "16339", "PvnId": null, "Name": "TestGame1", "CnName": ""},
+          {"BangumiId": "210068", "VndbId": "20860", "PvnId": null, "Name": "TestGame2", "CnName": ""},
+          {"BangumiId": "143834", "VndbId": "18149", "PvnId": null, "Name": "TestGame4", "CnName": ""}
+        ],
+        "ImagePath": "",
+        "LastPlayed": "2024-05-24T00:00:00",
+        "LastClicked": "0001-01-01T00:00:00"
+      },
+      {
+        "Name": "在玩",
+        "Id": "00000000-0000-0000-0000-000000000003",
+        "GalgamesX": [
+          {"BangumiId": "131836", "VndbId": "17376", "PvnId": null, "Name": "TestGame5", "CnName": ""}
+        ],
+        "ImagePath": "",
+        "LastPlayed": "2023-10-08T00:00:00",
+        "LastClicked": "0001-01-01T00:00:00"
+      }
+    ],
+    "Type": 1
+  }
+]

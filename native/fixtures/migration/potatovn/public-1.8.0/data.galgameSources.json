@@ -1,0 +1,38 @@
+[
+  {
+    "SourceType": 1,
+    "Galgames": [
+      {"Galgame": {"BangumiId": "118063", "VndbId": "16339", "PvnId": null, "Name": "TestGame1", "CnName": ""}, "Path": "E:\\GalGame\\TestGame1"},
+      {"Galgame": {"BangumiId": "210068", "VndbId": "20860", "PvnId": null, "Name": "TestGame2", "CnName": ""}, "Path": "E:\\GalGame\\TestGame2"},
+      {"Galgame": {"BangumiId": "225784", "VndbId": "21852", "PvnId": null, "Name": "TestGame3", "CnName": ""}, "Path": "E:\\GalGame\\TestGame3"},
+      {"Galgame": {"BangumiId": "131836", "VndbId": "17376", "PvnId": null, "Name": "TestGame5", "CnName": ""}, "Path": "E:\\GalGame\\TestGame5"}
+    ],
+    "Url": "local_folder://E:\\GalGame",
+    "Path": "E:\\GalGame",
+    "ScanOnStart": true,
+    "Name": "GalGame",
+    "ImagePath": null,
+    "LastPlayed": "0001-01-01T00:00:00",
+    "LastClicked": "0001-01-01T00:00:00"
+  },
+  {
+    "SourceType": 1,
+    "Galgames": [
+      {"Galgame": {"BangumiId": "143834", "VndbId": "18149", "PvnId": null, "Name": "TestGame4", "CnName": ""}, "Path": "E:\\Galgame2\\TestFolder\\TestGame4"}
+    ],
+    "Url": "local_folder://E:\\Galgame2",
+    "Path": "E:\\Galgame2",
+    "ScanOnStart": false,
+    "Name": "Galgame2",
+    "ImagePath": null,
+    "LastPlayed": "0001-01-01T00:00:00",
+    "LastClicked": "0001-01-01T00:00:00"
+  },
+  {
+    "SourceType": 3,
+    "Path": "TestVirtual",
+    "Name": "Test Virtual Source",
+    "Galgames": [],
+    "DontScanPath": []
+  }
+]

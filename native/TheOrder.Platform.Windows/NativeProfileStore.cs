@@ -42,6 +42,18 @@ public sealed class NativeProfileStore : INativeProfileStore, IDisposable
         try { store.Initialize(probe); return store; }
         catch { store.Dispose(); throw; }
     }
+    internal static LibraryDocument ReadMigrationTestPreview(NativeProfileRequest request, ILibraryCodec codec)
+    {
+        if (request.Kind != NativeProfileKind.Test || request.ExplicitProductionAuthorization) throw new NativeProfileException("MigrationTestOnly");
+        using var store = new NativeProfileStore(request, codec, null);
+        store.held.AddRange(IsolatedLibraryPersistence.PinDirectoryChain(store.Root));
+        // No Initialize, lease creation, recovery, settings access, backup or filesystem write.
+        store.Manifest = store.ParseManifest(store.ReadFile(ManifestName) ?? throw new NativeProfileException("MissingManifest"), "Ready", store.PhysicalIdentity());
+        if (store.Manifest.ProfileKind != NativeProfileKind.Test) throw new NativeProfileException("MigrationTestOnly");
+        var bytes = store.ReadCore("library.json", false);
+        store.ValidatePayload("library.json", bytes);
+        return codec.Inspect(bytes, "2000-01-01T00:00:00.000Z");
+    }
     private void Initialize(IBootstrapProbe? probe)
     {
         probe?.Reach(BootstrapPoint.BeforeRoot);
