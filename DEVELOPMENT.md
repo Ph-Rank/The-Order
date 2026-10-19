@@ -2,6 +2,8 @@
 
 ## 设置页 ZIP 迁移入口（2026-10-19）
 
+实际已用源码 `3461478` 构建的标准 Setup 完成本机替换：完整回归 4564/0/0、117 项定向、29 项启动检查、隔离 Setup 和安装目录 8 步 CLI 闭环通过。安装的 929 份载荷、3 份入口附件及更新基包均核对，回退程序 662 份已备份，5 份未知/路由文件未改动。没有启动正常 WinUI 或访问真实资料。`.artifacts/migration-settings-20261019/installation-receipt.json`、`completion.json` 为本轮事实；下方准备及 CLI-only 描述按历史节点理解。最终文档提交不是另一份程序构建。
+
 当前 `codex/migration-settings-20261019` 基于保留统计及 CLI 的 `c8d6ffd`。用户已授权在设置页选择 PotatoVN 导出 ZIP、预览后导入当前打开的书架，并替换本机程序；不是授权代理读取或迁移真实用户库。本轮仍不使用 Computer Use、不操作桌面、不启动真实游戏、不推送或发布。测试仅隔离 Test Profile，应用内 service 复用既有 writer/备份/事务；没有提供 CLI Production 开关或新用户数据库。
 
 相关回归为 `LibraryMigrationSettingsTests`、原 `MigrationTests`、备份及统计测试，完整测试继续用现有本地合成 Worker 入口。构建 Release x64，安装前冻结源码与载荷并使用全新 artifact；包先做隔离安装与 headless `--validate-only`，不能裸启动默认 Profile。实际日用替换仅在确切进程退出、旧程序哈希备份及新包校验均通过后执行；不读 Profile 或路由文件内容。全部新回执在 `.artifacts/migration-settings-20261019/`，用户步骤在 `docs/migration-trial.md`。旧版本回退前需在新版本恢复「导入前」备份，避免旧 codec 只读含迁移来源的书架。
