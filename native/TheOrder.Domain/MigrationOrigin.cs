@@ -7,11 +7,16 @@ namespace TheOrder.Domain;
 // Imported IDs are source assertions, not a NextMoe metadata binding or a remote verification.
 public sealed record ImportedIdentity(string Provider, string Id);
 public sealed record ImportedField(string Target, string SourceField, string ValueDigest);
+public sealed record ImportedProgressUpdate(string Status, string DocumentDigest, string RecordDigest, string UpdatedAt);
 public sealed record MigrationOrigin(string Manager, string RecordId, string RecordDigest, string DocumentDigest,
     string Format, string ImportedAt, string OriginalTitle, ImmutableArray<string> Aliases,
     ImmutableArray<ImportedIdentity> Identities, ImmutableArray<ImportedField> Fields,
     string TimePrecision, long ReportedSeconds, long? ReportedPlayCount, string? LocalLastPlayed,
-    string? LocalAddedAt, string? Edition, string? SourceTimeZone = null);
+    string? LocalAddedAt, string? Edition, string? SourceTimeZone = null)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public ImportedProgressUpdate? ProgressUpdate { get; init; }
+}
 
 public static class MigrationLineage
 {
@@ -23,6 +28,10 @@ public static class MigrationLineage
             var old = result.FirstOrDefault(x => x.Manager == item.Manager && x.RecordId == item.RecordId);
             if (old is null) result.Add(item);
             else if (old.RecordDigest != item.RecordDigest) throw new InvalidDataException("Conflicting migration origin; manual review required.");
+            else if (item.ProgressUpdate is { } progress && (old.ProgressUpdate is null
+                || GameProgress.Higher(old.ProgressUpdate.Status, progress.Status) == progress.Status
+                && (old.ProgressUpdate.Status != progress.Status || string.CompareOrdinal(progress.UpdatedAt, old.ProgressUpdate.UpdatedAt) > 0)))
+                result[result.IndexOf(old)] = old with { ProgressUpdate = progress };
         }
         Validate(result.ToImmutable()); return result.ToImmutable();
     }
@@ -50,6 +59,9 @@ public static class MigrationLineage
                 throw new InvalidDataException("Invalid migration lineage.");
             Text(o.OriginalTitle, 2000); Text(o.LocalLastPlayed, 100); Text(o.LocalAddedAt, 100); Text(o.Edition, 500);
             Text(o.SourceTimeZone, 100);
+            if (o.ProgressUpdate is { } progress && (!GameProgress.Valid(progress.Status) || !Digest(progress.DocumentDigest)
+                || !Digest(progress.RecordDigest) || !DateTimeOffset.TryParse(progress.UpdatedAt, out _)))
+                throw new InvalidDataException("Invalid imported progress update.");
             foreach (var a in o.Aliases) Text(a, 2000);
             foreach (var f in o.Fields) { Text(f.Target, 100); Text(f.SourceField, 200); }
         }

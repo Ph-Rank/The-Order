@@ -35,7 +35,8 @@ public static class MigrationResolver
             var prior = origins.GetValueOrDefault((dataset.Manager, g.SourceId)) ?? [];
             if (prior.Count != 0)
             {
-                if (prior.Count == 1 && SameRecordExceptProgress(prior[0].MigrationOrigins.Single(o => o.Manager == dataset.Manager && o.RecordId == g.SourceId), g))
+                if (prior.Count == 1 && (SameRecordExceptProgress(prior[0].MigrationOrigins.Single(o => o.Manager == dataset.Manager && o.RecordId == g.SourceId), g)
+                    || GameProgress.Higher(prior[0].Status, g.Status) != prior[0].Status && ReliableProgressIdentity(prior[0], g)))
                 {
                     var previous = prior[0];
                     if (GameProgress.Higher(previous.Status, g.Status) != previous.Status)
@@ -124,9 +125,18 @@ public static class MigrationResolver
             .Concat(entry.MigrationOrigins.SelectMany(o => o.Identities)).Where(MigrationLineage.Identity).Distinct()];
     private static bool SameRecordExceptProgress(MigrationOrigin origin, ImportGame game)
     {
-        if (origin.RecordDigest == ImportHash.Of(game)) return true;
+        if (origin.RecordDigest == ImportHash.Of(game) || origin.ProgressUpdate?.RecordDigest == ImportHash.Of(game)) return true;
         // Includes the v1 mapper that collapsed PotatoVN's 想玩 into planned. No other changed fact is admitted.
         return GameProgress.Ordered.Where(status => status != game.Status).Any(status => origin.RecordDigest == ImportHash.Of(game with { Status = status }));
+    }
+    private static bool ReliableProgressIdentity(LibraryEntry target, ImportGame game)
+    {
+        var ids = Identities(target);
+        return !game.Identities.IsEmpty && game.Identities.Any(i => ids.Contains(i))
+            && !game.Identities.Any(i => ids.Any(x => x.Provider == i.Provider && x.Id != i.Id))
+            && !game.Installations.IsEmpty && game.Installations.All(i => target.Installations.Any(x => ImportPaths.Key(x.Folder) == ImportPaths.Key(i.Folder)
+                && (i.Executable is null || x.Executable is null || ImportPaths.Key(x.Executable) == ImportPaths.Key(i.Executable))))
+            && !target.MigrationOrigins.Any(o => o.Edition is not null && game.Edition is not null && o.Edition != game.Edition);
     }
     private static string Name(string value) => value.Trim().Normalize(NormalizationForm.FormKC).ToUpperInvariant();
     private static Dictionary<K, List<LibraryEntry>> Index<K>(IEnumerable<(K Key, LibraryEntry Entry)> data) where K : notnull
@@ -187,7 +197,7 @@ internal static class MigrationProjection
             g.TotalSeconds, g.PlayCount, g.LocalLastPlayed, g.LocalAddedAt, g.Edition, dataset.SourceTimeZone);
         var previous = e.MigrationOrigins.FirstOrDefault(o => o.Manager == dataset.Manager && o.RecordId == g.SourceId);
         return e with { MigrationOrigins = previous is null ? e.MigrationOrigins.Add(origin)
-            : e.MigrationOrigins.Replace(previous, origin with { Fields = [.. previous.Fields.Where(f => !operation.Fields.Contains(f.Target)), .. origin.Fields] }) };
+            : e.MigrationOrigins.Replace(previous, previous with { ProgressUpdate = new(e.Status, dataset.DocumentDigest, ImportHash.Of(g), now) }) };
     }
     private static object? Value(LibraryEntry e, string field) => field switch
     {

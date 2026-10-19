@@ -87,16 +87,21 @@ public sealed class ProgressPolicyTests
         }
     }
     [Fact]
-    public async Task ChangedIdentityOrOtherSourceFactsStillCannotUseStatusPriorityToBypassReview()
+    public async Task ChangedPersonalSourceFactsAllowOnlyProgressWithReliableIdentityButChangedIdentityStillRequiresReview()
     {
         var data = await Source(); var disk = new SessionMemoryDisk { Main = Codec.Encode([], Date) };
         await using var library = TransactionalLibrary.Open(Codec, new SessionMemoryPersistence(disk));
         await library.ApplyMigrationAsync(MigrationResolver.Preview(data, [], Codec));
-        var changed = data with { Games = [data.Games[0] with { Status = "completed", Notes = "改变了其他来源字段" }] };
-        var plan = MigrationResolver.Preview(changed, library.Snapshot.Entries, Codec);
-        Assert.Equal(ImportMatch.Conflict, plan.Rows[0].Match); Assert.Equal(ImportAction.Skip, plan.Rows[0].Action);
         var otherIdentity = data with { Games = [data.Games[0] with { Status = "completed", Identities = [new("vndb", "v999")] }] };
         Assert.Equal(ImportAction.Skip, MigrationResolver.Preview(otherIdentity, library.Snapshot.Entries, Codec).Rows[0].Action);
+        var changed = data with { DocumentDigest = ImportHash.Text("new source snapshot"), Games = [data.Games[0] with { Status = "completed", Notes = "改变了其他来源字段", TotalSeconds = 8000 }] };
+        var plan = MigrationResolver.Preview(changed, library.Snapshot.Entries, Codec); Assert.Equal(new[] { "status" }, plan.Rows[0].Fields);
+        var originalOrigin = library.Snapshot.Entries[0].MigrationOrigins[0];
+        await library.ApplyMigrationAsync(plan); var entry = library.Snapshot.Entries[0];
+        Assert.Equal("completed", entry.Status); Assert.Equal(7200, entry.EffectivePlaySeconds); Assert.Equal("", entry.Notes);
+        var origin = Assert.Single(entry.MigrationOrigins); Assert.Equal(originalOrigin.RecordDigest, origin.RecordDigest); Assert.Equal(originalOrigin.DocumentDigest, origin.DocumentDigest);
+        Assert.Equal(changed.DocumentDigest, origin.ProgressUpdate!.DocumentDigest); Assert.Equal(ImportHash.Of(changed.Games[0]), origin.ProgressUpdate.RecordDigest);
+        Assert.Equal(ImportAction.AlreadyImported, MigrationResolver.Preview(changed, library.Snapshot.Entries, Codec).Rows[0].Action);
     }
     [Fact]
     public async Task NewMigrationEntriesKeepSourceProgressButOrdinaryAddsUseUnset()
