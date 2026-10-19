@@ -299,6 +299,7 @@ public sealed partial class MainWindow
                     await contentLanguageSettings.ChangeAsync(new(language.GetProperty("preferred").GetString() ?? "", language.GetProperty("fallback").GetString() ?? "original"));
                     break;
                 case "probe": break;
+                case "statistics": await StatisticsFixtureAsync(root); break;
                 case "acgnControl": await RunAcgnControlFixtureAsync(root); break;
                 case "audioGuardSmoke": await RunAudioGuardFixtureAsync(root); break;
                 case "bangumi":

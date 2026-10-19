@@ -18,6 +18,8 @@ public sealed partial class MainWindow : Window
     private LibraryPage libraryPage = null!;
     private DetailsPage detailsPage = null!;
     private SettingsPage settingsPage = null!;
+    private StatisticsPage statisticsPage = null!;
+    private WorkspacePage detailsParent = WorkspacePage.Library;
     private readonly AppUpdateViewModel updates;
     private DispatcherTimer? updateTimer;
     private bool updatesStopped;
@@ -90,6 +92,7 @@ public sealed partial class MainWindow : Window
         initializePages = () =>
         {
         libraryPage = new(workspace, configuration.Diagnostics, images) { OpenDetails = id => Navigate(WorkspacePage.Details, id), ResolveUnsaved = ResolveUnsavedAsync, OpenImport = () => Navigate(WorkspacePage.Import), QuickLaunch = QuickLaunchAsync };
+        statisticsPage = new(() => extras.Snapshot) { OpenDetails = id => Navigate(WorkspacePage.Details, id, WorkspacePage.Statistics), OpenImport = () => Navigate(WorkspacePage.Import) };
         detailsPage = new(workspace, images, launch, recognition) { GoBack = GoBackAsync, ResolveUnsaved = ResolveUnsavedAsync, ActivateLaunch = ActivateLaunchAsync, ManageInstallations = async () => { if (workspace.SelectedId is { } id) await installationNavigation.OpenAsync(id, ResolveUnsavedAsync, () => Navigate(WorkspacePage.Installations)); },
             ChangeCover = async () => { if (await ResolveUnsavedAsync() && workspace.Draft?.Source is { } details && await PickFile(".png", ".jpg", ".jpeg") is { } path) await workspace.ExecuteFileMutationAsync(token => filesClient.CoverAsync(details, path, token), details.Id); } };
         detailsPage.ChooseWorkCover = () => ChooseWorkCoverAsync(coverSelection, coverRegistry);
@@ -242,6 +245,7 @@ public sealed partial class MainWindow : Window
     private void OnState(object? sender, PropertyChangedEventArgs e)
     {
         backups.RefreshAvailability();
+        if (ViewModel.Page == WorkspacePage.Statistics && statisticsPage?.IsLoaded == true) _ = statisticsPage.RefreshAsync();
         if (e.PropertyName == nameof(WorkspaceViewModel.Page)) ShowPage();
         if (e.PropertyName == nameof(WorkspaceViewModel.Notice)) {
             noticeTimer?.Stop();
@@ -264,20 +268,21 @@ public sealed partial class MainWindow : Window
         // Swapchain owners release while still in the live tree (proven early-release order).
         if (ViewModel.Page != WorkspacePage.Library) libraryPage.ReleaseStageBeforeLeave();
         if (ViewModel.Page != WorkspacePage.Details) detailsPage.ReleaseStageBeforeLeave();
-        PageContent.Content = ViewModel.Page switch { WorkspacePage.Online => onlinePage, WorkspacePage.Details => detailsPage, WorkspacePage.Settings => settingsPage, WorkspacePage.Import => importPage, WorkspacePage.Installations => installationsPage, _ => libraryPage };
-        Navigation.SelectedItem = ViewModel.Page == WorkspacePage.Settings ? SettingsNavigation : ViewModel.Page == WorkspacePage.Online ? OnlineNavigation : LibraryNavigation;
+        PageContent.Content = ViewModel.Page switch { WorkspacePage.Statistics => statisticsPage, WorkspacePage.Online => onlinePage, WorkspacePage.Details => detailsPage, WorkspacePage.Settings => settingsPage, WorkspacePage.Import => importPage, WorkspacePage.Installations => installationsPage, _ => libraryPage };
+        Navigation.SelectedItem = ViewModel.Page == WorkspacePage.Statistics || detailsParent == WorkspacePage.Statistics && ViewModel.Page is WorkspacePage.Details or WorkspacePage.Installations ? StatisticsNavigation : ViewModel.Page == WorkspacePage.Settings ? SettingsNavigation : ViewModel.Page == WorkspacePage.Online ? OnlineNavigation : LibraryNavigation;
+        if (ViewModel.Page == WorkspacePage.Statistics) _ = statisticsPage.RefreshAsync();
         RefreshBackNavigation();
         synchronizing = false;
         AnimatePage();
     }
-    private async Task Navigate(WorkspacePage page, string? id = null)
+    private async Task Navigate(WorkspacePage page, string? id = null, WorkspacePage returnTo = WorkspacePage.Library)
     {
         if (!startupReady || commandsBlocked) return;
         if (page == WorkspacePage.Recognition) { await OpenPendingReviewAsync(); return; }
         installationNavigation.Invalidate();
         if (page != WorkspacePage.Online) online.Leave();
         if (navigating) return; navigating = true;
-        try { if (await ResolveInstallationDraft()) { await ViewModel.NavigateAsync(page, id, ChooseUnsaved); ShowPage(); } }
+        try { if (await ResolveInstallationDraft()) { if (await ViewModel.NavigateAsync(page, id, ChooseUnsaved)) detailsParent = page == WorkspacePage.Details ? returnTo : page == WorkspacePage.Installations ? detailsParent : WorkspacePage.Library; ShowPage(); } }
         catch (Exception) { ViewModel.ReportUnexpected(); }
         finally { navigating = false; }
     }
@@ -285,7 +290,7 @@ public sealed partial class MainWindow : Window
     {
         if (args.InvokedItemContainer is NavigationViewItem { Tag: "visual-gallery" }) { ShowGallery(); return; }
         if (args.InvokedItemContainer is NavigationViewItem { Tag: "visual-states" }) { ShowSessionStateFixtures(); return; }
-        if (!synchronizing && args.InvokedItemContainer is NavigationViewItem item) await Navigate((item.Tag as string) switch { "settings" => WorkspacePage.Settings, "online" => WorkspacePage.Online, "recognition" => WorkspacePage.Recognition, _ => WorkspacePage.Library });
+        if (!synchronizing && args.InvokedItemContainer is NavigationViewItem item) await Navigate((item.Tag as string) switch { "statistics" => WorkspacePage.Statistics, "settings" => WorkspacePage.Settings, "online" => WorkspacePage.Online, "recognition" => WorkspacePage.Recognition, _ => WorkspacePage.Library });
     }
     private async void OnTitleBack(TitleBar sender, object args) => await GoBackAsync();
     private async void OnRailBack(object sender, RoutedEventArgs e) => await GoBackAsync();
@@ -328,9 +333,9 @@ public sealed partial class MainWindow : Window
         if (!startupReady || commandsBlocked || !ShellNavigationPolicy.CanGoBack(ViewModel.Page, onlinePage.IsBrowsing)) return;
         if (ViewModel.Page == WorkspacePage.Details && await detailsPage.GoBackCatalogAsync()) return;
         if (ViewModel.Page == WorkspacePage.Online) { await onlinePage.GoBackAsync(); return; }
-        if (ShellNavigationPolicy.Parent(ViewModel.Page) is { } parent)
+        if (ShellNavigationPolicy.Parent(ViewModel.Page, detailsParent) is { } parent)
             await Navigate(parent, parent == WorkspacePage.Details
-                ? ShellNavigationPolicy.ParentGameId(ViewModel.Page, ViewModel.SelectedId, files.GameId) : null);
+                ? ShellNavigationPolicy.ParentGameId(ViewModel.Page, ViewModel.SelectedId, files.GameId) : null, detailsParent);
     }
     private async Task<UnsavedChoice> ChooseUnsaved()
     {

@@ -1,0 +1,90 @@
+<Page x:Class="TheOrder.WinUI.Views.StatisticsPage"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:views="using:TheOrder.WinUI.Views"
+ xmlns:l="using:TheOrder.WinUI.Localization"
+ AutomationProperties.AutomationId="StatisticsPage">
+ <Page.Resources>
+  <Style x:Key="StatisticsCard" TargetType="Border" BasedOn="{StaticResource SurfaceStyle}">
+   <Setter Property="Padding" Value="20" /><Setter Property="CornerRadius" Value="10" />
+  </Style>
+ </Page.Resources>
+ <ScrollViewer x:Name="StatisticsScroll" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+  <StackPanel x:Name="StatisticsBody" MaxWidth="1280" HorizontalAlignment="Stretch" Margin="24,16,24,32" Spacing="20" SizeChanged="OnStatisticsSizeChanged">
+   <StackPanel Spacing="6">
+    <TextBlock Style="{StaticResource PageTitleStyle}" l:Localize.Text="游玩统计" />
+    <TextBlock Style="{StaticResource SecondaryTextStyle}" l:Localize.Text="回顾投入，了解你的书架。" />
+   </StackPanel>
+   <views:TagFlowPanel HorizontalSpacing="12" VerticalSpacing="12" MaximumItemWidth="1000">
+    <ComboBox x:Name="PeriodChoice" Width="170" SelectedIndex="1" SelectionChanged="OnPeriodChanged" AutomationProperties.AutomationId="StatisticsPeriod" l:Localize.Name="统计区间">
+     <ComboBoxItem l:Localize.Content="最近 7 天" /><ComboBoxItem l:Localize.Content="最近 30 天" />
+     <ComboBoxItem l:Localize.Content="今年" /><ComboBoxItem l:Localize.Content="全部记录" />
+    </ComboBox>
+    <ComboBox x:Name="GameChoice" Width="280" DisplayMemberPath="Name" SelectionChanged="OnGameChanged" AutomationProperties.AutomationId="StatisticsGame" l:Localize.Name="统计作品" />
+    <Button Click="OnRefresh" Style="{StaticResource SubtleButtonStyle}" Height="34" Padding="10,4" l:Localize.Content="刷新" AutomationProperties.AutomationId="StatisticsRefresh" />
+   </views:TagFlowPanel>
+   <ProgressBar x:Name="StatisticsLoadingBar" IsIndeterminate="True" Height="2" Visibility="Collapsed" AutomationProperties.AutomationId="StatisticsLoading" />
+   <InfoBar x:Name="StatisticsError" IsOpen="False" Severity="Warning" IsClosable="False" />
+   <Border x:Name="EmptyShelf" Style="{StaticResource StatisticsCard}" Visibility="Collapsed" Padding="28">
+    <StackPanel Spacing="12" HorizontalAlignment="Center">
+     <FontIcon Glyph="&#xE9D9;" FontSize="32" Foreground="{ThemeResource TextSecondaryBrush}" />
+     <TextBlock TextAlignment="Center" Style="{StaticResource SectionTitleStyle}" l:Localize.Text="还没有可统计的作品" />
+     <TextBlock TextAlignment="Center" Style="{StaticResource SecondaryTextStyle}" l:Localize.Text="先把游戏加入书架。游玩记录会在这里汇总。" />
+     <Button HorizontalAlignment="Center" Click="OnImport" l:Localize.Content="导入游戏" />
+    </StackPanel>
+   </Border>
+   <StackPanel x:Name="Dashboard" Spacing="20">
+    <Grid x:Name="SummaryGrid" ColumnSpacing="12" RowSpacing="12">
+     <Border x:Name="LifetimeCard" Style="{StaticResource StatisticsCard}"><StackPanel Spacing="8"><TextBlock Style="{StaticResource SecondaryTextStyle}" l:Localize.Text="累计游玩" /><TextBlock x:Name="LifetimeValue" FontSize="28" FontWeight="SemiBold" AutomationProperties.AutomationId="StatisticsLifetime" /><TextBlock x:Name="LifetimeCaption" Style="{StaticResource MetadataTextStyle}" /></StackPanel></Border>
+     <Border x:Name="PeriodCard" Style="{StaticResource StatisticsCard}"><StackPanel Spacing="8"><TextBlock Style="{StaticResource SecondaryTextStyle}" l:Localize.Text="区间时长" /><TextBlock x:Name="PeriodValue" FontSize="28" FontWeight="SemiBold" AutomationProperties.AutomationId="StatisticsPeriodTime" /><TextBlock x:Name="PeriodCaption" Style="{StaticResource MetadataTextStyle}" /></StackPanel></Border>
+     <Border x:Name="DaysCard" Style="{StaticResource StatisticsCard}"><StackPanel Spacing="8"><TextBlock Style="{StaticResource SecondaryTextStyle}" l:Localize.Text="活跃天数" /><TextBlock x:Name="DaysValue" FontSize="28" FontWeight="SemiBold" AutomationProperties.AutomationId="StatisticsActiveDays" /><TextBlock x:Name="DaysCaption" Style="{StaticResource MetadataTextStyle}" /></StackPanel></Border>
+     <Border x:Name="GamesCard" Style="{StaticResource StatisticsCard}"><StackPanel Spacing="8"><TextBlock Style="{StaticResource SecondaryTextStyle}" l:Localize.Text="游玩作品" /><TextBlock x:Name="GamesValue" FontSize="28" FontWeight="SemiBold" AutomationProperties.AutomationId="StatisticsPlayedGames" /><TextBlock Style="{StaticResource MetadataTextStyle}" l:Localize.Text="当前区间 · 按书架作品计数" /></StackPanel></Border>
+    </Grid>
+    <Border Style="{StaticResource StatisticsCard}">
+     <StackPanel Spacing="16">
+      <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+       <StackPanel Spacing="4"><TextBlock FontSize="18" FontWeight="SemiBold" l:Localize.Text="游玩趋势" /><TextBlock x:Name="TrendCaption" Style="{StaticResource MetadataTextStyle}" /></StackPanel>
+       <TextBlock x:Name="TrendInterval" Grid.Column="1" Style="{StaticResource MetadataTextStyle}" VerticalAlignment="Center" />
+      </Grid>
+      <views:StatisticsTrendChart x:Name="TrendChart" Height="230" Accent="{ThemeResource AccentFillColorDefaultBrush}" Gridline="{ThemeResource DividerBrush}" LabelBrush="{ThemeResource TextSecondaryBrush}" AutomationProperties.AutomationId="StatisticsTrendChart" />
+      <TextBlock x:Name="UndatedNotice" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" Visibility="Collapsed" AutomationProperties.AutomationId="StatisticsUndated" />
+     </StackPanel>
+    </Border>
+    <Grid x:Name="BreakdownGrid" ColumnSpacing="20" RowSpacing="20">
+     <Border x:Name="RankingCard" Style="{StaticResource StatisticsCard}">
+      <StackPanel Spacing="16">
+       <StackPanel Spacing="4"><TextBlock FontSize="18" FontWeight="SemiBold" l:Localize.Text="时间花在哪里" /><TextBlock Style="{StaticResource MetadataTextStyle}" l:Localize.Text="当前区间 · 点击作品查看详情" /></StackPanel>
+       <StackPanel x:Name="RankingRows" Spacing="10" AutomationProperties.AutomationId="StatisticsRanking" />
+      </StackPanel>
+     </Border>
+     <Border x:Name="ProgressCard" Style="{StaticResource StatisticsCard}">
+      <StackPanel Spacing="16">
+       <StackPanel Spacing="4"><TextBlock FontSize="18" FontWeight="SemiBold" l:Localize.Text="书架进度" /><TextBlock Style="{StaticResource MetadataTextStyle}" l:Localize.Text="当前状态 · 不随时间区间变化" /></StackPanel>
+       <Grid Height="170" HorizontalAlignment="Center" Width="170">
+        <views:StatisticsStatusChart x:Name="StatusChart" Track="{ThemeResource DividerBrush}" LabelBrush="{ThemeResource TextPrimaryBrush}" AutomationProperties.AutomationId="StatisticsStatusChart" />
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4" IsHitTestVisible="False"><TextBlock x:Name="CompletionValue" FontSize="27" FontWeight="SemiBold" HorizontalAlignment="Center" /><TextBlock Style="{StaticResource MetadataTextStyle}" HorizontalAlignment="Center" l:Localize.Text="已完成" /></StackPanel>
+       </Grid>
+       <StackPanel x:Name="StatusLegend" Spacing="8" />
+      </StackPanel>
+     </Border>
+    </Grid>
+    <Border Style="{StaticResource StatisticsCard}">
+     <StackPanel Spacing="16">
+      <StackPanel Spacing="4"><TextBlock FontSize="18" FontWeight="SemiBold" l:Localize.Text="每周节奏" /><TextBlock Style="{StaticResource MetadataTextStyle}" l:Localize.Text="当前区间内，各星期的累计游玩时长" /></StackPanel>
+      <views:StatisticsTrendChart x:Name="WeekdayChart" Height="170" Bars="True" Accent="{ThemeResource AccentFillColorDefaultBrush}" Gridline="{ThemeResource DividerBrush}" LabelBrush="{ThemeResource TextSecondaryBrush}" AutomationProperties.AutomationId="StatisticsWeekdayChart" />
+     </StackPanel>
+    </Border>
+    <Expander x:Name="DailyDetails" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnDailyExpanding" AutomationProperties.AutomationId="StatisticsDailyDetails">
+     <StackPanel Spacing="12"><StackPanel x:Name="DailyRows" Spacing="8" /><Button x:Name="MoreDays" Click="OnMoreDays" HorizontalAlignment="Left" l:Localize.Content="显示更多" /></StackPanel>
+    </Expander>
+    <Expander Header="统计说明" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+     <StackPanel Spacing="10">
+      <TextBlock Style="{StaticResource SecondaryTextStyle}" l:Localize.Text="按本地日期汇总已结束且可归日的记录，包含尚未撤回的时长修正。正在进行或未完整结束的会话不会被猜测分配到某一天。" />
+      <TextBlock x:Name="ProvenanceText" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+      <TextBlock Style="{StaticResource SecondaryTextStyle}" l:Localize.Text="书架进度采用你设置的状态，不按时长猜测通关；同一作品的多个安装不会重复计数。统计不上传个人游玩记录。" />
+     </StackPanel>
+    </Expander>
+   </StackPanel>
+  </StackPanel>
+ </ScrollViewer>
+</Page>

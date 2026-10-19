@@ -9,6 +9,7 @@ public sealed class StartupNavigationTests
     [InlineData(WorkspacePage.Library)]
     [InlineData(WorkspacePage.Settings)]
     [InlineData(WorkspacePage.Online)]
+    [InlineData(WorkspacePage.Statistics)]
     public void PeerPagesDoNotInventBackHistory(WorkspacePage page)
     { Assert.False(ShellNavigationPolicy.CanGoBack(page)); Assert.Null(ShellNavigationPolicy.Parent(page)); }
     [Theory]
@@ -21,6 +22,13 @@ public sealed class StartupNavigationTests
     [Fact]
     public void DiscoveryBrowsingHasBackUntilItReturnsToDiscoveryHome()
     { Assert.True(ShellNavigationPolicy.CanGoBack(WorkspacePage.Online, true)); Assert.False(ShellNavigationPolicy.CanGoBack(WorkspacePage.Online, false)); }
+    [Fact]
+    public void StatisticsDrilldownReturnsToStatisticsWithoutInventingOtherParents()
+    {
+        Assert.Equal(WorkspacePage.Statistics, ShellNavigationPolicy.Parent(WorkspacePage.Details, WorkspacePage.Statistics));
+        Assert.Equal(WorkspacePage.Details, ShellNavigationPolicy.Parent(WorkspacePage.Installations, WorkspacePage.Statistics));
+        Assert.Equal(WorkspacePage.Library, ShellNavigationPolicy.Parent(WorkspacePage.Details, WorkspacePage.Settings));
+    }
     [Fact]
     public async Task HomeCannotRevealBeforeLocalStateVisibleArtworkAndFinalFrame()
     {

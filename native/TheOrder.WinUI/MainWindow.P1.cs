@@ -45,7 +45,7 @@ public sealed partial class MainWindow
         importPage.IgnoreDiscovered = IgnoreDiscoveredAsync;
         libraryPage.OpenLaunchSettings = OpenLaunchSettingsAsync;
         detailsPage.OpenLaunchSettings = async () => { if (ViewModel.SelectedId is { } id) await OpenLaunchSettingsAsync(id); };
-        libraryPage.OpenStatistics = () => OpenStatisticsAsync(null); libraryPage.ConfigureP1();
+        libraryPage.OpenStatistics = () => Navigate(WorkspacePage.Statistics); libraryPage.ConfigureP1();
         detailsPage.OpenGameTools = async () => { if (ViewModel.SelectedId is { } id && await ResolveUnsavedAsync()) await OpenGameToolsAsync(id); };
         installationsPage.ChooseHelper = () => PickFile(".exe"); installationsPage.LocalResources = resources;
         sourceTimer.Tick += async (_, _) => { if (!p1Stopping && sourceOperation.IsCompleted) await (sourceOperation = CheckSourcesAsync()); };
@@ -131,6 +131,7 @@ public sealed partial class MainWindow
     private async Task StopCoreP1Async()
     {
         p1Stopping = true; startupFinished.TrySetResult(false); sourceTimer.Stop(); p1Dialog?.Hide(); p1Lifetime.Cancel();
+        statisticsPage?.Dispose();
         await audioOperation; await backgroundAudio.DisposeAsync();
         if (initialization is not null) await initialization; await backgroundInitialization;
         await Task.WhenAll(p1Operation, sourceOperation); sourceWatcher.Dispose(); await sources.DisposeAsync(); p1Lifetime.Dispose();

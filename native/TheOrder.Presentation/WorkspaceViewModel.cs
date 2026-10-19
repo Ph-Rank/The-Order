@@ -4,7 +4,7 @@ using TheOrder.Application;
 
 namespace TheOrder.Presentation;
 
-public enum WorkspacePage { Library, Details, Settings, Import, Installations, Online, Recognition }
+public enum WorkspacePage { Library, Details, Settings, Import, Installations, Online, Recognition, Statistics }
 public enum UnsavedChoice { Stay, Save, Discard }
 public enum PreferenceInitialization { Uninitialized, Loading, Ready, LoadFailed }
 public enum RefreshOutcome { None, Success, Failed, Superseded }

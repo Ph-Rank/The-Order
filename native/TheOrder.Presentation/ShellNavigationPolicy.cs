@@ -6,13 +6,14 @@ public static class ShellNavigationPolicy
         page == WorkspacePage.Installations ? installationGameId : selectedId;
     public static bool CanGoBack(WorkspacePage page, bool browsingDiscovery = false) => page switch
     {
-        WorkspacePage.Library or WorkspacePage.Settings => false,
+        WorkspacePage.Library or WorkspacePage.Settings or WorkspacePage.Statistics => false,
         WorkspacePage.Online => browsingDiscovery,
         _ => true
     };
-    public static WorkspacePage? Parent(WorkspacePage page) => page switch
+    public static WorkspacePage? Parent(WorkspacePage page, WorkspacePage detailsParent = WorkspacePage.Library) => page switch
     {
-        WorkspacePage.Details or WorkspacePage.Import or WorkspacePage.Recognition => WorkspacePage.Library,
+        WorkspacePage.Details => detailsParent == WorkspacePage.Statistics ? WorkspacePage.Statistics : WorkspacePage.Library,
+        WorkspacePage.Import or WorkspacePage.Recognition => WorkspacePage.Library,
         WorkspacePage.Installations => WorkspacePage.Details,
         _ => null
     };

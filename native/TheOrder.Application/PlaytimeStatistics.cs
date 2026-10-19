@@ -13,14 +13,16 @@ public static class PlaytimeStatistics
 {
     // Historical sessions do not store pause intervals. Cross-day allocation is labelled an estimate,
     // and only terminal, dated records enter charts. Unattributable totals remain separate.
-    public static PlaytimeReport Build(IEnumerable<LibraryEntry> entries, TimeZoneInfo zone)
+    public static PlaytimeReport Build(IEnumerable<LibraryEntry> entries, TimeZoneInfo zone, CancellationToken cancellation = default)
     {
         var rows = new Dictionary<(string, DateOnly), DailyPlaytime>(); long unknown = 0, total = 0;
         foreach (var e in entries)
         {
+            cancellation.ThrowIfCancellationRequested();
             long attributed = 0; total = checked(total + e.EffectivePlaySeconds);
             foreach (var s in e.Sessions)
             {
+                cancellation.ThrowIfCancellationRequested();
                 if (s.Seconds <= 0 || s.Native is { Lifecycle: not SessionLifecycle.Completed } || !Parse(s.StartedAt, out var start) || !Parse(s.EndedAt, out var end)
                     || end <= start || (end - start).TotalDays > 367 || s.Seconds > (end - start).TotalSeconds + 1) continue;
                 var first = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(start, zone).DateTime);
