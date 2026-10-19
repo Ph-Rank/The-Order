@@ -123,6 +123,7 @@ function RunningError: String;
 var
   Locator, Service, Processes, Process: Variant;
   ProcessIndex: Integer;
+  ProcessPath: String;
 begin
   Result := '';
   try
@@ -134,8 +135,9 @@ begin
       if VarIsNull(Process.ExecutablePath) then begin
         Result := '无法确认运行中的程序路径，未开始安装。'; Exit;
       end;
-      if (CompareText(ExtractFileDir(Process.ExecutablePath), RemoveBackslashUnlessRoot(ExpandConstant('{app}'))) = 0) or
-         (Pos(LowerCase(RemoveBackslashUnlessRoot(ExpandConstant('{app}')) + '\Tools\LibraryMigration\'), LowerCase(Process.ExecutablePath)) = 1) then begin
+      ProcessPath := Process.ExecutablePath;
+      if (CompareText(ExtractFileDir(ProcessPath), RemoveBackslashUnlessRoot(ExpandConstant('{app}'))) = 0) or
+         (Pos(LowerCase(RemoveBackslashUnlessRoot(ExpandConstant('{app}')) + '\Tools\LibraryMigration\'), LowerCase(ProcessPath)) = 1) then begin
         Result := '这个 The Order 仍在运行。请先从其托盘正常退出，再安装或卸载。'; Exit;
       end;
     end;
