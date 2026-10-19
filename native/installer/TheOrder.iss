@@ -128,13 +128,14 @@ begin
   try
     Locator := CreateOleObject('WbemScripting.SWbemLocator');
     Service := Locator.ConnectServer('.', 'root\CIMV2');
-    Processes := Service.ExecQuery('SELECT ProcessId, ExecutablePath FROM Win32_Process WHERE Name = ''TheOrder.WinUI.exe''');
+    Processes := Service.ExecQuery('SELECT ProcessId, ExecutablePath FROM Win32_Process WHERE Name = ''TheOrder.WinUI.exe'' OR Name = ''TheOrder.MigrationTool.exe''');
     for ProcessIndex := 0 to Processes.Count - 1 do begin
       Process := Processes.ItemIndex(ProcessIndex);
       if VarIsNull(Process.ExecutablePath) then begin
         Result := '无法确认运行中的程序路径，未开始安装。'; Exit;
       end;
-      if CompareText(ExtractFileDir(Process.ExecutablePath), RemoveBackslashUnlessRoot(ExpandConstant('{app}'))) = 0 then begin
+      if (CompareText(ExtractFileDir(Process.ExecutablePath), RemoveBackslashUnlessRoot(ExpandConstant('{app}'))) = 0) or
+         (Pos(LowerCase(RemoveBackslashUnlessRoot(ExpandConstant('{app}')) + '\Tools\LibraryMigration\'), LowerCase(Process.ExecutablePath)) = 1) then begin
         Result := '这个 The Order 仍在运行。请先从其托盘正常退出，再安装或卸载。'; Exit;
       end;
     end;

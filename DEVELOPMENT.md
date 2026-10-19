@@ -1,5 +1,13 @@
 # 开发与维护
 
+## 本机迁移工具随附候选（2026-10-19）
+
+`codex/local-migration-daily-20261019` 保留已验收统计快照并继承 `7821269` 迁移内核，不修改原统计工作树、Production 或公开附件。沿用固定 SDK/锁文件，分别自包含 publish WinUI 和 MigrationTool；不要用迁移分支的旧 UI 覆盖现有统计版，也不要把测试启动或 GUI 自动化附加到本轮替换。
+
+`native/scripts/package-library-migration-tool.ps1 -PublishedTool <独立工具publish> -PublishedApplication <应用publish>` 在冻结文件清单前附加工具和 `docs/migration-trial.md`，检查版本、自包含运行时、源/目标边界及开发/敏感文件。再用原 release/installer 脚本打包，工具载荷进入同一清单与标准安装/卸载范围。安装器同时拒绝选定目录内活动的 GUI 或迁移工具，不结束进程。`TheOrder.exe --validate-only` 仅校验入口、不会启动应用；本轮仅运行该校验、命令行合成导入及无界面测试，真实界面未重验。
+
+替换前应核验旧载荷与 `update-base.bin`、只备份受管理程序文件，未知文件仅记录大小/时间并保持；不得读取 Profile、路由文件内容或凭据。若确切日用进程仍在运行，先完成可独立的候选验证与备份，再等待用户正常退出，不能强杀或绕过安装器保护。实际完成状态见 `.artifacts/local-migration-daily-20261019/`，手动试导入步骤见 `docs/migration-trial.md`；试导入不等于正式书架入库。
+
 ## 跨管理器迁移内核 v1：仅无界面 Test（2026-10-19）
 
 独立分支 `codex/library-migration-20261019` 基于 `0227ea3`，代码检查点 `5c13f59`；不要在原统计工作区重放、覆盖未提交文件或据此替换日用程序。没有版本升级或 Production 迁移。本分支新增 `native/TheOrder.MigrationTool`，复用现有 Native Profile、事务和时长台账，不启动 WinUI 或其他管理器。
