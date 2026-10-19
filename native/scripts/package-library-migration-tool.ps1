@@ -27,7 +27,9 @@ if ([Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $tool 'TheOrder.Mig
     [Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $application 'TheOrder.WinUI.exe')).ProductVersion) { throw 'Application and migration version differ' }
 $destination=Plain (Join-Path $application 'Tools/LibraryMigration')
 if (Test-Path -LiteralPath $destination) { throw 'Fresh tool destination required' }
-$files=@(Get-ChildItem -LiteralPath $tool -Recurse -File -Force)
+# Referenced projects may publish their symbols despite the entry-project switch.
+# Match the existing native payload packager: never ship PDBs.
+$files=@(Get-ChildItem -LiteralPath $tool -Recurse -File -Force | Where-Object Extension -NE '.pdb')
 foreach($file in $files) {
     if ($file.Name -match '(?i)(^\.env|^\.dev\.vars|secret|credential)' -or $file.Extension -in @('.cs','.ts','.map','.pdb')) { throw 'Development or sensitive artifact refused' }
     if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Linked payload refused' }
