@@ -7,7 +7,7 @@ namespace TheOrder.Application.Migrations;
 public static class MigrationResolver
 {
     public static MigrationPlan Preview(ImportDataset dataset, ImmutableArray<LibraryEntry> target, ILibraryCodec codec,
-        CancellationToken cancellation = default, string targetScope = "unbound")
+        CancellationToken cancellation = default, string targetScope = "unbound", ImmutableArray<ImportReviewDecision> reviews = default)
     {
         ImportModel.Validate(dataset);
         if (targetScope != "unbound" && !MigrationLineage.Digest(targetScope)) throw new InvalidDataException("Invalid target scope.");
@@ -15,7 +15,12 @@ public static class MigrationResolver
         var origins = Index(target.SelectMany(e => e.MigrationOrigins.Select(o => ((o.Manager, o.RecordId), e))));
         var identities = Index(target.SelectMany(e => Identities(e).Select(i => ((i.Provider, i.Id), e))));
         var paths = Index(target.SelectMany(e => e.Installations.Select(i => (ImportPaths.Key(i.Folder), e))));
-        var names = Index(target.Select(e => (Name(e.Name), e)));
+        var names = Index(target.SelectMany(e => new[] { e.Name, e.Metadata?.Title ?? "", e.Metadata?.OriginalTitle ?? "" }
+            .Concat(e.Metadata?.Aliases ?? []).Where(n => n.Length > 0).Distinct().Select(n => (Name(n), e))), maximum: 20);
+        var decisions = (reviews.IsDefault ? [] : reviews).ToDictionary(r => r.RecordKey, StringComparer.Ordinal);
+        if (decisions.Count > dataset.Games.Length || decisions.Values.Any(r => r.TargetKey is null || !r.IdentityAndVersionConfirmed || !Enum.IsDefined(r.History)))
+            throw new InvalidDataException("Invalid import review.");
+        var usedReviews = new HashSet<string>(StringComparer.Ordinal);
         var targetIds = target.Select(e => e.Id).ToHashSet(StringComparer.Ordinal);
         var duplicateRecords = Duplicates(dataset.Games.Select(g => (g.SourceId, g.SourceId)));
         var duplicateIds = Duplicates(dataset.Games.SelectMany(g => g.Identities.Select(i => (i.Provider + ":" + i.Id, g.SourceId))));
@@ -27,12 +32,43 @@ public static class MigrationResolver
         {
             cancellation.ThrowIfCancellationRequested();
             var key = ImportHash.Key(dataset.Manager, g.SourceId); var reasons = ImmutableArray.CreateBuilder<string>();
+            var prior = origins.GetValueOrDefault((dataset.Manager, g.SourceId)) ?? [];
+            var byId = g.Identities.SelectMany(i => identities.GetValueOrDefault((i.Provider, i.Id)) ?? []).DistinctBy(e => e.Id).ToArray();
+            var byPath = g.Installations.SelectMany(i => paths.GetValueOrDefault(ImportPaths.Key(i.Folder)) ?? []).DistinctBy(e => e.Id).ToArray();
+            var reviewPool = prior.Concat(byPath).Concat(byId).Concat(new[] { g.Name, g.OriginalName }.Concat(g.Aliases).Where(n => n.Length > 0)
+                .SelectMany(n => names.GetValueOrDefault(Name(n)) ?? [])).DistinctBy(e => e.Id).Take(20).ToImmutableArray();
+            var reviewable = true;
             if (g.NeedsReview || duplicateRecords.Contains(g.SourceId) || g.Identities.Any(i => duplicateIds.Contains(i.Provider + ":" + i.Id))
                 || g.Installations.Any(i => duplicatePaths.Contains(ImportPaths.Key(i.Folder))))
-            { Row(ImportMatch.Conflict, ImportAction.Skip, null, ["SOURCE_RECORD_OR_IDENTITY_CONFLICT"]); continue; }
+            { reviewable = false; Row(ImportMatch.Conflict, ImportAction.Skip, null, ["SOURCE_RECORD_OR_IDENTITY_CONFLICT"]); continue; }
             if (g.Installations.Any(i => overlappingPaths.Contains(ImportPaths.Key(i.Folder))))
-            { Row(ImportMatch.Conflict, ImportAction.Skip, null, ["PARENT_CHILD_INSTALLATION_CONFLICT"]); continue; }
-            var prior = origins.GetValueOrDefault((dataset.Manager, g.SourceId)) ?? [];
+            { reviewable = false; Row(ImportMatch.Conflict, ImportAction.Skip, null, ["PARENT_CHILD_INSTALLATION_CONFLICT"]); continue; }
+            if (decisions.TryGetValue(key, out var choice))
+            {
+                var selected = reviewPool.SingleOrDefault(e => ImportHash.Text(e.Id)[..20] == choice.TargetKey);
+                if (selected is null || prior.Count > 1 || selected.Sessions.Any(s => s.Native is { IsTerminal: false }))
+                    throw new InvalidDataException("Review target is unavailable or ambiguous.");
+                if (choice.History == ImportHistoryChoice.UseSourceTotal && !MigrationReview.CanUseSourceTotal(selected, g.TotalSeconds))
+                    throw new InvalidDataException("来源累计值小于需保留的已知会话或记录，不能采用。");
+                var fields = ImmutableArray.CreateBuilder<string>();
+                if (GameProgress.Higher(selected.Status, g.Status) != selected.Status) fields.Add("status");
+                if (prior.Count == 0)
+                {
+                    if (selected.Notes.Length == 0 && g.Notes.Length > 0) fields.Add("notes");
+                    if (selected.PersonalRating is null && g.Rating is not null) fields.Add("rating");
+                    if (!selected.Favorite && g.Favorite == true) fields.Add("favorite");
+                    if (g.Categories.Except(selected.Categories).Any()) fields.Add("categories");
+                    if (g.Tags.Except(selected.CustomTags).Any()) fields.Add("tags");
+                    if (selected.LastPlayedAt is null && g.LastPlayed is not null) fields.Add("lastPlayed");
+                }
+                if (choice.History == ImportHistoryChoice.UseSourceTotal && g.TotalSeconds != selected.EffectivePlaySeconds)
+                    fields.Add(selected.TotalPlaySeconds == 0 && selected.ManualPlaytime.IsEmpty && selected.Sessions.IsEmpty && selected.PlayCount == 0 ? "history" : "history-total");
+                fields.Add("lineage"); usedReviews.Add(key);
+                Row(ImportMatch.Confirmed, ImportAction.FillMissing, selected, ["USER_CONFIRMED_IDENTITY_AND_VERSION",
+                    choice.History == ImportHistoryChoice.UseSourceTotal ? "USER_ADOPTED_SOURCE_TOTAL" : "USER_KEPT_EXISTING_HISTORY"], fields.ToImmutable());
+                operations.Add(new(g, selected.Id, selected.Id, fields.ToImmutable(), choice));
+                continue;
+            }
             if (prior.Count != 0)
             {
                 if (prior.Count == 1 && (SameRecordExceptProgress(prior[0].MigrationOrigins.Single(o => o.Manager == dataset.Manager && o.RecordId == g.SourceId), g)
@@ -49,16 +85,15 @@ public static class MigrationResolver
                 else Row(ImportMatch.Conflict, ImportAction.Skip, null, ["SOURCE_RECORD_CHANGED_OR_DUPLICATED"]);
                 continue;
             }
-            var byId = g.Identities.SelectMany(i => identities.GetValueOrDefault((i.Provider, i.Id)) ?? []).DistinctBy(e => e.Id).ToArray();
-            var byPath = g.Installations.SelectMany(i => paths.GetValueOrDefault(ImportPaths.Key(i.Folder)) ?? []).DistinctBy(e => e.Id).ToArray();
             if (byId.Length > 1 || byPath.Length > 1 || byPath.Length == 1 && byId.Length == 1 && byPath[0].Id != byId[0].Id)
             { Row(ImportMatch.Conflict, ImportAction.Skip, null, ["MULTIPLE_OR_CONTRADICTORY_TARGETS"], candidates: [.. byId.Concat(byPath).Select(e => ImportHash.Text(e.Id)[..20]).Distinct()]); continue; }
             if (byId.Length == 1)
             {
                 var e = byId[0]; var existingIds = Identities(e);
-                if (g.Identities.Any(i => existingIds.Any(x => x.Provider == i.Provider && x.Id != i.Id))
-                    || e.MigrationOrigins.Any(o => o.Edition is not null && g.Edition is not null && o.Edition != g.Edition))
+                if (MigrationReview.ConflictingIds(g, existingIds))
                 { Row(ImportMatch.Conflict, ImportAction.Skip, e, ["EXTERNAL_ID_OR_EDITION_CONFLICT"]); continue; }
+                if (MigrationReview.EditionDifference(g, e))
+                { Row(ImportMatch.Candidate, ImportAction.Skip, e, ["TITLE_EDITION_DIFFERENCE_REQUIRES_REVIEW"]); continue; }
                 if (byPath.Length != 1 || g.Installations.Any(i => !e.Installations.Any(x => ImportPaths.Key(x.Folder) == ImportPaths.Key(i.Folder))))
                 { Row(ImportMatch.Candidate, ImportAction.Skip, e, ["WORK_ID_ONLY_VERSION_OR_INSTALLATION_REVIEW_REQUIRED"]); continue; }
                 var conflicts = ImmutableArray.CreateBuilder<string>(); var blocked = ImmutableArray.CreateBuilder<string>();
@@ -107,9 +142,14 @@ public static class MigrationResolver
             void Row(ImportMatch match, ImportAction action, LibraryEntry? e, ImmutableArray<string> why, ImmutableArray<string> fields = default, ImmutableArray<string> candidates = default)
                 => rows.Add(new(key, match, action, e is null ? null : ImportHash.Text(e.Id)[..20], why, fields.IsDefault ? [] : fields)
                 { CandidateKeys = candidates.IsDefault ? e is null ? [] : [ImportHash.Text(e.Id)[..20]] : candidates,
+                    ReviewCandidates = reviewable && prior.Count <= 1 && (match is ImportMatch.Candidate or ImportMatch.Conflict
+                        || decisions.ContainsKey(key) || why.Contains("HIGHER_PROGRESS_ONLY_OTHER_CONFLICTS_PRESERVED"))
+                        ? [.. reviewPool.Where(t => !t.Sessions.Any(s => s.Native is { IsTerminal: false })).Select(t => MigrationReview.Candidate(t, g))] : [],
+                    HumanReviewed = decisions.ContainsKey(key),
                     StatusBefore = e?.Status ?? GameProgress.Default,
                     StatusAfter = action == ImportAction.Create ? g.Status : e is not null ? !fields.IsDefault && fields.Contains("status") ? GameProgress.Higher(e.Status, g.Status) : e.Status : null });
         }
+        if (usedReviews.Count != decisions.Count) throw new InvalidDataException("Review no longer applies to the source or target.");
         // A preview is a validated plan, including the real target codec and document-size limit.
         var projected = target.ToDictionary(e => e.Id, StringComparer.Ordinal);
         foreach (var op in operations)
@@ -118,31 +158,34 @@ public static class MigrationResolver
             projected[op.GameId] = MigrationProjection.Apply(op, dataset, op.TargetId is null ? null : projected[op.TargetId], "2000-01-01T00:00:00.000Z");
         }
         _ = codec.Decode(codec.Encode([.. projected.Values], "2000-01-01T00:00:00.000Z"));
-        return new(dataset, digest, targetScope, rows.ToImmutable(), operations.ToImmutable());
+        if (operations.Where(o => o.TargetId is not null).GroupBy(o => o.TargetId).Any(g => g.Count() > 1))
+            throw new InvalidDataException("同一次导入不能把多个来源记录合并到同一条目。");
+        return new(dataset, digest, targetScope, rows.ToImmutable(), operations.ToImmutable(), reviews);
     }
     public static ImmutableArray<ImportedIdentity> Identities(LibraryEntry entry)
         => [.. (entry.Metadata?.References.Where(r => r.Source is "vndb" or "bangumi" or "nextmoe" or "steam").Select(r => new ImportedIdentity(r.Source, r.Id)) ?? [])
-            .Concat(entry.MigrationOrigins.SelectMany(o => o.Identities)).Where(MigrationLineage.Identity).Distinct()];
+            .Concat(entry.MigrationOrigins.Where(o => o.Review is null).SelectMany(o => o.Identities)).Where(MigrationLineage.Identity).Distinct()];
     private static bool SameRecordExceptProgress(MigrationOrigin origin, ImportGame game)
     {
-        if (origin.RecordDigest == ImportHash.Of(game) || origin.ProgressUpdate?.RecordDigest == ImportHash.Of(game)) return true;
+        if (origin.RecordDigest == ImportHash.Of(game) || origin.ProgressUpdate?.RecordDigest == ImportHash.Of(game) || origin.Review?.SourceRecordDigest == ImportHash.Of(game)) return true;
         // Includes the v1 mapper that collapsed PotatoVN's 想玩 into planned. No other changed fact is admitted.
-        return GameProgress.Ordered.Where(status => status != game.Status).Any(status => origin.RecordDigest == ImportHash.Of(game with { Status = status }));
+        return GameProgress.Ordered.Where(status => status != game.Status).Any(status =>
+            origin.RecordDigest == ImportHash.Of(game with { Status = status }) || origin.Review?.SourceRecordDigest == ImportHash.Of(game with { Status = status }));
     }
     private static bool ReliableProgressIdentity(LibraryEntry target, ImportGame game)
     {
         var ids = Identities(target);
         return !game.Identities.IsEmpty && game.Identities.Any(i => ids.Contains(i))
-            && !game.Identities.Any(i => ids.Any(x => x.Provider == i.Provider && x.Id != i.Id))
+            && !MigrationReview.ConflictingIds(game, ids) && !MigrationReview.EditionDifference(game, target)
             && !game.Installations.IsEmpty && game.Installations.All(i => target.Installations.Any(x => ImportPaths.Key(x.Folder) == ImportPaths.Key(i.Folder)
                 && (i.Executable is null || x.Executable is null || ImportPaths.Key(x.Executable) == ImportPaths.Key(i.Executable))))
             && !target.MigrationOrigins.Any(o => o.Edition is not null && game.Edition is not null && o.Edition != game.Edition);
     }
     private static string Name(string value) => value.Trim().Normalize(NormalizationForm.FormKC).ToUpperInvariant();
-    private static Dictionary<K, List<LibraryEntry>> Index<K>(IEnumerable<(K Key, LibraryEntry Entry)> data) where K : notnull
+    private static Dictionary<K, List<LibraryEntry>> Index<K>(IEnumerable<(K Key, LibraryEntry Entry)> data, int maximum = 2) where K : notnull
     {
         var result = new Dictionary<K, List<LibraryEntry>>();
-        foreach (var (key, entry) in data) { if (!result.TryGetValue(key, out var list)) result[key] = list = []; if (list.Count < 2 && !list.Any(x => x.Id == entry.Id)) list.Add(entry); }
+        foreach (var (key, entry) in data) { if (!result.TryGetValue(key, out var list)) result[key] = list = []; if (list.Count < maximum && !list.Any(x => x.Id == entry.Id)) list.Add(entry); }
         return result;
     }
     private static HashSet<string> Duplicates(IEnumerable<(string Key, string Record)> data)
@@ -188,22 +231,35 @@ internal static class MigrationProjection
                 ManualPlaytime = fields.Contains("history") ? manual : old.ManualPlaytime,
                 PlayCount = fields.Contains("history") ? g.PlayCount ?? 0 : old.PlayCount
             };
+            if (fields.Contains("history-total"))
+            {
+                if (operation.Review?.History != ImportHistoryChoice.UseSourceTotal || !MigrationReview.CanUseSourceTotal(old, g.TotalSeconds))
+                    throw new InvalidDataException("Historical total requires explicit review.");
+                // Preserve all dated sessions, corrections and launch counts. Only the
+                // undated historical remainder changes; never manufacture daily rows.
+                e = e with { TotalPlaySeconds = g.TotalSeconds - old.ManualPlaytime.Where(m => !m.Undone).Sum(m => m.Seconds) };
+            }
         }
         var sourceFields = new Dictionary<string, string>
-        { ["name"] = "Name.Value", ["status"] = "PlayType", ["rating"] = "MyRate", ["favorite"] = "source favorite", ["categories"] = "data.categoryGroups.json", ["tags"] = "Tags.Value", ["notes"] = "Comment", ["installations"] = "data.galgameSources.json / Path / ExePath", ["history"] = "TotalPlayTime / PlayedTime", ["lastPlayed"] = "LastPlayTime", ["addedAt"] = "AddTime", ["lineage"] = "Uuid / Ids / OriginalName / ChineseName" };
+        { ["name"] = "Name.Value", ["status"] = "PlayType", ["rating"] = "MyRate", ["favorite"] = "source favorite", ["categories"] = "data.categoryGroups.json", ["tags"] = "Tags.Value", ["notes"] = "Comment", ["installations"] = "data.galgameSources.json / Path / ExePath", ["history"] = "TotalPlayTime / PlayedTime", ["history-total"] = "TotalPlayTime; explicitly reviewed cumulative total", ["lastPlayed"] = "LastPlayTime", ["addedAt"] = "AddTime", ["lineage"] = "Uuid / Ids / OriginalName / ChineseName" };
         var origin = new MigrationOrigin(dataset.Manager, g.SourceId, ImportHash.Of(g), dataset.DocumentDigest, dataset.Format, now,
             g.OriginalName, g.Aliases, g.Identities, [.. operation.Fields.Select(f => new ImportedField(f, sourceFields[f], ImportHash.Of(new { f, value = Value(e, f), g.OriginalName, g.Aliases, g.Identities })))],
             g.Precision switch { ImportTimePrecision.DailyAggregate => "daily-aggregate", ImportTimePrecision.Sessions => "sessions", _ => "undated-total" },
             g.TotalSeconds, g.PlayCount, g.LocalLastPlayed, g.LocalAddedAt, g.Edition, dataset.SourceTimeZone);
+        if (operation.Review is { } review)
+            origin = origin with { Review = new(ImportHash.Of(g), dataset.DocumentDigest, review.TargetKey!, review.IdentityAndVersionConfirmed,
+                review.History == ImportHistoryChoice.UseSourceTotal ? "use-source-total" : "keep-existing", old?.EffectivePlaySeconds ?? 0, e.EffectivePlaySeconds, now) };
         var previous = e.MigrationOrigins.FirstOrDefault(o => o.Manager == dataset.Manager && o.RecordId == g.SourceId);
         return e with { MigrationOrigins = previous is null ? e.MigrationOrigins.Add(origin)
-            : e.MigrationOrigins.Replace(previous, previous with { ProgressUpdate = new(e.Status, dataset.DocumentDigest, ImportHash.Of(g), now) }) };
+            : e.MigrationOrigins.Replace(previous, previous with {
+                ProgressUpdate = operation.Fields.Contains("status") ? new(e.Status, dataset.DocumentDigest, ImportHash.Of(g), now) : previous.ProgressUpdate,
+                Review = origin.Review ?? previous.Review }) };
     }
     private static object? Value(LibraryEntry e, string field) => field switch
     {
         "name" => e.Name, "status" => e.Status, "rating" => e.PersonalRating, "favorite" => e.Favorite,
         "categories" => e.Categories, "tags" => e.CustomTags, "notes" => e.Notes, "installations" => e.Installations,
-        "history" => new { e.TotalPlaySeconds, e.ManualPlaytime, e.Sessions, e.PlayCount }, "lastPlayed" => e.LastPlayedAt,
+        "history" or "history-total" => new { e.TotalPlaySeconds, e.ManualPlaytime, e.Sessions, e.PlayCount }, "lastPlayed" => e.LastPlayedAt,
         "addedAt" => e.AddedAt, _ => null
     };
 }

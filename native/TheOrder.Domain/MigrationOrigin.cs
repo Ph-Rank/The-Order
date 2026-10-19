@@ -8,6 +8,8 @@ namespace TheOrder.Domain;
 public sealed record ImportedIdentity(string Provider, string Id);
 public sealed record ImportedField(string Target, string SourceField, string ValueDigest);
 public sealed record ImportedProgressUpdate(string Status, string DocumentDigest, string RecordDigest, string UpdatedAt);
+public sealed record ImportedMigrationReview(string SourceRecordDigest, string DocumentDigest, string TargetKey,
+    bool IdentityAndVersionConfirmed, string HistoryChoice, long BeforeSeconds, long AfterSeconds, string ReviewedAt);
 public sealed record MigrationOrigin(string Manager, string RecordId, string RecordDigest, string DocumentDigest,
     string Format, string ImportedAt, string OriginalTitle, ImmutableArray<string> Aliases,
     ImmutableArray<ImportedIdentity> Identities, ImmutableArray<ImportedField> Fields,
@@ -16,6 +18,8 @@ public sealed record MigrationOrigin(string Manager, string RecordId, string Rec
 {
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public ImportedProgressUpdate? ProgressUpdate { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public ImportedMigrationReview? Review { get; init; }
 }
 
 public static class MigrationLineage
@@ -32,6 +36,11 @@ public static class MigrationLineage
                 || GameProgress.Higher(old.ProgressUpdate.Status, progress.Status) == progress.Status
                 && (old.ProgressUpdate.Status != progress.Status || string.CompareOrdinal(progress.UpdatedAt, old.ProgressUpdate.UpdatedAt) > 0)))
                 result[result.IndexOf(old)] = old with { ProgressUpdate = progress };
+            if (old is not null && item.Review is { } review && (old.Review is null || string.CompareOrdinal(review.ReviewedAt, old.Review.ReviewedAt) > 0))
+            {
+                var index = result.IndexOf(result.First(o => o.Manager == item.Manager && o.RecordId == item.RecordId));
+                result[index] = result[index] with { Review = review };
+            }
         }
         Validate(result.ToImmutable()); return result.ToImmutable();
     }
@@ -62,6 +71,12 @@ public static class MigrationLineage
             if (o.ProgressUpdate is { } progress && (!GameProgress.Valid(progress.Status) || !Digest(progress.DocumentDigest)
                 || !Digest(progress.RecordDigest) || !DateTimeOffset.TryParse(progress.UpdatedAt, out _)))
                 throw new InvalidDataException("Invalid imported progress update.");
+            if (o.Review is { } review && (!Digest(review.SourceRecordDigest) || !Digest(review.DocumentDigest)
+                || review.TargetKey is null || !Regex.IsMatch(review.TargetKey, "^[a-f0-9]{20}$", RegexOptions.CultureInvariant)
+                || !review.IdentityAndVersionConfirmed || review.HistoryChoice is not ("keep-existing" or "use-source-total")
+                || review.BeforeSeconds is < 0 or > 1_000_000_000_000 || review.AfterSeconds is < 0 or > 1_000_000_000_000
+                || !DateTimeOffset.TryParse(review.ReviewedAt, out _)))
+                throw new InvalidDataException("Invalid migration review.");
             foreach (var a in o.Aliases) Text(a, 2000);
             foreach (var f in o.Fields) { Text(f.Target, 100); Text(f.SourceField, 200); }
         }

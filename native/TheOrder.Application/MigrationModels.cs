@@ -10,6 +10,12 @@ namespace TheOrder.Application.Migrations;
 public enum ImportMatch { Confirmed, Candidate, Unmatched, Conflict }
 public enum ImportAction { Create, FillMissing, Skip, AlreadyImported }
 public enum ImportTimePrecision { UndatedTotal, DailyAggregate, Sessions }
+public enum ImportHistoryChoice { KeepExisting, UseSourceTotal }
+public sealed record ImportReviewDecision(string RecordKey, string? TargetKey, bool IdentityAndVersionConfirmed = false,
+    ImportHistoryChoice History = ImportHistoryChoice.KeepExisting);
+public sealed record ImportReviewCandidate(string TargetKey, string Name, string CatalogName, string Status, long TotalSeconds,
+    ImmutableArray<ImportedIdentity> Identities, ImmutableArray<string> Folders, bool ExactInstallation, bool CanUseSourceTotal,
+    bool NotesConflict, bool RatingConflict, int InstallationCount);
 public sealed record ImportIssue(string RecordKey, string Field, string Code);
 public sealed record ImportDay(DateOnly Date, long Seconds);
 public sealed record ImportSession(string SourceId, DateTimeOffset Start, DateTimeOffset End, long Seconds);
@@ -35,24 +41,31 @@ public sealed record ImportRow(string RecordKey, ImportMatch Match, ImportAction
     public ImmutableArray<string> CandidateKeys { get; init; } = [];
     public string? StatusBefore { get; init; }
     public string? StatusAfter { get; init; }
+    public ImmutableArray<ImportReviewCandidate> ReviewCandidates { get; init; } = [];
+    public bool HumanReviewed { get; init; }
 }
 public sealed class MigrationPlan
 {
     internal MigrationPlan(ImportDataset dataset, string targetDigest, string targetScope, ImmutableArray<ImportRow> rows,
-        ImmutableArray<MigrationOperation> operations)
+        ImmutableArray<MigrationOperation> operations, ImmutableArray<ImportReviewDecision> reviews = default)
     {
         Dataset = dataset; TargetDigest = targetDigest; TargetScope = targetScope; Rows = rows; Operations = operations;
-        Id = ImportHash.Of(new { policy = 2, dataset.Manager, dataset.Format, dataset.DocumentDigest, dataset.SourceTimeZone,
-            normalized = ImportHash.Of(dataset.Games), targetDigest, targetScope, rows });
+        Reviews = reviews.IsDefault ? [] : reviews;
+        Id = ImportHash.Of(new { policy = 3, dataset.Manager, dataset.Format, dataset.DocumentDigest, dataset.SourceTimeZone, Reviews,
+            normalized = ImportHash.Of(dataset.Games), targetDigest, targetScope,
+            rows = rows.Select(r => new { r.RecordKey, r.Match, r.Action, r.TargetKey, r.Reasons, r.Fields, r.CandidateKeys,
+                r.StatusBefore, r.StatusAfter, r.HumanReviewed, reviewTargets = r.ReviewCandidates.Select(c => c.TargetKey) }) });
     }
     public string Id { get; }
     public string TargetDigest { get; }
     public string TargetScope { get; }
     public ImmutableArray<ImportRow> Rows { get; }
     public ImportDataset Dataset { get; }
+    public ImmutableArray<ImportReviewDecision> Reviews { get; }
     internal ImmutableArray<MigrationOperation> Operations { get; }
 }
-internal sealed record MigrationOperation(ImportGame Game, string? TargetId, string GameId, ImmutableArray<string> Fields);
+internal sealed record MigrationOperation(ImportGame Game, string? TargetId, string GameId, ImmutableArray<string> Fields,
+    ImportReviewDecision? Review = null);
 public sealed record MigrationCommit(int Created, int Filled, int Skipped, string PlanId);
 public sealed record MigrationVerification(string Status, int BeforeCount, int AfterCount, long BeforeSeconds, long AfterSeconds, bool Reopened, int ExpectedCount);
 public interface ILibraryMigrationAdapter

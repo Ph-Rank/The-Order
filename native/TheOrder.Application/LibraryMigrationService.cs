@@ -13,6 +13,7 @@ public sealed class LibraryMigrationPreview
     internal MigrationPlan Plan { get; }
     public ImportDataset Dataset => Plan.Dataset;
     public ImmutableArray<ImportRow> Rows => Plan.Rows;
+    public ImmutableArray<ImportReviewDecision> Reviews => Plan.Reviews;
     public int Added => Rows.Count(r => r.Action == ImportAction.Create);
     public int Filled => Rows.Count(r => r.Action == ImportAction.FillMissing);
     public int Review => Rows.Count(r => r.Match is ImportMatch.Candidate or ImportMatch.Conflict);
@@ -27,6 +28,7 @@ public interface ILibraryMigrationSource
 public interface ILibraryMigrationService
 {
     Task<LibraryMigrationPreview> PreviewAsync(string selectedFile, CancellationToken cancellation);
+    Task<LibraryMigrationPreview> ReviewAsync(LibraryMigrationPreview preview, ImportReviewDecision decision, CancellationToken cancellation);
     Task<ClientResult> ApplyAsync(LibraryMigrationPreview preview, CancellationToken cancellation);
 }
 public sealed class LibraryMigrationService(OfflineLibraryClient library, ILibraryMigrationSource source, ILibraryBackupStore backups)
@@ -34,6 +36,8 @@ public sealed class LibraryMigrationService(OfflineLibraryClient library, ILibra
 {
     public async Task<LibraryMigrationPreview> PreviewAsync(string selectedFile, CancellationToken cancellation)
         => await library.Required().PreviewActiveMigrationAsync(await source.ReadAsync(selectedFile, cancellation).ConfigureAwait(false), cancellation).ConfigureAwait(false);
+    public Task<LibraryMigrationPreview> ReviewAsync(LibraryMigrationPreview preview, ImportReviewDecision decision, CancellationToken cancellation)
+        => library.Required().ReviewActiveMigrationAsync(preview, decision, cancellation);
     public async Task<ClientResult> ApplyAsync(LibraryMigrationPreview preview, CancellationToken cancellation)
     {
         try

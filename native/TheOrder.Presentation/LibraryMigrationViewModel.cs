@@ -4,7 +4,11 @@ using TheOrder.Application.Migrations;
 
 namespace TheOrder.Presentation;
 
-public sealed record LibraryMigrationRow(string Name, string Action, string Detail);
+public sealed record LibraryMigrationRow(string Name, string Action, string Detail)
+{
+    public string RecordKey { get; init; } = "";
+    public bool CanReview { get; init; }
+}
 public sealed class LibraryMigrationViewModel(ILibraryMigrationService service) : ObservableState, IAsyncDisposable
 {
     private CancellationTokenSource? cancellation;
@@ -28,15 +32,32 @@ public sealed class LibraryMigrationViewModel(ILibraryMigrationService service) 
         {
             var preview = await service.PreviewAsync(selectedFile, token);
             token.ThrowIfCancellationRequested(); if (revision != generation || stopping) return;
-            Preview = preview;
-            var games = preview.Dataset.Games.GroupBy(g => ImportHash.Key(preview.Dataset.Manager, g.SourceId)).ToDictionary(g => g.Key, g => g.First());
-            Rows = [.. preview.Rows.Select(r => new LibraryMigrationRow(games[r.RecordKey].Name, Action(r), Detail(r)))];
-            Message = preview.Dataset.RawCount == 0 ? "备份中的书架为空。"
-                : !preview.CanApply ? "没有可直接导入的条目。已导入或需要核对的条目均不会重复写入。"
-                : $"将新增 {preview.Added} 部，更新 {preview.Filled} 部；其余 {preview.Skipped} 部跳过。";
-            if (!preview.Dataset.Issues.IsEmpty || preview.Dataset.Games.Any(g => !g.Issues.IsEmpty))
-                Message += " 部分字段无法可靠转换，已保留现有资料并跳过这些字段。";
+            PublishPreview(preview);
         });
+    }
+    public Task ReviewAsync(ImportReviewDecision decision)
+    {
+        if (!CanSelect || Preview is not { } preview) return pending;
+        Message = "正在更新核验结果…";
+        return pending = Run(async (token, revision) =>
+        {
+            var reviewed = await service.ReviewAsync(preview, decision, token);
+            token.ThrowIfCancellationRequested(); if (revision != generation || stopping) return;
+            PublishPreview(reviewed);
+        }, reviewing: true);
+    }
+    private void PublishPreview(LibraryMigrationPreview preview)
+    {
+        Preview = preview;
+        var games = preview.Dataset.Games.GroupBy(g => ImportHash.Key(preview.Dataset.Manager, g.SourceId)).ToDictionary(g => g.Key, g => g.First());
+        Rows = [.. preview.Rows.Select(r => new LibraryMigrationRow(games[r.RecordKey].Name, Action(r), Detail(r))
+        { RecordKey = r.RecordKey, CanReview = !r.ReviewCandidates.IsEmpty && (r.HumanReviewed || r.Match is ImportMatch.Candidate or ImportMatch.Conflict
+            || r.Reasons.Contains("HIGHER_PROGRESS_ONLY_OTHER_CONFLICTS_PRESERVED")) })];
+        Message = preview.Dataset.RawCount == 0 ? "备份中的书架为空。"
+            : !preview.CanApply ? Rows.Any(r => r.CanReview) ? "请选择待核验条目，核验后即可导入。" : "没有可导入的条目；已导入的记录不会重复写入。"
+            : $"将新增 {preview.Added} 部，更新 {preview.Filled} 部；其余 {preview.Skipped} 部不改动。";
+        if (!preview.Dataset.Issues.IsEmpty || preview.Dataset.Games.Any(g => !g.Issues.IsEmpty))
+            Message += " 部分字段无法可靠转换，这些字段不会写入。";
     }
     public Task ApplyAsync(Func<LibraryMigrationPreview, CancellationToken, Task<ClientResult>>? coordinator = null)
     {
@@ -49,16 +70,20 @@ public sealed class LibraryMigrationViewModel(ILibraryMigrationService service) 
             Message = result.Message; Preview = null; Rows = [];
         }, committing: true);
     }
-    private async Task Run(Func<CancellationToken, long, Task> action, bool committing = false)
+    private async Task Run(Func<CancellationToken, long, Task> action, bool committing = false, bool reviewing = false)
     {
         IsBusy = true; cancellation = new(); var revision = ++generation; Notify();
         try { await action(cancellation.Token, revision); }
-        catch (OperationCanceledException) { Message = "已取消，书架未改动。"; }
+        catch (OperationCanceledException)
+        { Message = "已取消，书架未改动。"; if (reviewing) { Preview = null; Rows = []; } }
+        catch (StaleLibraryRequestException) when (reviewing)
+        { Message = "书架已变化，请重新选择备份并核验。"; Preview = null; Rows = []; }
         catch (Exception)
         {
-            Message = committing ? "导入结果暂未确认，请查看书架与导入前备份，勿反复提交。"
+            Message = reviewing ? "核验未采用。请检查对应条目和时长选择；现有书架未改动。"
+                : committing ? "导入结果暂未确认，请查看书架与导入前备份，勿反复提交。"
                 : "无法读取此备份。请选择 PotatoVN 导出的 ZIP，检查文件是否完整；当前书架未改动。";
-            Preview = null; Rows = [];
+            if (!reviewing) { Preview = null; Rows = []; }
         }
         finally { cancellation.Dispose(); cancellation = null; IsBusy = false; Notify(); }
     }
@@ -76,14 +101,14 @@ public sealed class LibraryMigrationViewModel(ILibraryMigrationService service) 
     }
     public async ValueTask DisposeAsync() { stopping = true; Cancel(); await pending; Notify(); }
     private static string Action(ImportRow row) => row.Action switch
-    { ImportAction.Create => "新增", ImportAction.FillMissing => row.Fields.Contains("status") ? "更新进度" : "补全缺项", ImportAction.AlreadyImported => "已导入 · 跳过", _ => row.Match == ImportMatch.Conflict ? "存在冲突 · 跳过" : "待核对 · 跳过" };
-    private static string Detail(ImportRow row) => row.Action == ImportAction.FillMissing && row.Fields.Contains("status") && row.StatusBefore is { } before && row.StatusAfter is { } after
+    { ImportAction.Create => "新增", ImportAction.FillMissing => row.HumanReviewed ? "已核验 · 合并个人记录" : row.Fields.Contains("status") ? "更新进度" : "补全缺项",
+        ImportAction.AlreadyImported => "已导入 · 不重复写入", _ => !row.ReviewCandidates.IsEmpty ? "待核验" : "来源冲突 · 暂不可导入" };
+    private static string Detail(ImportRow row) => row.HumanReviewed
+        ? "保留现有作品资料、名称、笔记和评分。" + (row.Reasons.Contains("USER_ADOPTED_SOURCE_TOTAL") ? "采用来源累计时长，不与本地相加。" : "保留本地时长。")
+        : row.Action == ImportAction.FillMissing && row.Fields.Contains("status") && row.StatusBefore is { } before && row.StatusAfter is { } after
         ? $"进度：{StatusNames.Display(before)} → {StatusNames.Display(after)}。其他有冲突的资料保留现有记录。"
-        : row.Reasons.Any(r => r is "NOTES_CONFLICT" or "RATING_CONFLICT" or "PLAYTIME_OVERLAP_CONFLICT")
-        ? "笔记、评分或时长与书架不同，保留现有记录。"
-        : row.Reasons.Contains("SOURCE_RECORD_CHANGED_OR_DUPLICATED") ? "来源记录发生变化或重复，保留现有记录。"
         : row.Action == ImportAction.Create ? "保留来源身份与历史时长，不自动绑定在线作品。"
         : row.Action == ImportAction.FillMissing ? "作品身份和安装位置相符，只补全缺项。"
         : row.Action == ImportAction.AlreadyImported ? "同一来源记录，不重复添加或累计时长。"
-        : "作品、版本或安装位置需要核对，本次不会自动合并。";
+        : MigrationReview.Explain(row.Reasons);
 }

@@ -5,6 +5,7 @@
     <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
     <TextBlock Text="{x:Bind Action}" TextWrapping="Wrap" />
     <TextBlock Text="{x:Bind Detail}" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
+    <Button x:Name="ReviewButton" x:Load="{x:Bind CanReview}" Content="核验对应与时长…" Tag="{x:Bind RecordKey}" Click="OnReviewMigrationRow" />
    </StackPanel>
   </DataTemplate>
  </Page.Resources>
