@@ -14,8 +14,8 @@ function Plain([string]$Path) {
     return $full
 }
 $tool=Plain $PublishedTool; $application=Plain $PublishedApplication
-if ($tool.Equals($application,[StringComparison]::OrdinalIgnoreCase) -or $tool.StartsWith($application+'\',[StringComparison]::OrdinalIgnoreCase)
-    -or $application.StartsWith($tool+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Independent publish directories required' }
+if ($tool.Equals($application,[StringComparison]::OrdinalIgnoreCase) -or $tool.StartsWith($application+'\',[StringComparison]::OrdinalIgnoreCase) -or
+    $application.StartsWith($tool+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Independent publish directories required' }
 foreach($entry in @('TheOrder.MigrationTool.exe','TheOrder.MigrationTool.dll','TheOrder.MigrationTool.deps.json','TheOrder.MigrationTool.runtimeconfig.json','hostfxr.dll','hostpolicy.dll','coreclr.dll')) {
     if (!(Test-Path -LiteralPath (Join-Path $tool $entry) -PathType Leaf)) { throw 'Incomplete self-contained migration tool' }
 }
