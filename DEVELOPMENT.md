@@ -1,8 +1,10 @@
 # 开发与维护
 
-## 六种进度与本机候选（2026-10-19）
+## 六种进度与本机替换（2026-10-19）
 
-`codex/progress-status-20261019` 基于 `99d1a34`，继承设置页 ZIP、统计和媒体成果。集中定义 GameProgress，保留既有 planned 的磁盘值用于未设置；wish 由 NativeExtras v4 表示，兼容主字段仍为 planned，旧 NativeCodec 进入只读。不能直接往旧 JSON status 写未知 wish 或批量改真实资料。测试包括六乘六进度组合、旧迁移重放、其他字段冲突、真实 Native Test 持久化重启、旧日用程序集兼容探针及云端 unset/wish 区分。最终仍需完整本地合成 Worker 回归、WinUI 编译和新标准 Setup 隔离验证；没有桌面交互验收。
+`codex/progress-status-20261019` 基于 `99d1a34`，继承设置页 ZIP、统计和媒体成果。应用源码冻结为 `c8c9537`，沿用版本 `1.2.1-beta.1`；最终文档提交不重新标注载荷源码。最终完整本地合成 Worker 客户端回归 4612/0/0，修正后定向 197 项、启动器 29/0、Release x64 及标准 Setup 的隔离安装通过。日用目录已替换并核验 929 份载荷、3 份附件、更新基包和入口 `--validate-only`；已安装工具的 8 步迁移与 7 步 wish→completed→较低 playing 合成闭环通过，重复导入总量不增加。旧程序 937 份已备份，5 份未知文件未动。
+
+集中定义 GameProgress，保留既有 planned 的磁盘值用于未设置；wish 和新进度更新来源由 NativeExtras v4 保护，兼容主字段仍使用旧枚举，旧 NativeCodec 进入只读。不能直接往旧 JSON status 写未知 wish 或批量改真实资料。测试包括六乘六进度组合、旧迁移重放、其他字段冲突、真实 Native Test 持久化重启及云端 unset/wish 区分；旧日用与最终载荷程序集的无 Profile 兼容探针已通过。首轮完整 4610/2/0 的边界修复与冻结 oracle 单字段新契约投影、测试分析器及辅助脚本错误日志均保留，没有跳过用例或放宽时限。仍没有桌面交互、真实用户导出或 Production 验收。
 
 本轮原始失败、夹具修订、源码冻结、候选与程序回退凭据保留在 `.artifacts/progress-status-20261019/`。用户只授权替换程序；不读取真实书架、凭据或其他管理器私人数据。日用实例未退出时不可覆盖或强杀，不能把上一轮备份当当前程序备份，须核对当前已安装载荷并保存新回退点。步骤及数据格式回退说明继续维护 `docs/migration-trial.md`。
 
