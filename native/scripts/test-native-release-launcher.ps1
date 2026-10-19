@@ -30,6 +30,7 @@ function Fixture([string]$Name) {
     $folder=Join-Path $output $Name
     $null=[IO.Directory]::CreateDirectory($folder)
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'launch-native-release.ps1') -Destination (Join-Path $folder 'launch.ps1')
+    Copy-Item -LiteralPath (Join-Path ([IO.Path]::GetFullPath($Package)) 'release-identity.json') -Destination (Join-Path $folder 'release-identity.json')
     [IO.File]::WriteAllBytes((Join-Path $folder 'TheOrder.WinUI.exe'),[byte[]](1,2,3,4))
     $item=[pscustomobject]@{path='TheOrder.WinUI.exe';bytes=4;sha256=(Get-FileHash -LiteralPath (Join-Path $folder 'TheOrder.WinUI.exe')).Hash}
     @{schema=1;files=@($item)}|ConvertTo-Json -Depth 4|Set-Content -LiteralPath (Join-Path $folder 'files.json') -Encoding utf8
@@ -41,6 +42,15 @@ function RunFixture([string]$Name,[scriptblock]$Mutate,[bool]$ShouldPass,[string
     Record $Name (Invoke-Validation (Join-Path $folder 'launch.ps1') $Arguments) $ShouldPass
 }
 RunFixture 'complete-fixture-no-process-start' {} $true
+foreach ($withBom in @($false,$true)) {
+    RunFixture ('unicode-manifest-bom-'+$withBom) {param($f)
+        $name='阅读说明🌸.md'; $path=Join-Path $f $name
+        [IO.File]::WriteAllText($path,'Unicode manifest fixture',[Text.UTF8Encoding]::new($false))
+        $manifest=Get-Content -LiteralPath (Join-Path $f 'files.json') -Raw -Encoding UTF8|ConvertFrom-Json
+        $manifest.files += [pscustomobject]@{path=$name;bytes=(Get-Item -LiteralPath $path).Length;sha256=(Get-FileHash -LiteralPath $path).Hash}
+        [IO.File]::WriteAllText((Join-Path $f 'files.json'),($manifest|ConvertTo-Json -Depth 5),[Text.UTF8Encoding]::new($withBom))
+    } $true
+}
 RunFixture 'missing-executable' {param($f) Remove-Item -LiteralPath (Join-Path $f 'TheOrder.WinUI.exe')} $false
 RunFixture 'changed-executable' {param($f) [IO.File]::WriteAllBytes((Join-Path $f 'TheOrder.WinUI.exe'),[byte[]](4,3,2,1))} $false
 RunFixture 'wrong-size' {param($f) $m=Get-Content -LiteralPath (Join-Path $f 'files.json') -Raw|ConvertFrom-Json; $m.files[0].bytes=3; $m|ConvertTo-Json -Depth 4|Set-Content -LiteralPath (Join-Path $f 'files.json')} $false

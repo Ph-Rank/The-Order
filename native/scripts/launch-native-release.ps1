@@ -4,7 +4,7 @@ Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Utility/Microsoft
 # Compatible with Windows PowerShell 5.1. Validation never opens a Production profile.
 $package = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
 $exe = Join-Path $package 'TheOrder.WinUI.exe'
-$identity = Get-Content -LiteralPath (Join-Path $package 'release-identity.json') -Raw | ConvertFrom-Json
+$identity = Get-Content -LiteralPath (Join-Path $package 'release-identity.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $normalKind = 'Production' # The application resolves an explicit legacy-Beta library choice.
 if (!$Test -and $DataDirectory) { throw 'A custom data directory is available only with -Test.' }
 $profile = $null
@@ -26,11 +26,11 @@ if ($Test) {
     $profileManifest = Join-Path $profile 'native-profile.json'
     if (Test-Path -LiteralPath $profileManifest) {
         if (([IO.File]::GetAttributes($profileManifest) -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'A linked profile manifest cannot be used as Test.' }
-        $stored = Get-Content -LiteralPath $profileManifest -Raw | ConvertFrom-Json
+        $stored = Get-Content -LiteralPath $profileManifest -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($stored.ProfileKind -ne 'Test') { throw 'Existing profile is not Test; it will not be changed.' }
     }
 }
-$manifest = Get-Content -LiteralPath (Join-Path $package 'files.json') -Raw | ConvertFrom-Json
+$manifest = Get-Content -LiteralPath (Join-Path $package 'files.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($manifest.schema -ne 1 -or !$manifest.files -or @($manifest.files | Where-Object path -eq 'TheOrder.WinUI.exe').Count -ne 1) { throw 'Invalid package manifest.' }
 $seen = @{}
 foreach ($file in $manifest.files) {
