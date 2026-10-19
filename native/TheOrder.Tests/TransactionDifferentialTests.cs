@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using TheOrder.Application;
 using TheOrder.Domain;
 using TheOrder.Infrastructure.Legacy;
@@ -64,18 +65,31 @@ public sealed class TransactionDifferentialTests
                 }
             });
             Assert.True(c.GetProperty("accepted").GetBoolean() == (error is null), error?.ToString() ?? "Native accepted a legacy rejection");
-            EqualEntries(c.GetProperty("after"), library.Snapshot.Entries);
-            if (error is null && result is LibraryEntry entry) EqualEntries(WrapArray(c.GetProperty("result")), [entry]);
+            EqualEntries(CurrentProgressExpectation(c.GetProperty("after"), name), library.Snapshot.Entries);
+            if (error is null && result is LibraryEntry entry) EqualEntries(CurrentProgressExpectation(WrapArray(c.GetProperty("result")), name), [entry]);
             if (error is null && result is ImportCount count)
             {
                 Assert.Equal(c.GetProperty("result").GetProperty("added").GetInt32(), count.Added);
                 Assert.Equal(c.GetProperty("result").GetProperty("skipped").GetInt32(), count.Skipped);
             }
-            EqualDocument(c.GetProperty("serialized").GetString()!, File.ReadAllText(profile.Main));
+            using var serialized = JsonDocument.Parse(c.GetProperty("serialized").GetString()!);
+            EqualDocument(CurrentProgressExpectation(serialized.RootElement, name).GetRawText(), File.ReadAllText(profile.Main));
             if (c.GetProperty("backup").ValueKind == JsonValueKind.Null) Assert.False(File.Exists(profile.Backup));
             else EqualDocument(c.GetProperty("backup").GetString()!, File.ReadAllText(profile.Backup));
         }
-        using var reopened = profile.Open(); EqualEntries(c.GetProperty("after"), reopened.Snapshot.Entries);
+        using var reopened = profile.Open(); EqualEntries(CurrentProgressExpectation(c.GetProperty("after"), name), reopened.Snapshot.Entries);
+    }
+    private static JsonElement CurrentProgressExpectation(JsonElement legacy, string name)
+    {
+        if (name != "merge-left-wins") return legacy;
+        // The user-approved six-state priority supersedes Electron's left-wins status only.
+        // Keep the frozen oracle and compare every other field, serialized value and restart.
+        var node = JsonNode.Parse(legacy.GetRawText())!;
+        var games = node is JsonArray array ? array : node["games"]!.AsArray();
+        var merged = Assert.Single(games, x => x?["id"]?.GetValue<string>() == "a")!;
+        Assert.Equal("dropped", merged["status"]!.GetValue<string>());
+        merged["status"] = "completed";
+        return JsonSerializer.SerializeToElement(node);
     }
     [Fact]
     public void OracleIsFreshForAllMutationDependencies()

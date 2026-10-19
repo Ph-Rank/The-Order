@@ -61,7 +61,7 @@ public static class PersonalSyncPlanning
         var work = local.Metadata?.Id ?? throw new OnlineException(OnlineFailure.InvalidRequest);
         var state = CloudStatus(local.Status);
         bool different = state != cloud?.State;
-        bool conflict = different && (basis is null ? direction == PersonalSyncDirection.Bidirectional && cloud is not null
+        bool conflict = state is not null && different && (basis is null ? direction == PersonalSyncDirection.Bidirectional && cloud is not null
             : local.Status != basis.LocalState && (cloud?.State != basis.CloudState || cloud?.Completion != basis.Completion));
         var completion = state is "wish" or null ? null : cloud?.Completion;
         var explanation = "安装信息不参与状态转换；不推断通关程度，上传保留已有通关程度。";

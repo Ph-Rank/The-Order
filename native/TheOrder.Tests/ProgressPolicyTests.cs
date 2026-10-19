@@ -187,7 +187,7 @@ public sealed class ProgressPolicyTests
         Assert.Null(empty.Upload); Assert.Equal(PersonalSyncChoice.Skip, empty.Recommended);
         var remote = new CloudWorkState("123", "wish", null, Date);
         var row = PersonalSyncPlanning.State(entry, remote, null, PersonalSyncDirection.Bidirectional);
-        Assert.Null(row.Upload); Assert.Equal("wish", row.LocalStateToApply); Assert.Equal(PersonalSyncChoice.Import, row.Recommended);
+        Assert.Null(row.Upload); Assert.Equal("wish", row.LocalStateToApply); Assert.Equal(PersonalSyncChoice.Import, row.Recommended); Assert.False(row.Conflict);
         var played = PersonalSyncPlanning.State(entry with { Status = "completed" }, remote, null, PersonalSyncDirection.Import);
         Assert.Equal("completed", played.LocalStateToApply);
     }
