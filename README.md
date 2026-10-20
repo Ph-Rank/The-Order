@@ -12,8 +12,8 @@
 
 <p>
   <a href="#下载与安装"><img src="https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=flat-square" alt="Windows 10 / 11 x64"></a>
-  <a href="https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.0"><img src="https://img.shields.io/badge/Stable-1.2.0-2EA44F?style=flat-square" alt="稳定版 1.2.0"></a>
-  <a href="https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.1-beta.1"><img src="https://img.shields.io/badge/Beta-1.2.1--beta.1-DB8A26?style=flat-square" alt="公开测试版 1.2.1-beta.1"></a>
+  <a href="https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.1"><img src="https://img.shields.io/badge/Stable-1.2.1-2EA44F?style=flat-square" alt="稳定版 1.2.1"></a>
+  <a href="https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.2-beta.1"><img src="https://img.shields.io/badge/Beta-1.2.2--beta.1-DB8A26?style=flat-square" alt="公开测试版 1.2.2-beta.1"></a>
   <a href="https://t.me/+ONE-Lif0uZBiNzJh"><img src="https://img.shields.io/badge/Telegram-加入交流群-26A5E4?style=flat-square&amp;logo=telegram&amp;logoColor=white" alt="Telegram 交流群"></a>
 </p>
 
@@ -30,10 +30,12 @@
 
 | 版本 | 适合谁 | 下载 |
 | --- | --- | --- |
-| **正式版 · 1.2.0** | 游戏书架、游玩记录与五类 ACGN 专业资料 | **[下载 Windows 安装包](https://github.com/Ph-Rank/The-Order/releases/download/v1.2.0/The-Order-1.2.0-Setup-x64.exe)** · [更新说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.0) |
-| **测试版 · 1.2.1-beta.1** | 体验游戏影像、音乐收听与书籍阅读 / 购买入口 | **[下载 Beta 安装包](https://github.com/Ph-Rank/The-Order/releases/download/v1.2.1-beta.1/The-Order-1.2.1-beta.1-Setup-x64.exe)** · [更新说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.1-beta.1) |
+| **正式版 · 1.2.1** | ACGN 资料、游戏影像与阅读 / 收听入口，改进硬盘兼容 | **[下载 Windows 安装包](https://github.com/Ph-Rank/The-Order/releases/download/v1.2.1/The-Order-1.2.1-Setup-x64.exe)** · [更新说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.1) |
+| **测试版 · 1.2.2-beta.1** | 统计分区、管理器 ZIP 互通与历史时长 / 日期合并 | **[下载 Beta 安装包](https://github.com/Ph-Rank/The-Order/releases/download/v1.2.2-beta.1/The-Order-1.2.2-beta.1-Setup-x64.exe)** · [更新说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.2-beta.1) |
 
 **同一个程序，可在「设置 → 程序更新 → 更新通道」中选择正式版或 Beta。** 切换时沿用当前书架，安装前自动备份。只有主动选择 Beta 才会收到测试版；也可切回兼容的正式版。
+
+**新 Beta 资料格式提示：** 使用迁移新记录后，切回 1.2.1 前请在 Beta 恢复升级前备份；恢复会回到备份时点，请先另存当前资料。
 
 旧 `1.2.0-beta.1` 用户需手动安装一次新 Beta；首次打开可选择继续使用旧 Beta 书架，无需重新扫描游戏。已有两份书架不会自动合并。不要直接复制 Profile 文件夹。
 
@@ -116,8 +118,8 @@ Bangumi 连接跨媒体作品，各专业来源补充深度信息。不同季度
 ## 文档与开发
 
 - [稳定版使用指南](https://github.com/Ph-Rank/The-Order/blob/v1.2.0/docs/release/1.2.0/README.md) · [稳定版更新记录](https://github.com/Ph-Rank/The-Order/blob/v1.2.0/docs/release/1.2.0/CHANGELOG.md)
-- [Beta 发布说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.1-beta.1) · [Beta 测试范围与限制](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.1-beta.1#已验证与边界)
-- [稳定版构建说明](https://github.com/Ph-Rank/The-Order/blob/v1.2.0/docs/release/1.2.0/BUILD.md) · [Beta 源码与构建说明](https://github.com/Ph-Rank/The-Order/tree/v1.2.1-beta.1/docs/release/1.2.1-beta.1)
+- [Beta 发布说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.2-beta.1) · [Beta 测试范围与限制](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.2-beta.1#已验证与边界)
+- [稳定版构建说明](https://github.com/Ph-Rank/The-Order/blob/v1.2.0/docs/release/1.2.0/BUILD.md) · [Beta 源码与构建说明](https://github.com/Ph-Rank/The-Order/tree/v1.2.2-beta.1/docs/release/1.2.2-beta.1)
 - [开发与数据隔离](DEVELOPMENT.md) · [历史 Electron 文档](https://github.com/Ph-Rank/The-Order/blob/85f06e18976d7a97222d25e2a35bf4aa9d31a789/README.md)
 
 当前原生版本使用 **C# / WinUI 3**。稳定版与 Beta 的对应源码随各自 Release 提供；构建或贡献时，请先选择对应分支 / Tag，阅读其开发说明，并使用独立测试资料目录。

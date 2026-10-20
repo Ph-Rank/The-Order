@@ -7,12 +7,12 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <Deterministic>true</Deterministic>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Version>1.2.1-beta.1</Version>
-    <AssemblyVersion>1.2.1.0</AssemblyVersion>
+    <Version>1.2.2-beta.1</Version>
+    <AssemblyVersion>1.2.2.0</AssemblyVersion>
     <!-- Published clients validate both Setup and the installed payload as core.beta.
          SemVer orders stable after beta; manifest hashes drive file replacement. -->
-    <FileVersion>1.2.1.1</FileVersion>
-    <InformationalVersion>1.2.1-beta.1</InformationalVersion>
+    <FileVersion>1.2.2.1</FileVersion>
+    <InformationalVersion>1.2.2-beta.1</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Product>The Order</Product>
     <Authors>The Order contributors</Authors>
