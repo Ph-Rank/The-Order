@@ -1,10 +1,16 @@
 # 开发与维护
 
-## 1.2.1 正式发布候选（2026-10-20）
 
-本轮用户明确授权发布 1.2.1 正式版与 1.2.2-beta.1 预发布；不替换当前日用安装、不读写 Production、不操作真实游戏或重新部署服务。从公开 v1.2.1-beta.1 与当前 main 文档建立，额外只回移 FAT/exFAT 兼容、数据盘根目录扫描及相应安全策略/测试。没有纳入尚未公开的统计与迁移功能，主库扩展格式保持公开 Beta 的 v1/v2。
+## 1.2.1 正式版与 1.2.2 beta 1 已发布（2026-10-20）
 
-版本标识来自 native/Directory.Build.props，正式版文件版本 core.0、Beta 文件版本 core.beta；安装身份和书架选择保持。分支基线、锁定依赖、完整回归、隔离安装、Tag、附件及回下载证据以 `.artifacts/release-1.2.1/` 和本轮最终发布回执为准。当前为候选准备，尚未公开；下方先前发布或日用证据不等于本候选已通过。
+- 正式版 [1.2.1](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.1) 已设为 GitHub Latest；Tag `v1.2.1`，构建源码 `b9cf6cc097bbf81c5a639dfd2a1d29c61f0b7f23`。范围为此前公开 Beta 的媒体功能及 FAT/exFAT、显式数据盘根目录兼容修复，未包含统计和管理器迁移。
+- 测试版 [1.2.2 beta 1](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.2-beta.1) 为 Pre-release；Tag `v1.2.2-beta.1`，构建源码 `a66b74421cff9fa9735cebf4473720d3893186bc`。保留最新日用源码的统计、六种进度、五管理器 ZIP 互通、时长相加及可靠日期合并。GitHub 显示名称使用 beta 1，程序与更新协议仍使用标准预发布版本号。
+
+完整客户端回归分别为 4480/0/0 与 4766/0/0，入口检查分别为 27/0 与 29/0。两份最终分发包均完成独立身份安装、实际空 Test WinUI 启动/退出、真实 exFAT 合成目录扫描/事务和版本检查；Beta 另通过已安装工具五目标 ZIP 原生 reader 回读及日期幂等验证。15 个公开附件均匿名流式回下载并核对 SHA-256。两版实际编译的更新器均读取到 stable=1.2.1、beta=1.2.2-beta.1，正式通道排除 Beta。服务 Node 36/0、SQLite 合约 7/0；本轮未部署或修改生产服务。
+
+新 Beta 的 NativeExtras v7 不可由 1.2.1 改写，旧版读取为只读保护。回退须先在 Beta 恢复与旧版兼容的早期备份，先另存当前资料；没有兼容备份时保留 Beta，不能强制转换。新旧来源的真实用户迁移、Windows 10 干净实机、全部 DPI、长期稳定性和真实 OAuth 到期恢复仍未全面验收，见各 Release 的 VALIDATION.md。
+
+本机日用安装保持此前 1.2.1-beta.1，未替换、启动普通实例或访问 Production、私人 ZIP、凭据及真实游戏。最终包、源码清单、测试、匿名下载和实际更新通道证据在两个发布工作树的 `.artifacts/release-1.2.1/` 与 `.artifacts/release-1.2.2-beta.1/`；统筹回执在原开发工作树 `.artifacts/dual-release-20261020/`。下方旧“未发布”等文字属于对应历史阶段。
 
 
 ## 1.2.1 Beta 1 发布候选（2026-10-19）

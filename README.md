@@ -13,7 +13,7 @@
 <p>
   <a href="#下载与安装"><img src="https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=flat-square" alt="Windows 10 / 11 x64"></a>
   <a href="https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.1"><img src="https://img.shields.io/badge/Stable-1.2.1-2EA44F?style=flat-square" alt="稳定版 1.2.1"></a>
-  <a href="https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.2-beta.1"><img src="https://img.shields.io/badge/Beta-1.2.2--beta.1-DB8A26?style=flat-square" alt="公开测试版 1.2.2-beta.1"></a>
+  <a href="https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.2-beta.1"><img src="https://img.shields.io/badge/Beta-1.2.2%20beta%201-DB8A26?style=flat-square" alt="公开测试版 1.2.2 beta 1"></a>
   <a href="https://t.me/+ONE-Lif0uZBiNzJh"><img src="https://img.shields.io/badge/Telegram-加入交流群-26A5E4?style=flat-square&amp;logo=telegram&amp;logoColor=white" alt="Telegram 交流群"></a>
 </p>
 
@@ -31,11 +31,11 @@
 | 版本 | 适合谁 | 下载 |
 | --- | --- | --- |
 | **正式版 · 1.2.1** | ACGN 资料、游戏影像与阅读 / 收听入口，改进硬盘兼容 | **[下载 Windows 安装包](https://github.com/Ph-Rank/The-Order/releases/download/v1.2.1/The-Order-1.2.1-Setup-x64.exe)** · [更新说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.1) |
-| **测试版 · 1.2.2-beta.1** | 统计分区、管理器 ZIP 互通与历史时长 / 日期合并 | **[下载 Beta 安装包](https://github.com/Ph-Rank/The-Order/releases/download/v1.2.2-beta.1/The-Order-1.2.2-beta.1-Setup-x64.exe)** · [更新说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.2-beta.1) |
+| **测试版 · 1.2.2 beta 1** | 统计分区、管理器 ZIP 互通与历史时长 / 日期合并 | **[下载 Beta 安装包](https://github.com/Ph-Rank/The-Order/releases/download/v1.2.2-beta.1/The-Order-1.2.2-beta.1-Setup-x64.exe)** · [更新说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.2-beta.1) |
 
 **同一个程序，可在「设置 → 程序更新 → 更新通道」中选择正式版或 Beta。** 切换时沿用当前书架，安装前自动备份。只有主动选择 Beta 才会收到测试版；也可切回兼容的正式版。
 
-**新 Beta 资料格式提示：** 使用迁移新记录后，切回 1.2.1 前请在 Beta 恢复升级前备份；恢复会回到备份时点，请先另存当前资料。
+**新 Beta 资料格式提示：** 切回 1.2.1 前，须在 Beta 恢复与正式版兼容的早期备份；请先另存当前资料。没有兼容备份时，请继续使用 Beta，避免强行转换。
 
 旧 `1.2.0-beta.1` 用户需手动安装一次新 Beta；首次打开可选择继续使用旧 Beta 书架，无需重新扫描游戏。已有两份书架不会自动合并。不要直接复制 Profile 文件夹。
 
@@ -54,11 +54,11 @@
 
 | 媒体 | 可以继续探索的内容 | 主要资料来源 |
 | --- | --- | --- |
-| **Galgame** | 发行资料、角色与声优、制作人员、相关游戏；宣传影像与购买链接（Beta） | NextMoe · IGDB |
+| **Galgame** | 发行资料、角色与声优、制作人员、相关游戏；宣传影像与购买链接 | NextMoe · IGDB |
 | **动画** | 逐集资料、角色 / 声优、Staff、制作公司、前后作、PV 与正版观看入口 | AniList · Bangumi |
-| **音乐** | 专辑、不同发行版本、多碟曲目与制作资料；收听与购买入口（Beta） | MusicBrainz |
-| **漫画** | 作品资料、作者 / 作画、系列与单行本、出版信息；阅读与购买入口（Beta） | AniList · Bangumi · MangaDex · NDL Search |
-| **轻小说** | 作者 / 插画师、系列与单卷、ISBN 与出版版本；阅读与购买入口（Beta） | Bangumi · AniList · NDL Search |
+| **音乐** | 专辑、不同发行版本、多碟曲目与制作资料；收听与购买入口 | MusicBrainz |
+| **漫画** | 作品资料、作者 / 作画、系列与单行本、出版信息；阅读与购买入口 | AniList · Bangumi · MangaDex · NDL Search |
+| **轻小说** | 作者 / 插画师、系列与单卷、ISBN 与出版版本；阅读与购买入口 | Bangumi · AniList · NDL Search |
 
 Bangumi 连接跨媒体作品，各专业来源补充深度信息。不同季度、单卷和发行版本分别保留；不确定的对应关系可核对、确认或排除。资料差异可手动确认，不同媒体可添加为独立相关作品；网络失败的明确链接可待核验保存。
 
@@ -101,7 +101,7 @@ Bangumi 连接跨媒体作品，各专业来源补充深度信息。不同季度
 
 - **更新通道**：在「设置 → 程序更新 → 更新通道」选择正式版或 Beta，再检查更新并确认安装。默认只接收正式版，主动选择 Beta 后才会收到测试版。
 - **书架与资料**：切换通道继续使用所选书架，无需重新导入。已有的正式版与旧 Beta 书架不会自动合并，请勿直接复制 Profile 文件夹。
-- **备份与回退**：软件内安装更新前自动备份用户资料；在设置中切回「正式版」即可回退到兼容版本，最低为 **1.1.2**，保留 Beta 期间新增的个人记录。自动备份不含游戏本体与存档，请另行备份。详见 [备份与回退说明](https://github.com/Ph-Rank/The-Order/blob/v1.2.0/docs/release/1.2.0/ROLLBACK.md)。
+- **备份与回退**：软件内安装更新前自动备份用户资料，备份不含游戏本体与存档。新 Beta 使用较新资料格式，回退须先在 Beta 恢复与旧版兼容的早期备份；恢复前另存当前资料。详见 [本版安装与回退说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.2-beta.1)。
 - **旧版过渡**：`1.1.0` 用户先更新至 `1.1.2`；`1.2.0-beta.1` 用户需手动安装一次新 Beta，首次启动时选择原 Beta 书架。旧 Electron 资料不会自动迁移。手动安装前，请从托盘正常退出所有相关实例。
 - **账号与同步**：登录与个人同步相互独立，同步默认关闭。稳定版真实云端写入等未验证范围见 [认证与隐私说明](https://github.com/Ph-Rank/The-Order/blob/v1.2.0/docs/release/1.2.0/AUTHENTICATION.md)。
 - **联网与播放**：资料覆盖、限流与可用性依各来源；PV 和观看入口受原平台版权、地区、年龄及订阅条件限制，链接存在不代表当前可播放。
