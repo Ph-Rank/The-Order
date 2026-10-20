@@ -30,6 +30,7 @@ function Fixture([string]$Name) {
     $folder=Join-Path $output $Name
     $null=[IO.Directory]::CreateDirectory($folder)
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'launch-native-release.ps1') -Destination (Join-Path $folder 'launch.ps1')
+    Copy-Item -LiteralPath (Join-Path ([IO.Path]::GetFullPath($Package)) 'release-identity.json') -Destination (Join-Path $folder 'release-identity.json')
     [IO.File]::WriteAllBytes((Join-Path $folder 'TheOrder.WinUI.exe'),[byte[]](1,2,3,4))
     $item=[pscustomobject]@{path='TheOrder.WinUI.exe';bytes=4;sha256=(Get-FileHash -LiteralPath (Join-Path $folder 'TheOrder.WinUI.exe')).Hash}
     @{schema=1;files=@($item)}|ConvertTo-Json -Depth 4|Set-Content -LiteralPath (Join-Path $folder 'files.json') -Encoding utf8
