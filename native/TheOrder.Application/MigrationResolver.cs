@@ -50,6 +50,8 @@ public static class MigrationResolver
                     throw new InvalidDataException("Review target is unavailable or ambiguous.");
                 if (choice.History == ImportHistoryChoice.UseSourceTotal && !MigrationReview.CanUseSourceTotal(selected, g.TotalSeconds))
                     throw new InvalidDataException("来源累计值小于需保留的已知会话或记录，不能采用。");
+                if (choice.History == ImportHistoryChoice.AddSourceTotal && !MigrationReview.CanAddSourceTotal(selected, dataset.Manager, g))
+                    throw new InvalidDataException("相加后的累计时长超出支持范围。");
                 var fields = ImmutableArray.CreateBuilder<string>();
                 if (GameProgress.Higher(selected.Status, g.Status) != selected.Status) fields.Add("status");
                 if (prior.Count == 0)
@@ -63,22 +65,50 @@ public static class MigrationResolver
                 }
                 if (choice.History == ImportHistoryChoice.UseSourceTotal && g.TotalSeconds != selected.EffectivePlaySeconds)
                     fields.Add(selected.TotalPlaySeconds == 0 && selected.ManualPlaytime.IsEmpty && selected.Sessions.IsEmpty && selected.PlayCount == 0 ? "history" : "history-total");
+                if (choice.History == ImportHistoryChoice.AddSourceTotal)
+                    fields.Add("history-add");
+                if (choice.History == ImportHistoryChoice.AddSourceTotal && MigrationHistoryDates.LastPlayed(g) is { } sourceLast
+                    && (selected.LastPlayedAt is null || DateTimeOffset.TryParse(selected.LastPlayedAt, out var targetLast) && sourceLast > targetLast)
+                    && !fields.Contains("lastPlayed")) fields.Add("lastPlayed");
                 fields.Add("lineage"); usedReviews.Add(key);
                 Row(ImportMatch.Confirmed, ImportAction.FillMissing, selected, ["USER_CONFIRMED_IDENTITY_AND_VERSION",
-                    choice.History == ImportHistoryChoice.UseSourceTotal ? "USER_ADOPTED_SOURCE_TOTAL" : "USER_KEPT_EXISTING_HISTORY"], fields.ToImmutable());
+                    choice.History == ImportHistoryChoice.AddSourceTotal ? "USER_ADDED_SOURCE_TOTAL" : choice.History == ImportHistoryChoice.UseSourceTotal ? "USER_ADOPTED_SOURCE_TOTAL" : "USER_KEPT_EXISTING_HISTORY"], fields.ToImmutable());
                 operations.Add(new(g, selected.Id, selected.Id, fields.ToImmutable(), choice));
                 continue;
             }
             if (prior.Count != 0)
             {
-                if (prior.Count == 1 && (SameRecordExceptProgress(prior[0].MigrationOrigins.Single(o => o.Manager == dataset.Manager && o.RecordId == g.SourceId), g)
+                var previousOrigin = prior.Count == 1 ? prior[0].MigrationOrigins.Single(o => o.Manager == dataset.Manager && o.RecordId == g.SourceId) : null;
+                var historyPending = previousOrigin is not null && g.TotalSeconds > 0 && prior[0].EffectivePlaySeconds > 0
+                    && g.TotalSeconds != prior[0].EffectivePlaySeconds && !ReviewCovers(previousOrigin, g)
+                    && (previousOrigin.Fields.Any(f => f.Target == "history-pending") || !SameRecordExceptProgress(previousOrigin, g));
+                if (prior.Count == 1 && (SameRecordExceptProgress(previousOrigin!, g)
                     || GameProgress.Higher(prior[0].Status, g.Status) != prior[0].Status && ReliableProgressIdentity(prior[0], g)))
                 {
                     var previous = prior[0];
                     if (GameProgress.Higher(previous.Status, g.Status) != previous.Status)
                     {
-                        Row(ImportMatch.Confirmed, ImportAction.FillMissing, previous, ["HIGHER_PROGRESS_ONLY_PREVIOUS_DATA_PRESERVED"], ["status"]);
-                        operations.Add(new(g, previous.Id, previous.Id, ["status"]));
+                        ImmutableArray<string> progressFields = historyPending ? ["status", "history-pending"] : ["status"];
+                        if (MigrationHistoryDates.CanRepair(previous, dataset.Manager, g))
+                        {
+                            progressFields = progressFields.Add("history-dates");
+                            if (MigrationHistoryDates.LastPlayed(g) is { } sourceLast
+                                && (previous.LastPlayedAt is null || DateTimeOffset.TryParse(previous.LastPlayedAt, out var targetLast) && sourceLast > targetLast))
+                                progressFields = progressFields.Add("lastPlayed");
+                        }
+                        Row(ImportMatch.Confirmed, ImportAction.FillMissing, previous,
+                            historyPending ? ["PLAYTIME_OVERLAP_CONFLICT", "HIGHER_PROGRESS_ONLY_OTHER_CONFLICTS_PRESERVED"] : ["HIGHER_PROGRESS_ONLY_PREVIOUS_DATA_PRESERVED"], progressFields);
+                        operations.Add(new(g, previous.Id, previous.Id, progressFields));
+                    }
+                    else if (historyPending) Row(ImportMatch.Conflict, ImportAction.Skip, previous, ["PLAYTIME_OVERLAP_CONFLICT"], ["history"]);
+                    else if (MigrationHistoryDates.CanRepair(previous, dataset.Manager, g))
+                    {
+                        ImmutableArray<string> dateFields = ["history-dates", "lineage"];
+                        if (MigrationHistoryDates.LastPlayed(g) is { } sourceLast
+                            && (previous.LastPlayedAt is null || DateTimeOffset.TryParse(previous.LastPlayedAt, out var targetLast) && sourceLast > targetLast))
+                            dateFields = dateFields.Add("lastPlayed");
+                        Row(ImportMatch.Confirmed, ImportAction.FillMissing, previous, ["PREVIOUS_ADDITION_DATES_AVAILABLE"], dateFields);
+                        operations.Add(new(g, previous.Id, previous.Id, dateFields));
                     }
                     else Row(ImportMatch.Confirmed, ImportAction.AlreadyImported, previous, ["SAME_SOURCE_RECORD_ALREADY_IMPORTED"]);
                 }
@@ -105,8 +135,9 @@ public static class MigrationResolver
                 {
                     if (!conflicts.Contains("LIVE_HISTORY_CONFLICT") && GameProgress.Higher(e.Status, g.Status) != e.Status)
                     {
-                        Row(ImportMatch.Confirmed, ImportAction.FillMissing, e, [.. conflicts, "HIGHER_PROGRESS_ONLY_OTHER_CONFLICTS_PRESERVED"], ["status", "lineage"]);
-                        operations.Add(new(g, e.Id, e.Id, ["status", "lineage"]));
+                        ImmutableArray<string> progressFields = conflicts.Contains("PLAYTIME_OVERLAP_CONFLICT") ? ["status", "lineage", "history-pending"] : ["status", "lineage"];
+                        Row(ImportMatch.Confirmed, ImportAction.FillMissing, e, [.. conflicts, "HIGHER_PROGRESS_ONLY_OTHER_CONFLICTS_PRESERVED"], progressFields);
+                        operations.Add(new(g, e.Id, e.Id, progressFields));
                     }
                     else Row(ImportMatch.Conflict, ImportAction.Skip, e, conflicts.ToImmutable(), blocked.ToImmutable());
                     continue;
@@ -140,14 +171,20 @@ public static class MigrationResolver
                 operations.Add(new(g, null, id, rows[^1].Fields));
             }
             void Row(ImportMatch match, ImportAction action, LibraryEntry? e, ImmutableArray<string> why, ImmutableArray<string> fields = default, ImmutableArray<string> candidates = default)
-                => rows.Add(new(key, match, action, e is null ? null : ImportHash.Text(e.Id)[..20], why, fields.IsDefault ? [] : fields)
+            {
+                var dates = e is not null && !fields.IsDefault && (fields.Contains("history-add") || fields.Contains("history-dates"))
+                    ? MigrationHistoryDates.Build(e, dataset.Manager, g) : null;
+                rows.Add(new(key, match, action, e is null ? null : ImportHash.Text(e.Id)[..20], why, fields.IsDefault ? [] : fields)
                 { CandidateKeys = candidates.IsDefault ? e is null ? [] : [ImportHash.Text(e.Id)[..20]] : candidates,
                     ReviewCandidates = reviewable && prior.Count <= 1 && (match is ImportMatch.Candidate or ImportMatch.Conflict
                         || decisions.ContainsKey(key) || why.Contains("HIGHER_PROGRESS_ONLY_OTHER_CONFLICTS_PRESERVED"))
-                        ? [.. reviewPool.Where(t => !t.Sessions.Any(s => s.Native is { IsTerminal: false })).Select(t => MigrationReview.Candidate(t, g))] : [],
+                        ? [.. reviewPool.Where(t => !t.Sessions.Any(s => s.Native is { IsTerminal: false })).Select(t => MigrationReview.Candidate(t, g, dataset.Manager))] : [],
                     HumanReviewed = decisions.ContainsKey(key),
+                    HistoryAdditionalSeconds = dates?.AdditionalSeconds ?? 0, HistoryNewlyDatedSeconds = dates?.NewlyDatedSeconds ?? 0,
+                    HistoryDeduplicatedSeconds = dates?.DuplicateSeconds ?? 0, HistoryWarnings = dates?.Warnings ?? [],
                     StatusBefore = e?.Status ?? GameProgress.Default,
                     StatusAfter = action == ImportAction.Create ? g.Status : e is not null ? !fields.IsDefault && fields.Contains("status") ? GameProgress.Higher(e.Status, g.Status) : e.Status : null });
+            }
         }
         if (usedReviews.Count != decisions.Count) throw new InvalidDataException("Review no longer applies to the source or target.");
         // A preview is a validated plan, including the real target codec and document-size limit.
@@ -172,6 +209,8 @@ public static class MigrationResolver
         return GameProgress.Ordered.Where(status => status != game.Status).Any(status =>
             origin.RecordDigest == ImportHash.Of(game with { Status = status }) || origin.Review?.SourceRecordDigest == ImportHash.Of(game with { Status = status }));
     }
+    private static bool ReviewCovers(MigrationOrigin origin, ImportGame game) => origin.Review is { } review
+        && GameProgress.Ordered.Any(status => review.SourceRecordDigest == ImportHash.Of(game with { Status = status }));
     private static bool ReliableProgressIdentity(LibraryEntry target, ImportGame game)
     {
         var ids = Identities(target);
@@ -206,9 +245,11 @@ internal static class MigrationProjection
     {
         var g = operation.Game;
         var installations = g.Installations.Select(i => new Installation("import-" + ImportHash.Key(dataset.Manager, g.SourceId + ":" + i.SourceId), i.Folder, i.Executable, [])).ToImmutableArray();
-        var history = g.Sessions.Select(s => new PlaySession(ImportHash.GuidFor(dataset.Manager + ":" + g.SourceId + ":session:" + s.SourceId), NativeSession.Format(s.Start), NativeSession.Format(s.End), s.Seconds)).ToImmutableArray();
-        var manual = g.Days.Select(d => new ManualPlaytime(ImportHash.GuidFor(dataset.Manager + ":" + g.SourceId + ":day:" + d.Date), d.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), d.Seconds,
-            "导入的来源按日累计；非真实会话。", now, false)).ToImmutableArray();
+        var history = g.Sessions.Select(s => new PlaySession(MigrationHistoryDates.SessionId(dataset.Manager, g.SourceId, s), NativeSession.Format(s.Start), NativeSession.Format(s.End), s.Seconds)).ToImmutableArray();
+        var manual = g.Days.Select(d => new ManualPlaytime(MigrationHistoryDates.DayId(dataset.Manager, g.SourceId, d.Date), d.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), d.Seconds,
+            MigrationHistoryDates.DailyNote, now, false)).ToImmutableArray();
+        ImportedHistoryDates? dateCoverage = old is null || operation.Fields.Contains("history")
+            ? !g.Days.IsEmpty || !g.Sessions.IsEmpty ? MigrationHistoryDates.Initial(dataset.Manager, g) : null : null;
         var reportedTotal = checked(g.TotalSeconds - g.Days.Sum(d => d.Seconds));
         var e = old ?? new LibraryEntry(operation.GameId, g.Name, true, null, installations, installations.FirstOrDefault()?.Id,
             g.Status, g.Rating, g.Favorite ?? false, g.Categories, g.Tags, g.Notes, reportedTotal, g.PlayCount ?? 0,
@@ -225,7 +266,7 @@ internal static class MigrationProjection
                 Favorite = old.Favorite || fields.Contains("favorite"),
                 Categories = fields.Contains("categories") ? [.. old.Categories.Concat(g.Categories).Distinct(StringComparer.Ordinal)] : old.Categories,
                 CustomTags = fields.Contains("tags") ? [.. old.CustomTags.Concat(g.Tags).Distinct(StringComparer.Ordinal)] : old.CustomTags,
-                LastPlayedAt = fields.Contains("lastPlayed") ? NativeSession.Format(g.LastPlayed!.Value) : old.LastPlayedAt,
+                LastPlayedAt = fields.Contains("lastPlayed") ? NativeSession.Format((fields.Contains("history-add") || fields.Contains("history-dates") ? MigrationHistoryDates.LastPlayed(g) : g.LastPlayed)!.Value) : old.LastPlayedAt,
                 TotalPlaySeconds = fields.Contains("history") ? reportedTotal : old.TotalPlaySeconds,
                 Sessions = fields.Contains("history") ? history : old.Sessions,
                 ManualPlaytime = fields.Contains("history") ? manual : old.ManualPlaytime,
@@ -239,27 +280,49 @@ internal static class MigrationProjection
                 // undated historical remainder changes; never manufacture daily rows.
                 e = e with { TotalPlaySeconds = g.TotalSeconds - old.ManualPlaytime.Where(m => !m.Undone).Sum(m => m.Seconds) };
             }
+            if (fields.Contains("history-add") || fields.Contains("history-dates"))
+            {
+                var repair = fields.Contains("history-dates") && MigrationHistoryDates.CanRepair(old, dataset.Manager, g);
+                if (!repair && (operation.Review?.History != ImportHistoryChoice.AddSourceTotal || !MigrationReview.CanAddSourceTotal(old, dataset.Manager, g)))
+                    throw new InvalidDataException("Historical addition requires explicit review.");
+                var addition = MigrationHistoryDates.Build(old, dataset.Manager, g, now);
+                if (repair && addition.AdditionalSeconds != 0) throw new InvalidDataException("Date repair cannot add time.");
+                e = e with { TotalPlaySeconds = checked(old.TotalPlaySeconds + addition.AdditionalSeconds - MigrationHistoryDates.AddedDailySeconds(old, addition)),
+                    Sessions = addition.Sessions, ManualPlaytime = addition.ManualPlaytime };
+                dateCoverage = addition.Coverage;
+            }
         }
         var sourceFields = new Dictionary<string, string>
         { ["name"] = "Name.Value", ["status"] = "PlayType", ["rating"] = "MyRate", ["favorite"] = "source favorite", ["categories"] = "data.categoryGroups.json", ["tags"] = "Tags.Value", ["notes"] = "Comment", ["installations"] = "data.galgameSources.json / Path / ExePath", ["history"] = "TotalPlayTime / PlayedTime", ["history-total"] = "TotalPlayTime; explicitly reviewed cumulative total", ["lastPlayed"] = "LastPlayTime", ["addedAt"] = "AddTime", ["lineage"] = "Uuid / Ids / OriginalName / ChineseName" };
+        sourceFields["history-add"] = "source cumulative seconds; explicitly reviewed addition, deduplicated by source record";
+        sourceFields["history-dates"] = "dated history of a previously reviewed addition; total unchanged";
+        sourceFields["history-pending"] = "unresolved cumulative time conflict; no time mutation";
+        if (dataset.Manager != "potatovn")
+            foreach (var field in sourceFields.Keys.ToArray()) sourceFields[field] = dataset.Format + ": " + field;
         var origin = new MigrationOrigin(dataset.Manager, g.SourceId, ImportHash.Of(g), dataset.DocumentDigest, dataset.Format, now,
             g.OriginalName, g.Aliases, g.Identities, [.. operation.Fields.Select(f => new ImportedField(f, sourceFields[f], ImportHash.Of(new { f, value = Value(e, f), g.OriginalName, g.Aliases, g.Identities })))],
-            g.Precision switch { ImportTimePrecision.DailyAggregate => "daily-aggregate", ImportTimePrecision.Sessions => "sessions", _ => "undated-total" },
-            g.TotalSeconds, g.PlayCount, g.LocalLastPlayed, g.LocalAddedAt, g.Edition, dataset.SourceTimeZone);
+            g.Precision switch { ImportTimePrecision.DailyAggregate => "daily-aggregate", ImportTimePrecision.Sessions => "sessions", ImportTimePrecision.SessionsAndDailyAggregate => "sessions-and-daily-aggregate", _ => "undated-total" },
+            g.TotalSeconds, g.PlayCount, g.LocalLastPlayed, g.LocalAddedAt, g.Edition, dataset.SourceTimeZone) { HistoryDates = dateCoverage };
         if (operation.Review is { } review)
             origin = origin with { Review = new(ImportHash.Of(g), dataset.DocumentDigest, review.TargetKey!, review.IdentityAndVersionConfirmed,
-                review.History == ImportHistoryChoice.UseSourceTotal ? "use-source-total" : "keep-existing", old?.EffectivePlaySeconds ?? 0, e.EffectivePlaySeconds, now) };
+                review.History == ImportHistoryChoice.AddSourceTotal ? "add-source-total" : review.History == ImportHistoryChoice.UseSourceTotal ? "use-source-total" : "keep-existing", old?.EffectivePlaySeconds ?? 0, e.EffectivePlaySeconds, now)
+                { AccountedSourceSeconds = review.History == ImportHistoryChoice.AddSourceTotal
+                    ? Math.Max(g.TotalSeconds, old is null ? 0 : MigrationReview.SourceSecondsAlreadyAccounted(old, dataset.Manager, g))
+                : review.History == ImportHistoryChoice.UseSourceTotal ? g.TotalSeconds
+                : old?.MigrationOrigins.FirstOrDefault(o => o.Manager == dataset.Manager && o.RecordId == g.SourceId)?.Review?.AccountedSourceSeconds } };
         var previous = e.MigrationOrigins.FirstOrDefault(o => o.Manager == dataset.Manager && o.RecordId == g.SourceId);
         return e with { MigrationOrigins = previous is null ? e.MigrationOrigins.Add(origin)
             : e.MigrationOrigins.Replace(previous, previous with {
+                Fields = operation.Fields.Contains("history-pending") && !previous.Fields.Any(f => f.Target == "history-pending")
+                    ? previous.Fields.Add(origin.Fields.Single(f => f.Target == "history-pending")) : previous.Fields,
                 ProgressUpdate = operation.Fields.Contains("status") ? new(e.Status, dataset.DocumentDigest, ImportHash.Of(g), now) : previous.ProgressUpdate,
-                Review = origin.Review ?? previous.Review }) };
+                Review = origin.Review ?? previous.Review, HistoryDates = origin.HistoryDates ?? previous.HistoryDates }) };
     }
     private static object? Value(LibraryEntry e, string field) => field switch
     {
         "name" => e.Name, "status" => e.Status, "rating" => e.PersonalRating, "favorite" => e.Favorite,
         "categories" => e.Categories, "tags" => e.CustomTags, "notes" => e.Notes, "installations" => e.Installations,
-        "history" or "history-total" => new { e.TotalPlaySeconds, e.ManualPlaytime, e.Sessions, e.PlayCount }, "lastPlayed" => e.LastPlayedAt,
+        "history" or "history-total" or "history-add" or "history-dates" => new { e.TotalPlaySeconds, e.ManualPlaytime, e.Sessions, e.PlayCount }, "lastPlayed" => e.LastPlayedAt,
         "addedAt" => e.AddedAt, _ => null
     };
 }

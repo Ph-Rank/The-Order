@@ -9,14 +9,22 @@ namespace TheOrder.Application.Migrations;
 
 public enum ImportMatch { Confirmed, Candidate, Unmatched, Conflict }
 public enum ImportAction { Create, FillMissing, Skip, AlreadyImported }
-public enum ImportTimePrecision { UndatedTotal, DailyAggregate, Sessions }
-public enum ImportHistoryChoice { KeepExisting, UseSourceTotal }
+public enum ImportTimePrecision { UndatedTotal, DailyAggregate, Sessions, SessionsAndDailyAggregate }
+public enum ImportHistoryChoice { KeepExisting, UseSourceTotal, AddSourceTotal }
 public sealed record ImportReviewDecision(string RecordKey, string? TargetKey, bool IdentityAndVersionConfirmed = false,
     ImportHistoryChoice History = ImportHistoryChoice.KeepExisting);
 public sealed record ImportReviewCandidate(string TargetKey, string Name, string CatalogName, string Status, long TotalSeconds,
     ImmutableArray<ImportedIdentity> Identities, ImmutableArray<string> Folders, bool ExactInstallation, bool CanUseSourceTotal,
-    bool NotesConflict, bool RatingConflict, int InstallationCount);
+    bool NotesConflict, bool RatingConflict, int InstallationCount)
+{
+    public bool CanAddSourceTotal { get; init; } = true;
+    public long AdditionalSourceSeconds { get; init; }
+    public long NewlyDatedSeconds { get; init; }
+    public long DuplicateSessionSeconds { get; init; }
+    public ImmutableArray<string> HistoryWarnings { get; init; } = [];
+}
 public sealed record ImportIssue(string RecordKey, string Field, string Code);
+public sealed record ImportExclusion(string RecordKey, string Name, string Reason);
 public sealed record ImportDay(DateOnly Date, long Seconds);
 public sealed record ImportSession(string SourceId, DateTimeOffset Start, DateTimeOffset End, long Seconds);
 public sealed record ImportInstallation(string SourceId, string Folder, string? Executable, string? Edition = null);
@@ -28,16 +36,21 @@ public sealed record ImportGame(string SourceId, string Name, string OriginalNam
     string? LocalLastPlayed, string? LocalAddedAt, string? Edition, ImmutableArray<ImportIssue> Issues)
 {
     public bool NeedsReview { get; init; }
-    public ImportTimePrecision Precision => !Sessions.IsEmpty ? ImportTimePrecision.Sessions : !Days.IsEmpty ? ImportTimePrecision.DailyAggregate : ImportTimePrecision.UndatedTotal;
+    public ImportTimePrecision Precision => !Sessions.IsEmpty && !Days.IsEmpty ? ImportTimePrecision.SessionsAndDailyAggregate : !Sessions.IsEmpty ? ImportTimePrecision.Sessions : !Days.IsEmpty ? ImportTimePrecision.DailyAggregate : ImportTimePrecision.UndatedTotal;
 }
 public sealed record ImportDataset(string Manager, string Format, string DocumentDigest, int RawCount,
     ImmutableArray<ImportGame> Games, ImmutableArray<ImportIssue> Issues)
 {
     public string? SourceTimeZone { get; init; }
+    public ImmutableArray<ImportExclusion> Exclusions { get; init; } = [];
 }
 public sealed record ImportRow(string RecordKey, ImportMatch Match, ImportAction Action, string? TargetKey,
     ImmutableArray<string> Reasons, ImmutableArray<string> Fields)
 {
+    public long HistoryAdditionalSeconds { get; init; }
+    public long HistoryNewlyDatedSeconds { get; init; }
+    public long HistoryDeduplicatedSeconds { get; init; }
+    public ImmutableArray<string> HistoryWarnings { get; init; } = [];
     public ImmutableArray<string> CandidateKeys { get; init; } = [];
     public string? StatusBefore { get; init; }
     public string? StatusAfter { get; init; }
@@ -51,7 +64,7 @@ public sealed class MigrationPlan
     {
         Dataset = dataset; TargetDigest = targetDigest; TargetScope = targetScope; Rows = rows; Operations = operations;
         Reviews = reviews.IsDefault ? [] : reviews;
-        Id = ImportHash.Of(new { policy = 3, dataset.Manager, dataset.Format, dataset.DocumentDigest, dataset.SourceTimeZone, Reviews,
+        Id = ImportHash.Of(new { policy = 5, dataset.Manager, dataset.Format, dataset.DocumentDigest, dataset.SourceTimeZone, Reviews,
             normalized = ImportHash.Of(dataset.Games), targetDigest, targetScope,
             rows = rows.Select(r => new { r.RecordKey, r.Match, r.Action, r.TargetKey, r.Reasons, r.Fields, r.CandidateKeys,
                 r.StatusBefore, r.StatusAfter, r.HumanReviewed, reviewTargets = r.ReviewCandidates.Select(c => c.TargetKey) }) });
@@ -111,9 +124,12 @@ public static class ImportModel
     public const int MaximumGames = 10000;
     public static void Validate(ImportDataset d)
     {
-        if (d.Manager != "potatovn" || d.Format != "potatovn-export-json-v1" || !MigrationLineage.Digest(d.DocumentDigest)
+        if (!MigrationFormats.Valid(d.Manager, d.Format) || !MigrationLineage.Digest(d.DocumentDigest)
             || d.Games.IsDefault || d.Games.Length > MaximumGames || d.RawCount < d.Games.Length || d.RawCount > MaximumGames
-            || d.Issues.IsDefault || d.Issues.Length > 100000) throw new InvalidDataException("Invalid import dataset.");
+            || d.Issues.IsDefault || d.Issues.Length > 100000 || d.Exclusions.IsDefault || d.Exclusions.Length > d.RawCount
+            || d.Exclusions.Any(e => e is null || e.Name.Length is 0 or > 2000 || e.Name.Contains('\0')
+                || e.RecordKey.Length != 20 || !e.RecordKey.All(Uri.IsHexDigit) || e.Reason != "NON_GALGAME_OR_UNVERIFIED_IDENTITY_EXCLUDED"))
+            throw new InvalidDataException("Invalid import dataset.");
         foreach (var g in d.Games)
         {
             if (g is null || string.IsNullOrWhiteSpace(g.SourceId) || g.SourceId.Length > 200 || string.IsNullOrWhiteSpace(g.Name) || g.Name.Length > 2000
@@ -128,9 +144,9 @@ public static class ImportModel
             foreach (var i in g.Installations)
                 if (ImportPaths.Folder(i.Folder) is null || i.Executable is not null && ImportPaths.Executable(i.Folder, i.Executable) != i.Executable)
                     throw new InvalidDataException("Unsafe import installation.");
-            if (g.Days.Select(x => x.Date).Distinct().Count() != g.Days.Length || g.Days.Any(x => x.Seconds is <= 0 or > 86400)
-                || !g.Days.IsEmpty && !g.Sessions.IsEmpty
-                || g.Sessions.Any(x => x.End <= x.Start || (x.End - x.Start).TotalDays > 366 || x.Seconds <= 0 || x.Seconds > (x.End - x.Start).TotalSeconds)
+            if (g.Days.Any(x => x is null) || g.Days.Select(x => x.Date).Distinct().Count() != g.Days.Length || g.Days.Any(x => x.Seconds is <= 0 or > 86400)
+                || g.Sessions.Any(x => x is null || string.IsNullOrWhiteSpace(x.SourceId) || x.SourceId.Length > 200 || x.SourceId.Any(char.IsControl)
+                    || x.End <= x.Start || (x.End - x.Start).TotalDays > 366 || x.Seconds <= 0 || x.Seconds > (x.End - x.Start).TotalSeconds)
                 || g.Sessions.Select(x => x.SourceId).Distinct().Count() != g.Sessions.Length
                 || g.Days.Sum(x => x.Seconds) + g.Sessions.Sum(x => x.Seconds) > g.TotalSeconds)
                 throw new InvalidDataException("Inconsistent source time accounting.");

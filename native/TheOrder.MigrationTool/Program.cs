@@ -24,26 +24,41 @@ static async Task<int> Run(string[] args, CancellationToken cancellation)
 {
     if (args.Length == 0 || args[0] is "help" or "--help")
     {
-        Console.WriteLine("The Order migration core (Test only)\npreview --source FILE [--target TEST_DIR] [--source-time-zone ZONE] [--out NEW_REPORT_DIR]\ninit-test --target NEW_TEST_DIR\napply --source FILE --target TEST_DIR --commit PLAN_SHA256 [--source-time-zone ZONE] [--out NEW_REPORT_DIR]\ndetect --source FILE\ndemo --out NEW_LAB_DIR\nOptions without a command default to preview. No Production mode; no network or game directory probing."); return 0;
+        Console.WriteLine("The Order migration core (Test only)\npreview --source BACKUP.zip [--target TEST_DIR] [--source-time-zone ZONE] [--out NEW_REPORT_DIR]\ninit-test --target NEW_TEST_DIR\napply --source BACKUP.zip --target TEST_DIR --commit PLAN_SHA256 [--source-time-zone ZONE] [--out NEW_REPORT_DIR]\ndetect --source BACKUP.zip\nexport --source THE_ORDER_BACKUP.json --manager potatovn|vnite|reinamanager|playnite|lunabox --out NEW_DIR\ndemo --out NEW_LAB_DIR\nOptions without a command default to preview. No Production mode; no network or game directory probing."); return 0;
     }
     var command = args[0].StartsWith("--", StringComparison.Ordinal) ? "preview" : args[0];
     var options = new Dictionary<string, string>(StringComparer.Ordinal);
     for (var i = command == args[0] ? 1 : 0; i < args.Length; i += 2)
     {
-        if (i + 1 >= args.Length || args[i] is not ("--source" or "--target" or "--commit" or "--out" or "--source-time-zone") || !options.TryAdd(args[i], args[i + 1])) throw new ArgumentException("Invalid command options.");
+        if (i + 1 >= args.Length || args[i] is not ("--source" or "--target" or "--commit" or "--out" or "--source-time-zone" or "--manager") || !options.TryAdd(args[i], args[i + 1])) throw new ArgumentException("Invalid command options.");
     }
     string Need(string key) => options.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : throw new ArgumentException("Explicit input required.");
     var codec = new NativeLibraryCodec();
     if (command == "init-test") { if (options.Count != 1) throw new ArgumentException(); MigrationTestTarget.Create(Need("--target"), codec); Console.WriteLine("{\"status\":\"CREATED\",\"profileKind\":\"Test\"}"); return 0; }
     if (command == "demo") { if (options.Count != 1) throw new ArgumentException(); await Demo(Need("--out"), cancellation); return 0; }
+    if (command == "export")
+    {
+        if (options.Count != 3) throw new ArgumentException("Export requires source, manager and a fresh output directory.");
+        var entries = MigrationTestTarget.ReadLibraryBackup(Need("--source"), codec);
+        var package = await new ManagerArchiveWriter().CreateAsync(Need("--manager"), entries, cancellation);
+        var directory = Path.GetFullPath(Need("--out")); NewDirectory(directory);
+        var filename = package.Manager == "potatovn" ? "the-order.pvnExport.zip" : "the-order-" + package.Manager + ".zip";
+        using var output = new FileStream(Path.Combine(directory, filename), FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        await output.WriteAsync(package.Archive, cancellation); output.Flush(true);
+        Console.WriteLine(JsonSerializer.Serialize(new { status = "EXPORTED", manager = package.Manager, entries = package.Entries, package.Sha256, notices = package.Notices })); return 0;
+    }
     if (command is not ("preview" or "detect" or "apply") || command != "apply" && options.ContainsKey("--commit")) throw new ArgumentException();
+    if (options.ContainsKey("--manager")) throw new ArgumentException("Manager selection is for export only.");
     if (options.TryGetValue("--out", out var requestedReport))
     {
         var safeReport = NativeProfilePaths.Validate(new(NativeProfileKind.Test, Path.GetFullPath(requestedReport)));
         if (Directory.Exists(safeReport) || File.Exists(safeReport)) throw new InvalidOperationException("Fresh report output required before any commit.");
     }
     var zone = options.TryGetValue("--source-time-zone", out var zoneId) ? TimeZoneInfo.FindSystemTimeZoneById(zoneId) : null;
-    var data = await MigrationTestTarget.ReadSourceAsync(Need("--source"), new PotatoVnImportAdapter(zone), cancellation);
+    var indexPath = Path.Combine(AppContext.BaseDirectory, "data", "title-index.json.gz");
+    var index = File.Exists(indexPath) ? new TheOrder.Infrastructure.Recognition.TitleIndex(() => File.OpenRead(indexPath)) : null;
+    var data = await MigrationTestTarget.ReadSourceAsync(Need("--source"), Path.GetExtension(Need("--source")).Equals(".json", StringComparison.OrdinalIgnoreCase)
+        ? new PotatoVnImportAdapter(zone) : new ManagerImportAdapter(index, sourceTimeZone: zone), cancellation);
     var before = options.TryGetValue("--target", out var target) ? MigrationTestTarget.Preview(target, codec) : new LibraryDocument(LibraryAccess.ValidWritable, [], null);
     if (before.Access != LibraryAccess.ValidWritable) throw new InvalidDataException("Target is not writable.");
     var plan = target is not null ? MigrationTestTarget.PreviewPlan(target, data, codec, cancellation) : MigrationResolver.Preview(data, before.Entries, codec, cancellation);
@@ -114,6 +129,7 @@ static async Task Demo(string directory, CancellationToken cancellation)
     SaveReport(Path.Combine(root,"preview"),MigrationReport.Json(plan,0),MigrationReport.Markdown(plan,0));
     var committed=(await MigrationTestTarget.ApplyAsync(target,data,plan.Id,codec,cancellation)).Value;
     var after=MigrationTestTarget.Preview(target,codec); var statistics=PlaytimeStatistics.Build(after.Entries,TimeZoneInfo.Utc);
+    await File.WriteAllBytesAsync(Path.Combine(root,"native-backup.json"),codec.Encode(after.Entries,"2026-10-19T01:00:00.000Z"),cancellation);
     if(after.Entries.Length!=2||after.Entries[0].Installations.Length!=2||statistics.TotalSeconds!=14520||statistics.UnknownSeconds!=10920||statistics.Days.Length!=1)
         throw new InvalidDataException("Demo accounting invariant failed.");
     SaveReport(Path.Combine(root,"committed"),MigrationReport.Json(plan,0,committed),MigrationReport.Markdown(plan,0,committed));

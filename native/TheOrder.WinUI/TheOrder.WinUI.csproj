@@ -35,6 +35,7 @@
     <Content Include="../../data/LICENSE-PotatoDBMapper.txt" Link="data/LICENSE-PotatoDBMapper.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../licenses/UNICODE-LICENSE.txt" Link="LICENSE-Unicode.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../licenses/MARKDIG-LICENSE.txt" Link="LICENSE-Markdig.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../licenses/LITEDB-LICENSE.txt;../licenses/LEVELDB-LICENSE.txt;../licenses/SNAPPY-LICENSE.txt;../licenses/REINAMANAGER-LICENSE.txt;../licenses/LUNABOX-LICENSE.txt" Link="licenses/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.12" />

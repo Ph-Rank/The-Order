@@ -57,8 +57,8 @@ public static class MigrationTestTarget
     public static async Task<ImportDataset> ReadSourceAsync(string explicitFile, ILibraryMigrationAdapter adapter, CancellationToken cancellation = default)
     {
         var path = Path.GetFullPath(explicitFile);
-        if (!path.EndsWith(".pvnExport.zip", StringComparison.OrdinalIgnoreCase) && !Path.GetFileName(path).Equals("data.galgames.json", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("ONLY_EXPLICIT_POTATOVN_EXPORT_FILES_SUPPORTED");
+        if (!path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && !Path.GetFileName(path).Equals("data.galgames.json", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("ONLY_EXPLICIT_MANAGER_BACKUPS_SUPPORTED");
         var parent = Path.GetDirectoryName(path) ?? throw new InvalidDataException("SOURCE_DIRECTORY_REQUIRED");
         // Same lexical namespace and physical-link protections as Native Test profiles, without creating one.
         NativeProfilePaths.Validate(new(NativeProfileKind.Test, parent));
@@ -77,5 +77,14 @@ public static class MigrationTestTarget
         using var file = IsolatedLibrarySource.OpenChecked(path);
         if (file.Length > maximum) throw new InvalidDataException("MIGRATION_MARKER_SIZE_LIMIT");
         var bytes = new byte[(int)file.Length]; file.ReadExactly(bytes); return bytes;
+    }
+    public static ImmutableArray<LibraryEntry> ReadLibraryBackup(string explicitFile, ILibraryCodec codec)
+    {
+        var path = Path.GetFullPath(explicitFile);
+        if (!path.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("NATIVE_BACKUP_JSON_REQUIRED");
+        var parent = Path.GetDirectoryName(path)!; NativeProfilePaths.Validate(new(NativeProfileKind.Test, parent));
+        var held = IsolatedLibraryPersistence.PinDirectoryChain(parent);
+        try { return codec.Decode(ReadPlain(path, 32 * 1024 * 1024)); }
+        finally { foreach (var pin in held) pin.Dispose(); }
     }
 }

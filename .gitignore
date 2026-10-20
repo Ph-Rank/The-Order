@@ -8,6 +8,7 @@ node_modules/
 *.zip
 *.7z
 *.rar
+!native/fixtures/migration/interchange/*.zip
 
 # Test results, diagnostics, screenshots and caches
 /.artifacts/

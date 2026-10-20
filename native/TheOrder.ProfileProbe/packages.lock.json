@@ -2,6 +2,34 @@
   "version": 1,
   "dependencies": {
     "net10.0-windows10.0.26100": {
+      "LevelDB.Standard": {
+        "type": "Transitive",
+        "resolved": "2.1.6.1",
+        "contentHash": "NCaKNLhGcGXdXaTaMMVOziK1OM8ggJuIMFOUo/eJZQJAlF/mA72jBBDDCm2bsQb+t5HRp2/Sbb4HOjG2NpEogw=="
+      },
+      "LiteDB": {
+        "type": "Transitive",
+        "resolved": "4.1.4",
+        "contentHash": "g4g9JlHzRBZl+Gd2UbiRdszZ7t8wozU2wX7+5xY5uE79tmcgcDhha+ubAP84G1VLbwQmhBGCzRfIx+epLmJciQ=="
+      },
+      "Microsoft.Data.Sqlite": {
+        "type": "Transitive",
+        "resolved": "10.0.13",
+        "contentHash": "w37nz3WFmDtRfXxWEwIXX2OgqDRiwhD1JGbFwfpFCF8GkCrV/yO6Y2JF5058J2RGoI2sCcdn02wrk0yEcekWcw==",
+        "dependencies": {
+          "Microsoft.Data.Sqlite.Core": "10.0.13",
+          "SQLitePCLRaw.bundle_e_sqlite3": "2.1.13",
+          "SQLitePCLRaw.core": "2.1.13"
+        }
+      },
+      "Microsoft.Data.Sqlite.Core": {
+        "type": "Transitive",
+        "resolved": "10.0.13",
+        "contentHash": "Gge8XsSCOwcbkbdmt2UDAe6kIv9Q0vA6yb3wsTStjjexaMFLTWfc/1gH4kbhJ+zWiXRTRA4lG2sOQNVfir204w==",
+        "dependencies": {
+          "SQLitePCLRaw.core": "2.1.13"
+        }
+      },
       "Microsoft.Windows.AI.MachineLearning": {
         "type": "Transitive",
         "resolved": "2.1.74",
@@ -56,6 +84,41 @@
           "Microsoft.WindowsAppSDK.Foundation": "2.3.12"
         }
       },
+      "SQLite": {
+        "type": "Transitive",
+        "resolved": "3.53.4",
+        "contentHash": "KN7jeWqgUPeBRe1FlcpZURzxomuKKEKHmBBQfg+Nx7NkY1LjKhzHvH+3ASkNvhayESE34nMBinL9CV21JfPRJw=="
+      },
+      "SQLitePCLRaw.bundle_e_sqlite3": {
+        "type": "Transitive",
+        "resolved": "3.0.5",
+        "contentHash": "SW8iASIyWMrLzqabUHYQRvALhvD4ylSBsj4PgEVGwc36kQjc9xT5kSV/XQ9rU7nIpBWD+LPyX3Hlw5FzyUzGeQ==",
+        "dependencies": {
+          "SQLite": "3.53.4",
+          "SQLitePCLRaw.config.e_sqlite3": "3.0.5"
+        }
+      },
+      "SQLitePCLRaw.config.e_sqlite3": {
+        "type": "Transitive",
+        "resolved": "3.0.5",
+        "contentHash": "aSk8WE5tF2MybESMgtZAEyMVCAWA0nBqOMc48HFoa9UoSdtm3goDXVzNRnefeKIwE6bV9NaNXptn1F9ReMQI0Q==",
+        "dependencies": {
+          "SQLitePCLRaw.provider.e_sqlite3": "3.0.5"
+        }
+      },
+      "SQLitePCLRaw.core": {
+        "type": "Transitive",
+        "resolved": "3.0.5",
+        "contentHash": "k81AYXXRCw3Zj8rOhyBoCsx/U97KYDFI2CSKr/ijl5BwpsW/hX/4kBiDmerFaoust8nxBwa0IHQFw8MmSHRtnQ=="
+      },
+      "SQLitePCLRaw.provider.e_sqlite3": {
+        "type": "Transitive",
+        "resolved": "3.0.5",
+        "contentHash": "um8YSWduhhuskTG2bHfZrBqMNQOydfU8pcseT+cu5RivOGyoUbCrGXxgoRNTmRYw2VbMWnEZVVFcneZT/5dsBg==",
+        "dependencies": {
+          "SQLitePCLRaw.core": "3.0.5"
+        }
+      },
       "System.Numerics.Tensors": {
         "type": "Transitive",
         "resolved": "9.0.0",
@@ -64,7 +127,7 @@
       "theorder.application": {
         "type": "Project",
         "dependencies": {
-          "TheOrder.Domain": "[1.0.2, )"
+          "TheOrder.Domain": "[1.2.1-beta.1, )"
         }
       },
       "theorder.domain": {
@@ -73,18 +136,27 @@
       "theorder.infrastructure": {
         "type": "Project",
         "dependencies": {
-          "TheOrder.Application": "[1.0.2, )"
+          "LevelDB.Standard": "[2.1.6.1, )",
+          "LiteDB": "[4.1.4, )",
+          "Microsoft.Data.Sqlite": "[10.0.13, )",
+          "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.5, )",
+          "TheOrder.Application": "[1.2.1-beta.1, )"
         }
       },
       "theorder.platform.windows": {
         "type": "Project",
         "dependencies": {
           "Microsoft.WindowsAppSDK.ML": "[2.1.94, )",
-          "TheOrder.Application": "[1.0.2, )"
+          "TheOrder.Application": "[1.2.1-beta.1, )"
         }
       }
     },
     "net10.0-windows10.0.26100/win-x64": {
+      "LevelDB.Standard": {
+        "type": "Transitive",
+        "resolved": "2.1.6.1",
+        "contentHash": "NCaKNLhGcGXdXaTaMMVOziK1OM8ggJuIMFOUo/eJZQJAlF/mA72jBBDDCm2bsQb+t5HRp2/Sbb4HOjG2NpEogw=="
+      },
       "Microsoft.Windows.AI.MachineLearning": {
         "type": "Transitive",
         "resolved": "2.1.74",
@@ -101,6 +173,11 @@
           "Microsoft.WindowsAppSDK.Base": "2.0.4",
           "Microsoft.WindowsAppSDK.InteractiveExperiences": "2.1.8"
         }
+      },
+      "SQLite": {
+        "type": "Transitive",
+        "resolved": "3.53.4",
+        "contentHash": "KN7jeWqgUPeBRe1FlcpZURzxomuKKEKHmBBQfg+Nx7NkY1LjKhzHvH+3ASkNvhayESE34nMBinL9CV21JfPRJw=="
       }
     }
   }

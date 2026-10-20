@@ -18,7 +18,7 @@ public sealed class LaunchFileDiscovery(IFilesystemIdentity identity, IScanFiles
         var root = identity.Inspect(folder);
         if (!root.IsValid) return new([], false, root.Message);
         var authorized = root.Observation!;
-        if (filesystem.IsForbiddenRoot(authorized)) return new([], true, UiText.Get("请选择具体游戏安装目录，不能浏览磁盘根目录或系统目录。"));
+        if (filesystem.IsForbiddenRoot(authorized)) return new([], true, UiText.Get("请选择游戏安装目录或数据盘，不能浏览系统盘根目录、系统目录或网络共享根目录。"));
         var stack = new Stack<(PathObservation Path, int Depth)>(); stack.Push((authorized, 0));
         var seen = new HashSet<FilesystemIdentity>(); var choices = new List<LaunchFileChoice>();
         int entries = 0, directories = 0; bool partial = false;
@@ -37,9 +37,11 @@ public sealed class LaunchFileDiscovery(IFilesystemIdentity identity, IScanFiles
                     if (item.IsReparsePoint) { partial = true; continue; }
                     if (item.IsDirectory)
                     {
+                        if (ScanDirectoryPolicy.SkipChild(next.Path, item.Name)) continue;
                         if (next.Depth >= 6) { partial = true; continue; }
                         var directory = identity.Inspect(item.Path);
-                        if (directory.IsValid && InScope(directory.Observation!)) stack.Push((directory.Observation!, next.Depth + 1));
+                        if (directory.IsValid && InScope(directory.Observation!))
+                        { if (!filesystem.IsForbiddenRoot(directory.Observation!)) stack.Push((directory.Observation!, next.Depth + 1)); }
                         else partial = true;
                     }
                     else if (IsLaunchFile(item.Name))

@@ -10,7 +10,7 @@ public sealed class WindowsLibraryMigrationSource(ILibraryMigrationAdapter adapt
         => Task.Run(async () =>
         {
             var path = Path.GetFullPath(selectedFile);
-            if (!path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("POTATOVN_ZIP_REQUIRED");
+            if (!path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("MANAGER_BACKUP_ZIP_REQUIRED");
             var parent = Path.GetDirectoryName(path) ?? throw new InvalidDataException("SOURCE_DIRECTORY_REQUIRED");
             // Reuse physical-path and protected-profile boundaries; never extract the archive or probe game paths.
             NativeProfilePaths.Validate(new(NativeProfileKind.Test, parent));
@@ -21,7 +21,7 @@ public sealed class WindowsLibraryMigrationSource(ILibraryMigrationAdapter adapt
                 if (file.Length > 512L * 1024 * 1024) throw new InvalidDataException("SOURCE_TOO_LARGE");
                 var magic = new byte[4];
                 if (await file.ReadAtLeastAsync(magic, 4, false, cancellation) != 4 || magic[0] != 'P' || magic[1] != 'K')
-                    throw new InvalidDataException("POTATOVN_ZIP_REQUIRED");
+                    throw new InvalidDataException("MANAGER_BACKUP_ZIP_REQUIRED");
                 file.Position = 0;
                 var hash = Convert.ToHexStringLower(await SHA256.HashDataAsync(file, cancellation)); file.Position = 0;
                 return await adapter.ReadAsync(file, hash, cancellation).ConfigureAwait(false);

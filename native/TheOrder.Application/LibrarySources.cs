@@ -74,10 +74,11 @@ public sealed class LibrarySourcesService(ILibrarySourcesStore store, IFilesyste
         {
             if (closing) throw new OperationCanceledException();
             var root = await Task.Run(() => identity.Inspect(path), cancellation).ConfigureAwait(false);
-            if (!root.IsValid || root.Observation!.ViaReparsePoint || filesystem.IsForbiddenRoot(root.Observation)) throw new InvalidDataException("请选择可读取的具体库目录，不能使用磁盘根目录、系统目录或目录链接。");
+            if (!root.IsValid || root.Observation!.ViaReparsePoint || filesystem.IsForbiddenRoot(root.Observation)) throw new InvalidDataException(UiText.Get("请选择可读取的库目录或数据盘，不能使用系统盘根目录、系统目录、网络共享根目录或目录链接。"));
             var prior = Sources;
             if (prior.Any(x => x.Root.Identity == root.Observation.Identity)) throw new InvalidDataException("这个库目录已经添加。");
-            var next = prior.Add(new(Guid.NewGuid().ToString("D"), kind, root.Observation)); Validate(next);
+            // A whole data volume can be checked explicitly, but never watched recursively in the background.
+            var next = prior.Add(new(Guid.NewGuid().ToString("D"), kind, root.Observation, !ScanDirectoryPolicy.IsDriveRoot(root.Observation))); Validate(next);
             await store.SaveAsync(next, cancellation).ConfigureAwait(false);
             lock (gate) { sources = next; dirty[next[^1].Id] = DateTimeOffset.MinValue; }
         }
@@ -90,6 +91,7 @@ public sealed class LibrarySourcesService(ILibrarySourcesStore store, IFilesyste
         {
             if (closing || !loaded) throw new OperationCanceledException();
             var prior = Sources; var root = prior.FirstOrDefault(x => x.Id == id) ?? throw new InvalidDataException("库目录不存在。");
+            if (watch == true && ScanDirectoryPolicy.IsDriveRoot(root.Root)) throw new InvalidDataException(UiText.Get("数据盘根目录仅支持手动检查；自动检查请选择具体游戏库文件夹。"));
             var next = watch is null ? prior.Remove(root) : prior.Replace(root, root with { Watch = watch.Value });
             await store.SaveAsync(next, cancellation).ConfigureAwait(false);
             lock (gate) { sources = next; dirty.Remove(id); scans = scans.RemoveAll(x => x.SourceId == id); if (watch == true) dirty[id] = DateTimeOffset.MinValue; }
@@ -187,7 +189,7 @@ public sealed class LibrarySourcesService(ILibrarySourcesStore store, IFilesyste
             throw new InvalidDataException("忽略记录最多保存 2000 项，请先恢复部分记录。");
         foreach (var x in value)
             if (!Guid.TryParseExact(x.Id, "D", out _) || !Enum.IsDefined(x.Kind) || x.Root is null || !x.Root.IsDirectory || x.Root.ViaReparsePoint || x.Root.StoredPath.Length > 32768 || x.Root.Identity is null
-                || x.Kind != LibrarySourceKind.Steam && x.ShowUnconfirmedSteam
+                || x.Kind != LibrarySourceKind.Steam && x.ShowUnconfirmedSteam || x.Watch && ScanDirectoryPolicy.IsDriveRoot(x.Root)
                 || x.IgnoredCandidates.Distinct(StringComparer.Ordinal).Count() != x.IgnoredCandidates.Length
                 || x.IgnoredCandidates.Any(k => k is null || k.Length != 64 || k.Any(c => c is not (>= '0' and <= '9') and not (>= 'A' and <= 'F'))))
                 throw new InvalidDataException("库目录记录无效。");

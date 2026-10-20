@@ -38,6 +38,13 @@ public sealed partial class MainWindow
         picker.FileTypeChoices.Add("JSON 书架备份", [".json"]);
         return (await picker.PickSaveFileAsync())?.Path;
     }
+    private async Task<string?> PickManagerExportDestination(string manager)
+    {
+        var picker = new FileSavePicker(AppWindow.Id)
+        { SuggestedFileName = $"The-Order-{manager}-{DateTime.Now:yyyyMMdd-HHmmss}" + (manager == "potatovn" ? ".pvnExport" : ""), DefaultFileExtension = ".zip", ShowOverwritePrompt = true };
+        picker.FileTypeChoices.Add("ZIP 兼容备份", [".zip"]);
+        return (await picker.PickSaveFileAsync())?.Path;
+    }
     private async Task RestoreLibraryAsync(LibraryRestorePreview preview, OfflineLibraryClient library)
     {
         if (commandsBlocked || !ViewModel.CanEdit || !await ResolveUnsavedAsync()) return;

@@ -1,0 +1,176 @@
+{
+  "users": {
+    "sql": "CREATE TABLE IF NOT EXISTS users (\n\t\t\tid TEXT PRIMARY KEY,\n\t\t\tcreated_at TIMESTAMPTZ,\n\t\t\tdefault_backup_target TEXT\n\t\t)",
+    "columns": [
+      "id",
+      "created_at",
+      "default_backup_target"
+    ]
+  },
+  "categories": {
+    "sql": "CREATE TABLE IF NOT EXISTS categories (\n\t\t\tid TEXT PRIMARY KEY,\n\t\t\tname TEXT,\n\t\t\temoji TEXT DEFAULT '',\n\t\t\tcreated_at TIMESTAMPTZ,\n\t\t\tupdated_at TIMESTAMPTZ,\n\t\t\tis_system BOOLEAN\n\t\t)",
+    "columns": [
+      "id",
+      "name",
+      "emoji",
+      "created_at",
+      "updated_at",
+      "is_system"
+    ]
+  },
+  "games": {
+    "sql": "CREATE TABLE IF NOT EXISTS games (\n\t\t\tid TEXT PRIMARY KEY,\n\t\t\tname TEXT,\n\t\t\taliases TEXT DEFAULT '[]',\n\t\t\tcover_url TEXT,\n\t\t\tcover_source_url TEXT DEFAULT '',\n\t\t\tcompany TEXT,\n\t\t\tsummary TEXT,\n\t\t\trating DOUBLE DEFAULT 0,\n\t\t\trelease_date TEXT DEFAULT '',\n\t\t\tpath TEXT,\n\t\t\tgame_directory TEXT DEFAULT '',\n\t\t\tsave_path TEXT,\n\t\t\tprocess_name TEXT DEFAULT '',\n\t\t\twine_runner TEXT DEFAULT '',\n\t\t\twine_args TEXT DEFAULT '',\n\t\t\twine_prefix TEXT DEFAULT '',\n\t\t\tlaunch_mode TEXT DEFAULT 'normal',\n\t\t\tsteam_launch_id TEXT DEFAULT '',\n\t\t\tsteam_launch_kind TEXT DEFAULT '',\n\t\t\tsteam_user_id TEXT DEFAULT '',\n\t\t\tsteam_launch_options TEXT DEFAULT '',\n\t\t\tstatus TEXT DEFAULT 'not_started',\n\t\t\tsource_type TEXT NOT NULL,\n\t\t\tcached_at TIMESTAMPTZ,\n\t\t\tsource_id TEXT,\n\t\t\tcreated_at TIMESTAMPTZ,\n\t\t\tupdated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,\n\t\t\tuse_locale_emulator BOOLEAN DEFAULT FALSE,\n\t\t\tuse_magpie BOOLEAN DEFAULT FALSE,\n\t\t\tis_nsfw BOOLEAN DEFAULT FALSE,\n\t\t\tmetadata_locked BOOLEAN DEFAULT FALSE\n\t\t)",
+    "columns": [
+      "id",
+      "name",
+      "aliases",
+      "cover_url",
+      "cover_source_url",
+      "company",
+      "summary",
+      "rating",
+      "release_date",
+      "path",
+      "game_directory",
+      "save_path",
+      "process_name",
+      "wine_runner",
+      "wine_args",
+      "wine_prefix",
+      "launch_mode",
+      "steam_launch_id",
+      "steam_launch_kind",
+      "steam_user_id",
+      "steam_launch_options",
+      "status",
+      "source_type",
+      "cached_at",
+      "source_id",
+      "created_at",
+      "updated_at",
+      "use_locale_emulator",
+      "use_magpie",
+      "is_nsfw",
+      "metadata_locked"
+    ]
+  },
+  "game_metadata_sources": {
+    "sql": "CREATE TABLE IF NOT EXISTS game_metadata_sources (\n\t\t\tgame_id TEXT NOT NULL,\n\t\t\tsource_type TEXT NOT NULL,\n\t\t\tsource_id TEXT NOT NULL,\n\t\t\tcached_at TIMESTAMPTZ,\n\t\t\tcreated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,\n\t\t\tupdated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,\n\t\t\tPRIMARY KEY (game_id, source_type)\n\t\t)",
+    "columns": [
+      "game_id",
+      "source_type",
+      "source_id",
+      "cached_at",
+      "created_at",
+      "updated_at"
+    ]
+  },
+  "game_categories": {
+    "sql": "CREATE TABLE IF NOT EXISTS game_categories (\n\t\t\tgame_id TEXT,\n\t\t\tcategory_id TEXT,\n\t\t\tupdated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,\n\t\t\tPRIMARY KEY (game_id, category_id)\n\t\t)",
+    "columns": [
+      "game_id",
+      "category_id",
+      "updated_at"
+    ]
+  },
+  "play_sessions": {
+    "sql": "CREATE TABLE IF NOT EXISTS play_sessions (\n\t\t\tid TEXT PRIMARY KEY,\n\t\t\tgame_id TEXT,\n\t\t\tstart_time TIMESTAMPTZ,\n\t\t\tend_time TIMESTAMPTZ,\n\t\t\tduration INTEGER,\n\t\t\tupdated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP\n\t\t)",
+    "columns": [
+      "id",
+      "game_id",
+      "start_time",
+      "end_time",
+      "duration",
+      "updated_at"
+    ]
+  },
+  "sync_tombstones": {
+    "sql": "CREATE TABLE IF NOT EXISTS sync_tombstones (\n\t\t\tentity_type TEXT NOT NULL,\n\t\t\tentity_id TEXT NOT NULL,\n\t\t\tparent_id TEXT DEFAULT '',\n\t\t\tsecondary_id TEXT DEFAULT '',\n\t\t\tdeleted_at TIMESTAMPTZ NOT NULL,\n\t\t\tPRIMARY KEY (entity_type, entity_id, parent_id, secondary_id)\n\t\t)",
+    "columns": [
+      "entity_type",
+      "entity_id",
+      "parent_id",
+      "secondary_id",
+      "deleted_at"
+    ]
+  },
+  "game_progress": {
+    "sql": "CREATE TABLE IF NOT EXISTS game_progress (\n\t\t\tid TEXT PRIMARY KEY,\n\t\t\tgame_id TEXT NOT NULL,\n\t\t\tchapter TEXT DEFAULT '',\n\t\t\troute TEXT DEFAULT '',\n\t\t\tprogress_note TEXT DEFAULT '',\n\t\t\tspoiler_boundary TEXT DEFAULT 'none',\n\t\t\tupdated_at TIMESTAMPTZ\n\t\t)",
+    "columns": [
+      "id",
+      "game_id",
+      "chapter",
+      "route",
+      "progress_note",
+      "spoiler_boundary",
+      "updated_at"
+    ]
+  },
+  "game_reviews": {
+    "sql": "CREATE TABLE IF NOT EXISTS game_reviews (\n\t\t\tgame_id TEXT PRIMARY KEY,\n\t\t\trating INTEGER,\n\t\t\tcontent TEXT NOT NULL DEFAULT '',\n\t\t\tis_spoiler BOOLEAN NOT NULL DEFAULT FALSE,\n\t\t\tcreated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,\n\t\t\tupdated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,\n\t\t\tCHECK (rating IS NULL OR (rating >= 1 AND rating <= 10))\n\t\t)",
+    "columns": [
+      "game_id",
+      "rating",
+      "content",
+      "is_spoiler",
+      "created_at",
+      "updated_at"
+    ]
+  },
+  "download_tasks": {
+    "sql": "CREATE TABLE IF NOT EXISTS download_tasks (\n\t\t\tid TEXT PRIMARY KEY,\n\t\t\trequest_json TEXT,\n\t\t\tstatus TEXT,\n\t\t\tprogress DOUBLE,\n\t\t\tdownloaded BIGINT,\n\t\t\ttotal BIGINT,\n\t\t\terror TEXT,\n\t\t\tfile_path TEXT,\n\t\t\tcreated_at TIMESTAMPTZ,\n\t\t\tupdated_at TIMESTAMPTZ\n\t\t)",
+    "columns": [
+      "id",
+      "request_json",
+      "status",
+      "progress",
+      "downloaded",
+      "total",
+      "error",
+      "file_path",
+      "created_at",
+      "updated_at"
+    ]
+  },
+  "game_tags": {
+    "sql": "CREATE TABLE IF NOT EXISTS game_tags (\n\t\t\tid          TEXT PRIMARY KEY,\n\t\t\tgame_id     TEXT NOT NULL,\n\t\t\tname        TEXT NOT NULL,\n\t\t\tsource      TEXT NOT NULL,\n\t\t\tweight      DOUBLE DEFAULT 1.0,\n\t\t\tis_spoiler  BOOLEAN DEFAULT FALSE,\n\t\t\tcreated_at  TIMESTAMPTZ,\n\t\t\tupdated_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,\n\t\t\tUNIQUE (game_id, name, source)\n\t\t)",
+    "columns": [
+      "id",
+      "game_id",
+      "name",
+      "source",
+      "weight",
+      "is_spoiler",
+      "created_at",
+      "updated_at"
+    ]
+  },
+  "cloud_sync_state": {
+    "sql": "CREATE TABLE IF NOT EXISTS cloud_sync_state (\n\t\t\tbucket_key TEXT PRIMARY KEY,\n\t\t\tlocal_hash TEXT NOT NULL,\n\t\t\tremote_hash TEXT NOT NULL,\n\t\t\tremote_revision_id TEXT NOT NULL,\n\t\t\tupdated_at TIMESTAMPTZ NOT NULL\n\t\t)",
+    "columns": [
+      "bucket_key",
+      "local_hash",
+      "remote_hash",
+      "remote_revision_id",
+      "updated_at"
+    ]
+  },
+  "game_filter_presets": {
+    "sql": "CREATE TABLE IF NOT EXISTS game_filter_presets (\n\t\t\tid TEXT PRIMARY KEY,\n\t\t\tname TEXT NOT NULL,\n\t\t\ttags TEXT NOT NULL DEFAULT '[]',\n\t\t\texclude_tags BOOLEAN NOT NULL DEFAULT FALSE,\n\t\t\tstatus TEXT NOT NULL DEFAULT '',\n\t\t\texclude_status BOOLEAN NOT NULL DEFAULT FALSE,\n\t\t\tmetadata_source TEXT NOT NULL DEFAULT '',\n\t\t\tsort_by TEXT NOT NULL DEFAULT '',\n\t\t\tsort_order TEXT NOT NULL DEFAULT '',\n\t\t\tsecondary_sort_by TEXT NOT NULL DEFAULT '',\n\t\t\tsecondary_sort_order TEXT NOT NULL DEFAULT '',\n\t\t\tcreated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,\n\t\t\tupdated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP\n\t\t)",
+    "columns": [
+      "id",
+      "name",
+      "tags",
+      "exclude_tags",
+      "status",
+      "exclude_status",
+      "metadata_source",
+      "sort_by",
+      "sort_order",
+      "secondary_sort_by",
+      "secondary_sort_order",
+      "created_at",
+      "updated_at"
+    ]
+  }
+}

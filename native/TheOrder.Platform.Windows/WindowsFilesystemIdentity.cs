@@ -32,8 +32,8 @@ public sealed class WindowsFilesystemIdentity : IFilesystemIdentity
             {
                 using var entry = Open(part, true);
                 if (entry.IsInvalid) return NativeFailure(Marshal.GetLastWin32Error(), alias);
-                if (!GetFileInformationByHandleEx(entry, 9, out AttributeTag info, (uint)Marshal.SizeOf<AttributeTag>()))
-                    return Failure(PreflightStatus.IdentityUnavailable, UiText.Get("无法检查目录的重解析信息。"), Marshal.GetLastWin32Error());
+                if (!TryAttributes(entry, out var info, out var error))
+                    return AttributeFailure(error, alias);
                 if ((info.Attributes & ReparseAttribute) == 0) continue;
                 alias = true; tag = info.Tag;
                 reparsePaths.Add(part);
@@ -41,25 +41,60 @@ public sealed class WindowsFilesystemIdentity : IFilesystemIdentity
             }
             using var handle = Open(display, false, requireDirectory);
             if (handle.IsInvalid) return NativeFailure(Marshal.GetLastWin32Error(), alias);
-            if (!GetFileInformationByHandleEx(handle, 9, out AttributeTag attributes, (uint)Marshal.SizeOf<AttributeTag>()))
-                return NativeFailure(Marshal.GetLastWin32Error(), alias);
+            if (!TryAttributes(handle, out var attributes, out var attributeError))
+                return AttributeFailure(attributeError, alias);
             bool directory = (attributes.Attributes & 0x10) != 0;
             if ((attributes.Attributes & ReparseAttribute) != 0 && attributes.Tag is not (Symlink or MountPoint))
                 return Failure(PreflightStatus.UnsupportedReparseCase, UiText.Get("最终目标属于不支持的重解析类型。"));
             if (requireDirectory && !directory) return Failure(PreflightStatus.FileInsteadOfDirectory, UiText.Get("所选路径是文件，请选择文件夹。"));
-            if (!GetFileInformationByHandleEx(handle, 18, out FileIdInfo identity, (uint)Marshal.SizeOf<FileIdInfo>()))
-                return Failure(PreflightStatus.IdentityUnavailable, UiText.Get("此文件系统不能提供可靠的 128 位文件身份，未允许写入安装关系。"), Marshal.GetLastWin32Error());
+            var key = ReadIdentity(handle, out var identityError);
+            if (key is null)
+                return Failure(PreflightStatus.IdentityUnavailable, UiText.Get("此文件系统不能提供可靠的文件身份，请选择其他目录。"), identityError);
             var final = new StringBuilder(32768);
             uint length = GetFinalPathNameByHandle(handle, final, (uint)final.Capacity, 0);
             if (length == 0 || length >= final.Capacity) return Failure(PreflightStatus.IdentityUnavailable, UiText.Get("无法取得句柄的最终路径。"), Marshal.GetLastWin32Error());
-            // FILE_ID_INFO is deliberately not narrowed to 64 bits (ReFS needs all 128).
-            var key = new FilesystemIdentity(identity.Volume.ToString("X16"), $"{identity.Low:X16}{identity.High:X16}");
             return new(PreflightStatus.Valid, new(storedPath, display, final.ToString(), key, directory, alias, tag) { ReparsePaths = reparsePaths.ToImmutable() }, UiText.Get("可用"));
         }
         catch (UnauthorizedAccessException) { return Failure(PreflightStatus.AccessDenied, UiText.Get("无权访问此目录，请选择可读取的目录。")); }
         catch (Exception e) when (e is IOException or ArgumentException or NotSupportedException)
         { return Failure(PreflightStatus.OtherIOError, UiText.Get("路径不可用或无法读取。")); }
     }
+    private static bool TryAttributes(SafeFileHandle handle, out AttributeTag attributes, out int error)
+    {
+        if (GetFileInformationByHandleEx(handle, 9, out attributes, (uint)Marshal.SizeOf<AttributeTag>())) { error = 0; return true; }
+        error = Marshal.GetLastWin32Error();
+        // FAT does not implement FileAttributeTagInfo/FileIdInfo. Only a volume which the same
+        // handle proves is FAT and incapable of reparse points may use the legacy attributes.
+        // Access errors, unknown drivers, NTFS/ReFS and unexpected reparse attributes stay closed.
+        if (!TryFatInformation(handle, error, out var legacy, out _)) return false;
+        attributes = new() { Attributes = legacy.Attributes }; error = 0; return true;
+    }
+    private static FilesystemIdentity? ReadIdentity(SafeFileHandle handle, out int error)
+    {
+        if (GetFileInformationByHandleEx(handle, 18, out FileIdInfo identity, (uint)Marshal.SizeOf<FileIdInfo>()))
+        {
+            // Preserve the existing full 128-bit identity, especially on ReFS.
+            error = 0; return new(identity.Volume.ToString("X16"), $"{identity.Low:X16}{identity.High:X16}");
+        }
+        error = Marshal.GetLastWin32Error();
+        if (!TryFatInformation(handle, error, out var legacy, out var serial)) return null;
+        var volumePath = new StringBuilder(32768);
+        var length = GetFinalPathNameByHandle(handle, volumePath, (uint)volumePath.Capacity, 1); // VOLUME_NAME_GUID
+        if (length == 0 || length >= volumePath.Capacity) { error = Marshal.GetLastWin32Error(); return null; }
+        return FatFilesystemIdentity.Create(volumePath.ToString(), serial, legacy.Attributes,
+            ((ulong)legacy.IndexHigh << 32) | legacy.IndexLow, ((ulong)legacy.CreationHigh << 32) | legacy.CreationLow);
+    }
+    private static bool TryFatInformation(SafeFileHandle handle, int error, out LegacyInformation legacy, out uint serial)
+    {
+        legacy = default; serial = 0;
+        if (error is not (1 or 50 or 87)) return false;
+        var fileSystem = new StringBuilder(64);
+        return GetVolumeInformationByHandle(handle, IntPtr.Zero, 0, out serial, out _, out var flags, fileSystem, (uint)fileSystem.Capacity)
+            && FatFilesystemIdentity.AllowsFallback(error, fileSystem.ToString(), flags)
+            && GetFileInformationByHandle(handle, out legacy) && legacy.Serial == serial && (legacy.Attributes & ReparseAttribute) == 0;
+    }
+    private static PathPreflight AttributeFailure(int error, bool alias) => error is 1 or 50 or 87
+        ? Failure(PreflightStatus.IdentityUnavailable, UiText.Get("无法检查目录的重解析信息。"), error) : NativeFailure(error, alias);
     private static SafeFileHandle Open(string path, bool noFollow, bool listDirectory = false) => CreateFile(path, listDirectory ? 0x81u : 0x80u, 7, IntPtr.Zero, 3, DirectoryFlag | (noFollow ? OpenReparse : 0), IntPtr.Zero);
     private static PathPreflight Failure(PreflightStatus status, string message, int error = 0) => new(status, null, message, error);
     private static PathPreflight NativeFailure(int error, bool alias) => error switch
@@ -71,12 +106,21 @@ public sealed class WindowsFilesystemIdentity : IFilesystemIdentity
     };
     [StructLayout(LayoutKind.Sequential)] private struct FileIdInfo { public ulong Volume, Low, High; }
     [StructLayout(LayoutKind.Sequential)] private struct AttributeTag { public uint Attributes, Tag; }
+    [StructLayout(LayoutKind.Sequential)] private struct LegacyInformation
+    {
+        public uint Attributes, CreationLow, CreationHigh, AccessLow, AccessHigh, WriteLow, WriteHigh,
+            Serial, SizeHigh, SizeLow, Links, IndexHigh, IndexLow;
+    }
     [DllImport("kernel32.dll", EntryPoint = "CreateFileW", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern SafeFileHandle CreateFile(string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
     [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetFileInformationByHandleEx(SafeFileHandle handle, int kind, out FileIdInfo info, uint size);
     [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetFileInformationByHandleEx(SafeFileHandle handle, int kind, out AttributeTag info, uint size);
+    [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetFileInformationByHandle(SafeFileHandle handle, out LegacyInformation info);
+    [DllImport("kernel32.dll", EntryPoint = "GetVolumeInformationByHandleW", CharSet = CharSet.Unicode, SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetVolumeInformationByHandle(SafeFileHandle handle, IntPtr name, uint nameCapacity, out uint serial, out uint maximumComponentLength, out uint flags, StringBuilder fileSystem, uint capacity);
     [DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern uint GetFinalPathNameByHandle(SafeFileHandle handle, StringBuilder path, uint capacity, uint flags);
 }

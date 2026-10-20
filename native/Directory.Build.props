@@ -18,4 +18,12 @@
     <Authors>The Order contributors</Authors>
     <Copyright>Copyright © 2026 The Order contributors</Copyright>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Playnite 10 requires LiteDB v4 on disk. The interchange adapter exclusively
+         reads raw BsonDocument values; it never uses POCO/object deserialization,
+         rejects _type recursively, and writes only application-generated documents.
+         GHSA-3x49-g6rc-c284's BsonMapper type-activation path is unreachable.
+         See docs/manager-interchange.md; do not use LiteDB outside this boundary. -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-3x49-g6rc-c284" />
+  </ItemGroup>
 </Project>

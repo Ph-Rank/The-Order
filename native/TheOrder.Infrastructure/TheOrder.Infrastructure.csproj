@@ -1,6 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="LiteDB" Version="4.1.4" />
+    <!-- Managed binding only. Its packaged Windows engine cannot read Snappy SST
+         blocks; ship the pinned, reproducibly built C API engine below. -->
+    <PackageReference Include="LevelDB.Standard" Version="2.1.6.1" ExcludeAssets="native;build;buildTransitive" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.13" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+  </ItemGroup>
   <ItemGroup><ProjectReference Include="../TheOrder.Application/TheOrder.Application.csproj" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="Legacy/LegacyUnicodeData.json" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Migration/Schemas/*" /></ItemGroup>
+  <ItemGroup><Content Include="Migration/Native/win-x64/leveldb.dll" Link="leveldb.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>
+  <ItemGroup><Content Include="Migration/Native/win-x64/build.json" Link="leveldb-build.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="Recognition/RecognitionUnicode.json" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="WatchData/*.json;WatchData/*.json.gz" /></ItemGroup>
   <ItemGroup><InternalsVisibleTo Include="TheOrder.Tests" /></ItemGroup>

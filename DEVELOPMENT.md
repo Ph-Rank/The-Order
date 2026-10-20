@@ -1,5 +1,47 @@
 # 开发与维护
 
+## 迁移日期合并（2026-10-20，已本机替换）
+
+已按用户后续授权完成本机程序替换，沿用版本 `1.2.1-beta.1`；未改真实书架、凭据或 Profile 路由。最终证据在 `.artifacts/migration-dated-daily-20261020/`：965 份受管载荷、3 份入口附件、更新基包及 5 份未知/路由文件元数据核对通过；29 项入口检查、标准 Setup 隔离安装、实际安装工具五管理器互通与日期合并合成冒烟通过。新 Codec 对 v6/v7 均可写，已安装核心五程序集与开发验收字节一致。没有普通 WinUI、Computer Use、真实游戏或真实用户迁移，未提交、推送或发布。
+
+本轮安装包 SHA-256 `44bcc14b732944e37091d16d2e0f4a52bcc84438b44e9ea7c72e917d2635a92b`，源码清单 SHA-256 `acfc723fe701979ada68bb0cc9c71f852aa773501c47425693c618e042a7df82`。D: 临时程序回退、重复载荷及独立测试安装在成功后清理，释放 3,318,998,561 字节；最终 Setup 与所有回执保留。以下为开发阶段说明，真实旧相加记录须由用户重选原 ZIP 并确认日期补全，不由代理自动处理。
+
+当前工作区仍为 `D:\Projects\The-Order-worktrees\manager-interchange-20261020`，基线 `854ff3f` 加既有未提交内容。本增量只修改迁移时长/日期、预览提示与对应验证；后续获授权的日用替换结果见上方。未授权真实资料读取、Git 提交、推送或发布；沿用隔离合成 Test Profile。
+
+`MigrationHistoryDates` 仅处理已验证的统一模型，复用原事务与统计聚合。相加保留来源日期/会话，未知余量不猜日期；源每日增长及可证实的会话延长只补差额。来源高水位和日期收据使用 NativeExtras v7，旧 v1–6 兼容，原 v6 客户端应只读 v7。ImportPlan 策略版本增至 5，使旧预览不能冒充新语义的同意。旧相加记录只有在原核验摘要相符时，才在重新导入预览中提供不增总量的日期补全。
+
+测试覆盖真实公开格式夹具与合成历史，证据 `.artifacts/migration-dated-history-20261020/`。使用既有 .NET SDK 和本地合成 Worker 运行完整客户端回归；不以 Mock 或单纯构建代替真实用户库验证，不为此次纯数据/提示变更启动 WinUI 或真实游戏。旧程序只读兼容探针只加载程序程序集和合成 JSON，不打开 Profile。
+
+完整回归 **4764/0/0**，日志/TRX 为 `full-tests-final/` 与同名日志。随后仅补旧 en-US 日历编号兼容和两条语言测试；最新源码定向 **287/0/0**（36 项新增）、WinUI x64 构建 **0 警告/0 错误**，分别见 `focused-final/`、`winui-build-latest.log`。`compatibility-latest/` 保存独立旧 Codec 只读检查和合成预览：总量 8,100 秒，有日期 6,000、未知 2,100、次数保持 2，重导幂等。真实 Native Test 导入前备份/重启、旧 v6 日期补全、撤销保护、真实格式及 10,000 天/10,000 会话规模测试均通过。
+
+早期完整回归及进程定向复核各有一项旧时序超时，原日志保留；另有一次复核提前启动与运行中的测试争用构建输出，未运行成有效测试。后续均串行运行；没有跳过用例、放宽时限或修改进程代码。最终完整重跑通过后，仅用相关回归覆盖追加语言补丁。源码未提交，不访问真实资料；开发阶段 WinUI 仅构建，后续隔离安装与程序替换不等于鼠标/键盘实际验收。
+
+## exFAT / 数据盘根目录（2026-10-20）
+
+本轮已按后续授权完成本机替换：版本 `1.2.1-beta.1`，965 份载荷、3 份附件、更新基包与入口校验通过，5 份未知/路由文件元数据未变。完整 **4730/0/0**、启动器 29/0、真实 exFAT 的隔离扫描/事务落盘/回读/重导、标准 Setup 隔离安装通过。已安装工具的合成迁移闭环与五目标兼容 ZIP 导出/实际原生 reader 回读通过；未运行普通 WinUI、真实游戏或打开 Production。源码仍未提交，冻结清单 `source-freeze-final.json` 与 Setup 哈希、安装和清理结果都在 `.artifacts/filesystem-compatibility-20261020/`；保留最终 Setup/源码证据，成功后移除本轮冗余载荷及 D: 临时程序回退，不在 C: 留新回退目录。
+
+最新实现仍在 `D:\Projects\The-Order-worktrees\manager-interchange-20261020`，继承本分支所有管理器互通变更。用户追加授权将这两轮更新一起替换日用程序；不授权访问真实资料或公开发布。版本保持 `1.2.1-beta.1`，以完整未提交源码清单绑定构建，不能只用 HEAD 代表候选。
+
+`WindowsFilesystemIdentity` 优先保留原 128 位文件身份；FAT 家族仅对信息类不支持错误启用句柄证明的兼容路径，检查卷能力、原生属性及 GUID，使用与 NTFS/ReFS 分隔的卷/索引/创建时间标识。禁止用路径哈希代替身份，也不把权限或重解析失败当作普通文件。改名、卷替换、缓存的候选过期仍须重新检查。Profile 持久化安全规则不改变。
+
+`ScanDirectoryPolicy` 统一盘根名称、排除目录及显式手动检查边界。数据盘根可选，系统盘根和网络共享根仍禁；既有扫描预算、取消、原子导入、目录租约和重复/父子目录检测不变。根目录有启动文件时视作一个安装，不同时列出其中子安装；普通游戏库文件夹仍支持自动发现。导入提示及三套界面翻译同步。
+
+测试只允许本次新建的合成目录；真实 E: exFAT 的卷根只读元数据，不可为了验证盘根而枚举已有整盘内容。测试文件系统模拟盘根枚举；实际 exFAT 合成子目录验证扫描、文件选择、重复与过期快照。证据根 `.artifacts/filesystem-compatibility-20261020/`，安装前完成全回归、标准 Setup 隔离验证及受管程序清单核对；日用进程未退出时不得覆盖或强杀。不得读取/复制 Profile 路由、真实书架或凭据；本次临时程序回退放在 D: 验证目录，成功核验后按用户清理偏好移除，不在 C: 累积历史备份。
+
+已修复 Beta 打包对稳定版块映射工具执行无关 restore 的问题。固定锁文件在各引用项目的 RID 目标不完全相同；如需重建资产，使用各项目对应 RID 的 `restore --locked-mode --no-dependencies`，不要 force-evaluate 或重写其他任务的锁文件。首轮辅助验证误把提交结果期望为 Success（实际 Committed）、PowerShell 将 null 字符串转换为空字符串、日期 JSON 去掉末尾小数零以及隔离安装核验引用了另一轮 launcher 字节的问题均为夹具问题；原日志保留，产品断言未放宽。最终回归与已安装字节绑定通过。挂载点标题仅取文件夹名，不将其本地父路径传作作品名称。
+
+## ZIP 互通增量（2026-10-20）
+
+最新开发在 `D:\Projects\The-Order-worktrees\manager-interchange-20261020` / `codex/manager-interchange-20261020`，基线 `854ff3f`，不覆盖其他工作区。支持固定版本五管理器 ZIP 的读取/预览及兼容导出；原生备份和事务复用。设置页先核验，再自动备份并提交；默认相加只是核验框中的首选，不会跳过用户确认。
+
+格式、字段损失和原生引擎验证见 `docs/manager-interchange.md`，用户步骤见 `docs/migration-trial.md`。NativeExtras v6 保护新谱系/时长语义；旧库兼容，回退程序前用新版恢复导入前备份。WinUI 的 `--manager-backup-reader` 是仅用于本机管道的短进程：在任何 Profile/WinUI 初始化前分流，90 秒/768 MiB 限制，不作为普通用户入口。
+
+测试运行需要既有固定 .NET 10 SDK。此工作区 `.artifacts/native-phase1/tools/dotnet` 仅为指向已有 D 盘 SDK 的 junction，不复制 SDK，不删除其目标。完整客户端测试通过 `services/bangumi-auth-worker/test/run-client-bridge.mjs --all-client-tests` 启动本地合成 Worker；需要本仓库锁定的 Electron 运行时供旧安全存储回归，不能把缺少依赖记作 PASS。无真实账号/Cloudflare 部署。迁移夹具均为公开结构和合成记录，CLI 目标仍限 Test。
+
+正式候选 publish 仍要求 `-p:NativeProductionCandidate=true`；这不授权代理打开 Production。测试明确设置 `THE_ORDER_NATIVE_PROFILE_KIND=Test` 与专用 D 盘目录，使用隔离启动器。此次不发布、不推送、不替换日用安装。
+
+最终完整客户端 **4693/0/0**，结果 `.artifacts/manager-interchange/final-tests-6/`。前轮一次进程跟踪用例超时，保留原日志，单独复测及完整重跑通过；未放宽断言。Vnite 引擎使用固定 LevelDB 1.23 / Snappy 1.2.2，普通构建只复制其锁定 DLL，重建方法及来源摘要见 `native/scripts/build-leveldb-snappy.ps1`。候选 `candidate-delivery/`，显式启动 `launch-test.ps1 -DataDirectory <专用空目录>`；本次源码未提交，确切源码及载荷摘要以同目录最终回执为准。
+
 ## PotatoVN 逐条核验（2026-10-19，当前开发）
 
 后续授权的本机替换已完成，应用源码 `5543bbc` / 版本 `1.2.1-beta.1`，不是一次公开发行。沿用已完成的 4651/0/0 源码回归；本次另验证标准载荷和独立安装，18 项实际候选程序集核验/备份/重启检查、29 项启动器检查、8 步无 SDK 工具及 7 步进度闭环。最终以 `.artifacts/migration-review-daily-20261019/installation-receipt.json`、本机工具检查和 `completion.json` 为准；929 份载荷、3 份附件与更新基包核对，937 份旧程序备份保留，5 份未知文件不改动。程序回退与书架恢复分开：核验导入写 v5 后，如需退旧版，先在新版恢复导入前备份。没有运行正常 WinUI、访问真实 Profile、推送或发布；下方开发阶段状态为历史。

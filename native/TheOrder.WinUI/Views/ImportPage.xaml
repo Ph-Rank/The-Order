@@ -10,7 +10,7 @@
   <StackPanel Spacing="6">
    <TextBlock Style="{StaticResource PageTitleStyle}" l:Localize.Text="导入游戏" />
    <TextBlock Style="{StaticResource BodyTextStyle}" TextWrapping="Wrap" l:Localize.Text="选择文件夹 → 勾选游戏 → 加入书架" />
-   <TextBlock Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" l:Localize.Text="可选择单个游戏或存放多个游戏的文件夹。只记录游戏位置，不复制或移动文件。" />
+   <TextBlock Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" l:Localize.Text="可选择游戏文件夹或数据盘根目录。只记录游戏位置，不复制或移动文件；系统目录会自动跳过。" />
   </StackPanel>
   <Border Grid.Row="1" Style="{StaticResource ToolbarSurfaceStyle}" Padding="16,12">
    <StackPanel Spacing="8">

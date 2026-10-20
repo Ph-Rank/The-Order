@@ -133,6 +133,11 @@ public sealed partial class MainWindow : Window
             ChooseMigrationFile = () => PickFile(".zip"), ImportMigration = (preview, token) => ImportManagerLibraryAsync(preview, migrationService, token),
             PrepareBackupAction = ResolveUnsavedAsync, RestoreLibrary = preview => RestoreLibraryAsync(preview, library),
             InstallUpdate = package => App.Instance?.RequestUpgradeAsync(package) ?? Task.FromResult(false) };
+        var managerExport = new TheOrder.Application.Migrations.LibraryManagerExportService(library,
+            new TheOrder.Infrastructure.Legacy.NativeLibraryCodec(), new TheOrder.Infrastructure.Migration.ManagerArchiveWriter(), new WindowsManagerExportSink(configuration));
+        settingsPage.PreviewManagerExport = managerExport.PreviewAsync;
+        settingsPage.SaveManagerExport = managerExport.SaveAsync;
+        settingsPage.ChooseManagerExportDestination = PickManagerExportDestination;
         settingsPage.CredentialSaved = async () =>
         {
             libraryPage.ShowCatalogReminder(online.CatalogReminder);

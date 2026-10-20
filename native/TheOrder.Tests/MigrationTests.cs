@@ -317,7 +317,7 @@ public sealed class MigrationTests(ITestOutputHelper output)
         var d=await One();using var p=new MemoryPersistence();await using var lib=TransactionalLibrary.Open(Codec,p,()=>Date);await lib.ApplyMigrationAsync(Plan(d));
         var tree=JsonNode.Parse(p.Main!)!;Assert.Equal(3,(int)tree["games"]![0]!["nativeExtras"]!["version"]!);
         Assert.NotEmpty(Assert.Single(Codec.Decode(p.Main!)).MigrationOrigins);
-        tree["games"]![0]!["nativeExtras"]!["version"]=6;
+        tree["games"]![0]!["nativeExtras"]!["version"]=8;
         Assert.Equal(LibraryAccess.ValidReadOnly,Codec.Inspect(Encoding.UTF8.GetBytes(tree.ToJsonString()),Date).Access);
         var legacy=Codec.Encode([Entry() with {GuidePaths=[@"Q:\guide.txt"]}],Date);
         Assert.DoesNotContain("migrationOrigins",Encoding.UTF8.GetString(legacy));

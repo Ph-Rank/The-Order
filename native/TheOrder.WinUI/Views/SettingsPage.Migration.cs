@@ -19,12 +19,13 @@ public sealed partial class SettingsPage
     private void OnMigrationState(object? sender, PropertyChangedEventArgs e) => SynchronizeMigration();
     private void SynchronizeMigration()
     {
-        MigrationSelect.IsEnabled = !migrationFlowActive && Migration.CanSelect && ViewModel.CanEdit;
+        MigrationSelect.IsEnabled = !migrationFlowActive && !managerExportActive && Migration.CanSelect && ViewModel.CanEdit;
+        ManagerExportButton.IsEnabled = !migrationFlowActive && !managerExportActive && Migration.CanSelect && ViewModel.CanEdit;
         MigrationProgress.Visibility = Visible(Migration.IsBusy);
         MigrationCancel.Visibility = Visible(Migration.IsBusy);
     }
     internal void CancelMigrationDialog()
-    { migrationGeneration++; migrationDialog?.Hide(); Migration.Cancel(); }
+    { migrationGeneration++; migrationDialog?.Hide(); Migration.Cancel(); managerExportCancellation?.Cancel(); managerExportDialog?.Hide(); }
     private void OnCancelMigration(object sender, RoutedEventArgs e) => Migration.Cancel();
     private void OnReviewMigrationRow(object sender, RoutedEventArgs e)
     {
@@ -34,7 +35,7 @@ public sealed partial class SettingsPage
     }
     private async void OnImportManager(object sender, RoutedEventArgs e)
     {
-        if (migrationFlowActive || !Migration.CanSelect || !ViewModel.CanEdit) return;
+        if (migrationFlowActive || managerExportActive || !Migration.CanSelect || !ViewModel.CanEdit) return;
         migrationFlowActive = true; SynchronizeMigration();
         var revision = ++migrationGeneration;
         try
@@ -58,7 +59,7 @@ public sealed partial class SettingsPage
                 var notice = new TextBlock { Text = Migration.Message
                     + "\n\n待核验条目可逐条确认，未确认的暂不导入。进度取较高状态；笔记、评分保留本地非空值。导入前自动备份，不迁移游戏文件或账号。", TextWrapping = TextWrapping.Wrap };
                 Grid.SetRow(notice, 2); content.Children.Add(notice);
-                var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "导入 PotatoVN 书架",
+                var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "导入 " + MigrationFormats.Display(preview.Dataset.Manager) + " 书架",
                     Content = content, PrimaryButtonText = "备份并导入", IsPrimaryButtonEnabled = preview.CanApply,
                     CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
                 migrationDialog = dialog;
@@ -88,13 +89,14 @@ public sealed partial class SettingsPage
         var previous = preview.Reviews.SingleOrDefault(r => r.RecordKey == key);
         var panel = new StackPanel { Spacing = 12, MaxWidth = 560 };
         panel.Children.Add(Text(MigrationReview.Explain(row.Reasons)));
-        panel.Children.Add(Text("PotatoVN · " + source.Name));
+        panel.Children.Add(Text(MigrationFormats.Display(preview.Dataset.Manager) + " · " + source.Name));
         panel.Children.Add(Text($"{StatusNames.Display(source.Status)} · 累计 {Duration(source.TotalSeconds)}"));
         var targets = new ComboBox { Header = "对应当前书架", HorizontalAlignment = HorizontalAlignment.Stretch,
             ItemsSource = row.ReviewCandidates.Select(c => c.Name).ToArray() };
         panel.Children.Add(targets);
         var targetInfo = Text(""); panel.Children.Add(targetInfo);
         var history = new ComboBox { Header = "累计时长", HorizontalAlignment = HorizontalAlignment.Stretch };
+        history.Items.Add(new ComboBoxItem { Content = "相加两边时长" });
         history.Items.Add(new ComboBoxItem { Content = "保留本地时长" });
         history.Items.Add(new ComboBoxItem { Content = "采用来源累计值（不相加）" });
         panel.Children.Add(history);
@@ -115,11 +117,15 @@ public sealed partial class SettingsPage
             var c = row.ReviewCandidates[targets.SelectedIndex];
             targetInfo.Text = $"本地 · {StatusNames.Display(c.Status)} · 累计 {Duration(c.TotalSeconds)}\n导入后进度：{StatusNames.Display(GameProgress.Higher(c.Status, source.Status))}"
                 + (c.NotesConflict || c.RatingConflict ? "\n笔记或评分有差异，保留本地值。" : "");
-            ((ComboBoxItem)history.Items[1]).IsEnabled = c.CanUseSourceTotal;
-            history.SelectedIndex = c.CanUseSourceTotal && (previous?.TargetKey == c.TargetKey
-                ? previous.History == ImportHistoryChoice.UseSourceTotal : c.TotalSeconds == 0 && source.TotalSeconds > 0) ? 1 : 0;
-            timeNote.Text = c.CanUseSourceTotal ? "采用来源累计值时保留已有会话与启动次数，差额记为无日期历史时长。"
-                : "来源累计值少于已知会话或修正记录，不能覆盖；将保留本地时长。";
+            ((ComboBoxItem)history.Items[0]).IsEnabled = c.CanAddSourceTotal;
+            ((ComboBoxItem)history.Items[2]).IsEnabled = c.CanUseSourceTotal;
+            history.SelectedIndex = previous?.TargetKey == c.TargetKey
+                ? previous.History switch { ImportHistoryChoice.AddSourceTotal when c.CanAddSourceTotal => 0, ImportHistoryChoice.UseSourceTotal when c.CanUseSourceTotal => 2, _ => 1 }
+                : c.TotalSeconds == 0 && c.CanUseSourceTotal ? 2 : c.CanAddSourceTotal ? 0 : 1;
+            timeNote.Text = $"相加时本次新增累计 {Duration(c.AdditionalSourceSeconds)}，可补入有日期的记录 {Duration(c.NewlyDatedSeconds)}。保留可靠的逐日记录和会话，不推算日期或启动次数。"
+                + (c.DuplicateSessionSeconds > 0 ? $"已扣除完全相同的会话 {Duration(c.DuplicateSessionSeconds)}。" : "")
+                + "两边若包含其他重复历史，请保留其中一边。" + MigrationReview.ExplainHistoryWarnings(c.HistoryWarnings)
+                + (c.CanUseSourceTotal ? "" : " 来源累计值少于已知会话或修正记录，不能覆盖。");
             evidence.Text = "来源编号：" + Ids(source.Identities) + "\n本地编号：" + Ids(c.Identities)
                 + "\n\n来源安装位置：\n" + Paths(source.Installations.Select(i => i.Folder))
                 + "\n本地安装位置：\n" + Paths(c.Folders) + (c.InstallationCount > c.Folders.Length ? $"\n另有 {c.InstallationCount - c.Folders.Length} 个安装。" : "")
@@ -136,7 +142,7 @@ public sealed partial class SettingsPage
         if (result == ContentDialogResult.Secondary && row.HumanReviewed) return new(key, null);
         return result == ContentDialogResult.Primary && confirm.IsChecked == true && targets.SelectedIndex >= 0
             ? new(key, row.ReviewCandidates[targets.SelectedIndex].TargetKey, true,
-                history.SelectedIndex == 1 ? ImportHistoryChoice.UseSourceTotal : ImportHistoryChoice.KeepExisting) : null;
+                history.SelectedIndex switch { 0 => ImportHistoryChoice.AddSourceTotal, 2 => ImportHistoryChoice.UseSourceTotal, _ => ImportHistoryChoice.KeepExisting }) : null;
     }
     private static TextBlock Text(string text) => new() { Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
     private static string Duration(long seconds) => $"{seconds / 3600} 小时 {seconds % 3600 / 60} 分 {seconds % 60} 秒";

@@ -47,6 +47,8 @@ $dependencies = @(foreach ($dependency in $licenseIndex) {
     # Markdig's own BSD notice is copied by the application's publish target.
     if ($license -and $license.type -eq 'expression' -and $license.InnerText -eq 'MIT') { $texts += 'licenses/' + $mitName }
     if ($dependency.package -like 'Markdig/*') { $texts += 'LICENSE-Markdig.txt' }
+    if ($dependency.package -eq 'LiteDB/4.1.4') { $texts += 'licenses/LITEDB-LICENSE.txt' }
+    if ($dependency.package -like 'LevelDB.Standard/*') { $texts += 'licenses/LEVELDB-LICENSE.txt', 'licenses/SNAPPY-LICENSE.txt' }
     foreach ($text in $texts) { if (!(Test-Path -LiteralPath (Join-Path $output $text))) { throw 'Dependency license text is missing.' } }
     $lock = $assets.libraries.PSObject.Properties[$dependency.package]
     $hashPath = Join-Path (Join-Path $Packages $dependency.package.ToLowerInvariant()) ($spec.package.metadata.id.ToLowerInvariant() + '.' + $spec.package.metadata.version + '.nupkg.sha512')

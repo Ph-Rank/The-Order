@@ -6,18 +6,40 @@ namespace TheOrder.Application.Migrations;
 
 public static class MigrationReview
 {
+    public static long SourceSecondsAlreadyAccounted(LibraryEntry target, string manager, ImportGame source)
+    {
+        var previous = target.MigrationOrigins.FirstOrDefault(o => o.Manager == manager && o.RecordId == source.SourceId);
+        var reviewed = previous?.Review?.AccountedSourceSeconds
+            ?? (previous?.Review is { HistoryChoice: "use-source-total" } adopted ? adopted.AfterSeconds
+                : previous?.Fields.Any(f => f.Target == "history") == true ? previous.ReportedSeconds : 0);
+        return Math.Max(reviewed, previous?.HistoryDates?.AccountedSeconds ?? 0);
+    }
+    public static long AdditionalSourceSeconds(LibraryEntry target, string manager, ImportGame source)
+        => MigrationHistoryDates.Build(target, manager, source).AdditionalSeconds;
+    public static bool CanAddSourceTotal(LibraryEntry target, string manager, ImportGame source)
+    {
+        var addition = MigrationHistoryDates.Build(target, manager, source);
+        return target.TotalPlaySeconds <= 1_000_000_000_000 - addition.AdditionalSeconds
+            && target.EffectivePlaySeconds <= 1_000_000_000_000 - addition.AdditionalSeconds;
+    }
     public static bool CanUseSourceTotal(LibraryEntry target, long sourceSeconds)
     {
         var total = sourceSeconds - target.ManualPlaytime.Where(x => !x.Undone).Sum(x => x.Seconds);
         return total >= target.Sessions.Sum(x => x.Seconds) && total is >= 0 and <= 1_000_000_000_000;
     }
-    internal static ImportReviewCandidate Candidate(LibraryEntry target, ImportGame source) => new(
+    internal static ImportReviewCandidate Candidate(LibraryEntry target, ImportGame source, string manager)
+    {
+        var addition = MigrationHistoryDates.Build(target, manager, source);
+        return new(
         ImportHash.Text(target.Id)[..20], target.Name, target.Metadata?.Title ?? "", target.Status, target.EffectivePlaySeconds,
         MigrationResolver.Identities(target), [.. target.Installations.Take(6).Select(i => i.Folder)],
         !source.Installations.IsEmpty && source.Installations.All(i => target.Installations.Any(x => ImportPaths.Key(x.Folder) == ImportPaths.Key(i.Folder))),
         CanUseSourceTotal(target, source.TotalSeconds),
         target.Notes.Length > 0 && source.Notes.Length > 0 && target.Notes != source.Notes,
-        target.PersonalRating is { } a && source.Rating is { } b && a != b, target.Installations.Length);
+        target.PersonalRating is { } a && source.Rating is { } b && a != b, target.Installations.Length)
+        { CanAddSourceTotal = CanAddSourceTotal(target, manager, source), AdditionalSourceSeconds = addition.AdditionalSeconds,
+            NewlyDatedSeconds = addition.NewlyDatedSeconds, DuplicateSessionSeconds = addition.DuplicateSeconds, HistoryWarnings = addition.Warnings };
+    }
 
     // A matching Steam app is positive evidence. Other URLs for the same work
     // (including its trial) do not contradict that exact match. Disjoint app IDs
@@ -57,8 +79,19 @@ public static class MigrationReview
         if (codes.Contains("WORK_ID_ONLY_VERSION_OR_INSTALLATION_REVIEW_REQUIRED")) return "作品编号相符，安装位置或发行版本仍需核对。";
         if (codes.Contains("TITLE_ONLY_NEVER_MERGED")) return "标题相似，尚不足以自动认定为同一作品；可人工核验。";
         if (codes.Contains("SOURCE_RECORD_CHANGED_OR_DUPLICATED")) return "此前导入的来源记录已变化，请核对差异。";
-        if (codes.Contains("PLAYTIME_OVERLAP_CONFLICT")) return "两边累计时长不同，请选择保留本地或采用来源累计值，不会相加。";
+        if (codes.Contains("PLAYTIME_OVERLAP_CONFLICT")) return "两边累计时长不同，可选择相加、保留本地或采用来源累计值。";
         if (codes.Contains("NOTES_CONFLICT") || codes.Contains("RATING_CONFLICT")) return "个人笔记或评分不同；核验后仍保留本地值。";
         return "请核对作品、版本及个人记录。";
+    }
+    public static string ExplainHistoryWarnings(IEnumerable<string> warnings)
+    {
+        var codes = warnings.ToHashSet(StringComparer.Ordinal); var notes = new List<string>();
+        if (codes.Contains("OVERLAPPING_SESSION_KEPT_UNDATED")) notes.Add("部分会话与本地记录重叠，未重复分配到日期。");
+        if (codes.Contains("LOCAL_DAILY_RECORD_EDIT_PRESERVED") || codes.Contains("SOURCE_SESSION_REVISED_OR_LOCAL_RECORD_EDITED"))
+            notes.Add("保留本地已修改或撤销的记录；来源会话改写未直接覆盖。");
+        if (codes.Contains("SOURCE_DAILY_TOTAL_REVISED_EXISTING_DATE_PRESERVED")) notes.Add("来源逐日时长有减少，保留此前记录。");
+        if (codes.Any(c => c is "SOURCE_DATES_EXCEED_UNALLOCATED_CONTRIBUTION" or "SOURCE_SESSION_CHANGE_NOT_ATTRIBUTABLE" or "SOURCE_SESSION_ID_COLLISION" or "SOURCE_DAILY_ID_COLLISION"))
+            notes.Add("部分日期无法安全合并，剩余时长仍单独列为未分配日期。");
+        return string.Join("", notes);
     }
 }

@@ -967,5 +967,12 @@
   "资料来源": "Sources",
   "玩过": "Played",
   "未设置": "Not set",
-  "想玩": "Want to play"
+  "想玩": "Want to play",
+  "此文件系统不能提供可靠的文件身份，请选择其他目录。": "This filesystem cannot provide reliable file identity. Choose another folder.",
+  "磁盘 {0} 中的游戏": "Game on drive {0}",
+  "请选择游戏目录或数据盘；不能扫描系统盘根目录、系统目录、网络共享根目录或补丁备份目录。": "Choose a game folder or data drive. System drive roots, system folders, network share roots and patch backups cannot be scanned.",
+  "请选择游戏安装目录或数据盘，不能浏览系统盘根目录、系统目录或网络共享根目录。": "Choose a game installation folder or data drive. System drive roots, system folders and network share roots cannot be browsed.",
+  "请选择可读取的库目录或数据盘，不能使用系统盘根目录、系统目录、网络共享根目录或目录链接。": "Choose a readable library folder or data drive. System drive roots, system folders, network share roots and folder links cannot be used.",
+  "数据盘根目录仅支持手动检查；自动检查请选择具体游戏库文件夹。": "Data drive roots support manual checks only. Choose a specific library folder for automatic checks.",
+  "可选择游戏文件夹或数据盘根目录。只记录游戏位置，不复制或移动文件；系统目录会自动跳过。": "Choose a game folder or data drive root. Only game locations are recorded; no files are copied or moved. System folders are skipped."
 }

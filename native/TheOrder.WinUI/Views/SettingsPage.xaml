@@ -149,9 +149,9 @@
    <Border Style="{StaticResource SurfaceStyle}" Padding="20">
     <StackPanel Spacing="12" AutomationProperties.AutomationId="LibraryMigrationSection">
      <TextBlock Text="从其他管理器导入" Style="{StaticResource SectionTitleStyle}" />
-     <TextBlock Text="导入 PotatoVN 的游戏书架、个人资料与游玩时长。选择导出 ZIP 后，先预览再确认。" TextWrapping="Wrap" Style="{StaticResource SecondaryTextStyle}" />
+     <TextBlock Text="支持 PotatoVN、Vnite、ReinaManager、Playnite、LunaBox 备份 ZIP。先预览再导入；排除非 Galgame 及无法确认类型的条目。" TextWrapping="Wrap" Style="{StaticResource SecondaryTextStyle}" />
      <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8">
-      <Button x:Name="MigrationSelect" Content="选择 PotatoVN 备份 ZIP…" Click="OnImportManager" AutomationProperties.AutomationId="ImportManagerZip" />
+      <Button x:Name="MigrationSelect" Content="选择备份 ZIP…" Click="OnImportManager" AutomationProperties.AutomationId="ImportManagerZip" />
       <Button x:Name="MigrationCancel" Content="取消" Click="OnCancelMigration" Visibility="Collapsed" AutomationProperties.AutomationId="CancelManagerImport" />
      </views:TagFlowPanel>
      <ProgressBar x:Name="MigrationProgress" IsIndeterminate="True" Visibility="Collapsed" AutomationProperties.AutomationId="ManagerImportProgress" />
@@ -164,10 +164,13 @@
      <TextBlock Text="备份作品资料和游玩记录，不包含游戏本体或存档文件。" TextWrapping="Wrap" Style="{StaticResource SecondaryTextStyle}" />
      <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8">
       <Button Content="导出书架备份…" Click="OnExportBackup" IsEnabled="{x:Bind Backups.CanOperate, Mode=OneWay}" AutomationProperties.AutomationId="ExportLibraryBackup" />
+      <Button x:Name="ManagerExportButton" Content="导出兼容 ZIP…" Click="OnExportManager" AutomationProperties.AutomationId="ExportManagerZip" />
       <Button Content="从备份恢复…" Click="OnRestoreBackup" IsEnabled="{x:Bind Backups.CanOperate, Mode=OneWay}" AutomationProperties.AutomationId="RestoreLibraryBackup" />
       <Button x:Name="RestoreAutomaticBackup" Content="查看自动备份" Click="OnRestoreAutomaticBackup" IsEnabled="{x:Bind Backups.CanOperate, Mode=OneWay}" AutomationProperties.AutomationId="RestoreAutomaticBackup" />
      </views:TagFlowPanel>
      <Border Height="1" Background="{ThemeResource DividerBrush}" Margin="0,2" />
+     <ProgressBar x:Name="ManagerExportProgress" IsIndeterminate="True" Visibility="Collapsed" AutomationProperties.AutomationId="ManagerExportProgress" />
+     <TextBlock x:Name="ManagerExportMessage" TextWrapping="Wrap" Visibility="Collapsed" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="ManagerExportMessage" />
      <ToggleSwitch x:Name="AutomaticBackup" Header="自动备份" OnContent="开启" OffContent="关闭" Toggled="OnAutomaticBackup" IsEnabled="{x:Bind Backups.CanChangeAutomatic, Mode=OneWay}" AutomationProperties.AutomationId="AutomaticLibraryBackup" />
      <TextBlock Text="{x:Bind Backups.LastBackup, Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
      <TextBlock Text="{x:Bind Backups.Message, Mode=OneWay}" Visibility="{x:Bind VisibleText(Backups.Message), Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="LibraryBackupMessage" />

@@ -32,7 +32,7 @@ public sealed class P1LibraryExtrasTests
     [Fact] public void FutureExtensionIsReadOnlyAndCorruptExtensionsAreInvalid()
     {
         var json = JsonNode.Parse(Codec.Encode([Entry() with { ManualPlaytime = [Manual(60)] }], Clock))!;
-        json["games"]![0]!["nativeExtras"]!["version"] = 6; // v5 persists reviewed migration decisions; v6 is an unknown future writer.
+        json["games"]![0]!["nativeExtras"]!["version"] = 8; // v7 persists dated import receipts; v8 is unknown.
         Assert.Equal(LibraryAccess.ValidReadOnly, Codec.Inspect(System.Text.Encoding.UTF8.GetBytes(json.ToJsonString()), Clock).Access);
         json["games"]![0]!["nativeExtras"]!["version"] = 1; json["games"]![0]!["nativeExtras"]!["manualPlaytime"]![0] = null;
         Assert.Equal(LibraryAccess.InvalidInput, Codec.Inspect(System.Text.Encoding.UTF8.GetBytes(json.ToJsonString()), Clock).Access);

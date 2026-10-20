@@ -23,6 +23,9 @@ internal static class Program
         // A bounded auxiliary mode must never register an app instance, open a
         // user Profile, initialize WinUI or redirect a normal activation.
         if (WindowsAudioGuard.IsInvocation(args)) return WindowsAudioGuard.Run(args);
+        if (WindowsIsolatedMigrationSource.IsInvocation(args)) return WindowsIsolatedMigrationSource.Run(args,
+            new TheOrder.Infrastructure.Migration.ManagerImportAdapter(new TheOrder.Infrastructure.Recognition.TitleIndex(
+                () => File.OpenRead(Path.Combine(AppContext.BaseDirectory, "data", "title-index.json.gz")))));
         _ = StartupClock.Elapsed; // Force the marker before profile I/O even on beforefieldinit runtimes.
         if (!OperatingSystem.IsWindows() || !WindowsCompatibility.IsSupported(Environment.OSVersion.Version))
         {

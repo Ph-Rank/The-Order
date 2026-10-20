@@ -167,13 +167,14 @@ $setup = Join-Path $distribution ('The-Order-' + $releaseVersion + '-Setup-x64.e
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $distribution 'update-channel.json') -Encoding utf8
 
 # Publish the block map alongside Setup. Checks read only Release metadata; maps are fetched on explicit Install.
+if (!$beta) {
 if (!$Dotnet) { $Dotnet = Join-Path $repo '.artifacts/native-phase1/tools/dotnet/dotnet.exe' }
 if (!(Test-Path -LiteralPath $Dotnet -PathType Leaf) -or (& $Dotnet --version) -ne '10.0.401') { throw 'The pinned .NET SDK 10.0.401 is required for the block map.' }
 $updateTool = Join-Path $repo 'native/TheOrder.UpdateTool/TheOrder.UpdateTool.csproj'
 & $Dotnet restore $updateTool --locked-mode 2>&1 | Tee-Object -FilePath (Join-Path $output 'blockmap-restore.log') | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Block-map tool locked restore failed.' }
 $map = $setup + '.blocks.json'
-if (!$beta) { & $Dotnet run --project $updateTool --configuration Release --no-restore -- blockmap $setup $releaseVersion $map 2>&1 |
+& $Dotnet run --project $updateTool --configuration Release --no-restore -- blockmap $setup $releaseVersion $map 2>&1 |
     Tee-Object -FilePath (Join-Path $output 'blockmap-build.log') | Out-Null
 if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $map)) { throw 'Block-map generation failed.' }
 }

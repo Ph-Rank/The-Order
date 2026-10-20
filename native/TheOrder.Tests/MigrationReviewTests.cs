@@ -39,6 +39,55 @@ public sealed class MigrationReviewTests
         await lib.ApplyMigrationAsync(Review(data, target, history));
         return Assert.Single(Codec.Decode(disk.Main!));
     }
+    private static async Task<LibraryEntry> ExplicitCommit(ImportDataset data, LibraryEntry target, ImportHistoryChoice history)
+    {
+        var choice = new ImportReviewDecision(ImportHash.Key(data.Manager, data.Games[0].SourceId), ImportHash.Text(target.Id)[..20], true, history);
+        var disk = new SessionMemoryDisk { Main = Codec.Encode([target], Date) };
+        await using var lib = TransactionalLibrary.Open(Codec, new SessionMemoryPersistence(disk), () => Date);
+        await lib.ApplyMigrationAsync(MigrationResolver.Preview(data, [target], Codec, reviews: [choice]));
+        return Assert.Single(Codec.Decode(disk.Main!));
+    }
+
+    [Fact]
+    public async Task AutomaticHigherProgressCannotHideAnUnresolvedTimeAdditionChoice()
+    {
+        var data = Data(); var target = Target() with { TotalPlaySeconds = 3600 };
+        var first = MigrationResolver.Preview(data, [target], Codec);
+        var after = Codec.Decode(Codec.Encode([MigrationProjection.Apply(Assert.Single(first.Operations), data, target, Date)], Date))[0];
+        Assert.Equal("playing", after.Status); Assert.Equal(3600, after.EffectivePlaySeconds);
+        var pending = Assert.Single(MigrationResolver.Preview(data, [after], Codec).Rows);
+        Assert.Equal(ImportMatch.Conflict, pending.Match); Assert.Single(pending.ReviewCandidates);
+        var added = await Commit(data, after, ImportHistoryChoice.AddSourceTotal);
+        Assert.Equal(10800, added.EffectivePlaySeconds);
+        Assert.Equal(ImportAction.AlreadyImported, MigrationResolver.Preview(data, [added], Codec).Rows[0].Action);
+    }
+
+    [Fact]
+    public async Task AChangedTotalAndHigherProgressRemainReviewableAfterTheProgressCommit()
+    {
+        var first = await ExplicitCommit(Data(), Target(), ImportHistoryChoice.UseSourceTotal);
+        var changed = Data(Game() with { TotalSeconds = 9000, Status = "completed" });
+        var plan = MigrationResolver.Preview(changed, [first], Codec);
+        var after = Codec.Decode(Codec.Encode([MigrationProjection.Apply(Assert.Single(plan.Operations), changed, first, Date)], Date))[0];
+        Assert.Equal("completed", after.Status); Assert.Equal(7200, after.EffectivePlaySeconds);
+        Assert.Single(MigrationResolver.Preview(changed, [after], Codec).Rows[0].ReviewCandidates);
+        var added = await Commit(changed, after, ImportHistoryChoice.AddSourceTotal);
+        Assert.Equal(9000, added.EffectivePlaySeconds); // Only the unaccounted 1,800 seconds.
+        Assert.Empty(MigrationResolver.Preview(changed, [added], Codec).Operations);
+    }
+
+    [Fact]
+    public async Task LegacyV5ReviewUsesTheAdoptedTotalRatherThanTheOriginalLineageTotal()
+    {
+        var first = await ExplicitCommit(Data(), Target(), ImportHistoryChoice.UseSourceTotal);
+        var changed = await ExplicitCommit(Data(Game() with { TotalSeconds = 8100 }), first, ImportHistoryChoice.UseSourceTotal);
+        var origin = changed.MigrationOrigins[0];
+        var legacy = changed with { MigrationOrigins = [origin with { Review = origin.Review! with { AccountedSourceSeconds = null } }] };
+        legacy = Codec.Decode(Codec.Encode([legacy], Date))[0];
+        Assert.Equal(7200, legacy.MigrationOrigins[0].ReportedSeconds);
+        var result = await ExplicitCommit(Data(Game() with { TotalSeconds = 9000 }), legacy, ImportHistoryChoice.AddSourceTotal);
+        Assert.Equal(9000, result.EffectivePlaySeconds); Assert.Equal(9000, result.MigrationOrigins[0].Review!.AccountedSourceSeconds);
+    }
 
     [Theory] [InlineData("8002")] [InlineData("8003")]
     public void SharedExactSteamIdIsNotContradictedByAnAdditionalLink(string extra)
@@ -154,6 +203,42 @@ public sealed class MigrationReviewTests
         var target = Target() with { TotalPlaySeconds = 10_000 };
         var result = await Commit(Data(), target, ImportHistoryChoice.UseSourceTotal);
         Assert.Equal(7200, result.EffectivePlaySeconds); Assert.Empty(result.Sessions); Assert.Empty(result.ManualPlaytime); Assert.Equal(0, result.PlayCount);
+    }
+    [Fact]
+    public async Task AddingTotalsPreservesKnownActivityAndSurvivesReopenWithoutDuplicateTime()
+    {
+        var g = Game() with { Identities = [] };
+        var target = Target() with { TotalPlaySeconds = 900, PlayCount = 2,
+            Sessions = [new("11111111-1111-4111-8111-111111111111", "2026-10-18T01:00:00.000Z", "2026-10-18T01:10:00.000Z", 600)],
+            ManualPlaytime = [new("22222222-2222-4222-8222-222222222222", "2026-10-18", 120, "dated correction", Date)] };
+        var result = await Commit(Data(g), target, ImportHistoryChoice.AddSourceTotal);
+        Assert.Equal(8220, result.EffectivePlaySeconds); Assert.Equal(target.Sessions.ToArray(), result.Sessions.ToArray());
+        Assert.Equal(target.ManualPlaytime.ToArray(), result.ManualPlaytime.ToArray()); Assert.Equal(2, result.PlayCount);
+        Assert.Equal(7200, result.MigrationOrigins[0].Review!.AccountedSourceSeconds);
+        using var encoded = JsonDocument.Parse(Codec.Encode([result], Date));
+        Assert.Equal(7, encoded.RootElement.GetProperty("games")[0].GetProperty("nativeExtras").GetProperty("version").GetInt32());
+        var reopened = Codec.Decode(Codec.Encode([result], Date));
+        Assert.Equal(ImportAction.AlreadyImported, MigrationResolver.Preview(Data(g), reopened, Codec).Rows[0].Action);
+        var repeated = await ExplicitCommit(Data(g), reopened[0], ImportHistoryChoice.AddSourceTotal);
+        Assert.Equal(8220, repeated.EffectivePlaySeconds);
+        var updated = await Commit(Data(g with { TotalSeconds = 8000 }), repeated, ImportHistoryChoice.AddSourceTotal);
+        Assert.Equal(9020, updated.EffectivePlaySeconds); Assert.Equal(8000, updated.MigrationOrigins[0].Review!.AccountedSourceSeconds);
+        var stats = StatisticsDashboardBuilder.Build(new([updated], StatisticsPeriod.AllTime, new(2026, 10, 19), TimeZoneInfo.Utc));
+        Assert.Equal(720, stats.PeriodSeconds); Assert.Equal(1, stats.ActiveDays); Assert.Equal(8300, stats.UnknownSeconds);
+    }
+    [Fact]
+    public async Task AddingAnAlreadyImportedSourceDoesNotAddItsHistoryAgain()
+    {
+        var g = Game(); var data = Data(g); var plan = MigrationResolver.Preview(data, [], Codec);
+        var original = MigrationProjection.Apply(Assert.Single(plan.Operations), data, null, Date);
+        var reviewed = await ExplicitCommit(data, original, ImportHistoryChoice.AddSourceTotal);
+        Assert.Equal(7200, reviewed.EffectivePlaySeconds);
+    }
+    [Fact]
+    public void AdditionRejectsOverflowRatherThanClampingOrDamagingExistingTime()
+    {
+        var target = Target() with { TotalPlaySeconds = 999_999_999_999 };
+        Assert.Throws<InvalidDataException>(() => Review(Data(), target, ImportHistoryChoice.AddSourceTotal));
     }
     [Fact]
     public void ASourceTotalBelowKnownDatedHistoryCannotBeAdopted()

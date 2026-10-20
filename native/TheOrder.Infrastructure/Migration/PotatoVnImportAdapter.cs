@@ -282,7 +282,7 @@ public sealed class PotatoVnImportAdapter(TimeZoneInfo? sourceTimeZone = null) :
         { if (e.GetArrayLength() > 10000) throw new InvalidDataException("SOURCE_ARRAY_LIMIT"); foreach (var item in e.EnumerateArray()) Check(item, ref nodes, cancellation); }
         else if (e.ValueKind == JsonValueKind.String && e.GetString()!.Length > 100000) throw new InvalidDataException("SOURCE_FIELD_TOO_LARGE");
     }
-    private static void CheckDirectory(Stream source)
+    internal static void CheckDirectory(Stream source)
     {
         var size = (int)Math.Min(source.Length, 65557); source.Position = source.Length - size; var tail = new byte[size]; source.ReadExactly(tail);
         for (var i = size - 22; i >= 0; i--)

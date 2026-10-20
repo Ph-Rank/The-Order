@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "engine": "LevelDB 1.23 C API with statically linked Snappy 1.2.2",
+  "architecture": "win-x64",
+  "sha256": "d313f1e7fc4b7f751157270e81cf063a699775e86853e44122cef88851c2b06d",
+  "leveldbSource": "https://codeload.github.com/google/leveldb/zip/refs/tags/1.23",
+  "leveldbSourceSha256": "a6fa7eebd11de709c46bf1501600ed98bf95439d6967963606cc964931ce906f",
+  "snappySource": "https://codeload.github.com/google/snappy/zip/refs/tags/1.2.2",
+  "snappySourceSha256": "89c009c9c661f466aa1c4fd866ca29c222e5b1b7d73d2beadb44493c3d0d8476",
+  "compiler": "MSVC 19.50.35726.0, Visual Studio Build Tools 18, Windows SDK 10.0.26100.0",
+  "runtime": "static /MT; AVX, AVX2, BMI2, SSSE3 and optional CRC32 intrinsics disabled",
+  "rebuild": "native/scripts/build-leveldb-snappy.ps1",
+  "note": "CMake emits upstream WindowsEnv destructor warning C4722; default singleton is intentionally process-lifetime. No source changes or untrusted input compilation. Native engine runs in bounded auxiliary process."
+}
