@@ -62,6 +62,14 @@ public sealed partial class ArtworkStage : Grid
     public event Action? PresentationChanged;
     public bool PresentationReady { get; private set; }
     private bool imageFailed;
+    internal bool ImageUnavailable => imageFailed && pixelsKey != coverKey;
+    internal void RetryFailedImage()
+    {
+        if (!ImageUnavailable || coverKey is null) return;
+        request.Clear(); requestedImageKey = null; requestedImageEdge = 0;
+        imageFailed = false; LastFailure = null; SetPresentationReady(false);
+        SourceChanged?.Invoke(); Invalidate(immediate: true);
+    }
     // A successful draw alone can precede the final XAML arrange. A hero reveals
     // its artwork and foreground together only when this geometry also matches.
     internal bool HasCurrentPresentation => PresentationReady && (coverKey is null || imageFailed
@@ -332,8 +340,12 @@ public sealed partial class ArtworkStage : Grid
     {
         LastFailure = "cover:" + reason;
         // Failure of a higher-resolution upgrade keeps the valid existing frame.
-        if (pixelsKey == coverKey && pixels is not null) return;
-        imageFailed = true; ApplyLayers(); SetPresentationReady(true);
+        if (pixelsKey == coverKey && pixels is not null && fallbackArt.Source is not null) return;
+        pixels = originalLandscape = null; pixelsKey = null; fallbackArt.Source = null;
+        imageFailed = true; ApplyLayers();
+        // The host must discard dimensions reserved for an image that never arrived.
+        // A successful lower-resolution frame above remains visible on upgrade failure.
+        SourceChanged?.Invoke(); SetPresentationReady(true);
     }
     private void ComposeLandscape()
     {
@@ -384,7 +396,9 @@ public sealed partial class ArtworkStage : Grid
         // page palette. Theme switches still refresh the outer corner mask.
         if (ContainBackdrop && pixels is not null) { Polarity = ActualTheme == ElementTheme.Light ? StagePolarity.Lift : StagePolarity.Deepen; fallbackArt.HorizontalAlignment = HorizontalAlignment.Right; fallbackArt.Width = ActualHeight * pixels.Width / pixels.Height; }
         else { fallbackArt.HorizontalAlignment = HorizontalAlignment.Stretch; fallbackArt.Width = double.NaN; }
-        var art = Effective is "Glass" or "Standard" && fallbackArt.Source is not null && pixelsKey == coverKey;
+        // Transparency, energy saving and graphics fallback govern effects, not content.
+        // Keep the decoded static picture when Acrylic/DirectX are unavailable.
+        var art = Effective != "HighContrast" && fallbackArt.Source is not null && pixelsKey == coverKey;
         var glassShowing = Effective == "Glass" && optical is not null && panel.Visibility == Visibility.Visible;
         fallbackArt.Visibility = art && !glassShowing ? Visibility.Visible : Visibility.Collapsed;
         fallbackScrim.Visibility = fallbackArt.Visibility;
@@ -454,7 +468,8 @@ public sealed partial class ArtworkStage : Grid
         effective = Effective, presentationReady = PresentationReady, currentPresentation = HasCurrentPresentation, imageFailed, mode = Mode.ToString(), variant = Variant.ToString(), configuration = Variant switch { StageVariant.Clear => ClearConfiguration, StageVariant.Unrefracted => UnrefractedConfiguration, _ => ContinuousConfiguration },
         refractionDepth = constants[10], dispersion = constants[11], gloss = constants[12], edgeDensity = constants[27],
         naturalLandscape = NaturalLandscape, detachedPlate = DetachedPlate, sourceWidth = SourceWidth, sourceHeight = SourceHeight,
-        coverKey, loadedCoverKey = pixelsKey, fallbackPresent = fallbackArt.Source is not null, plateBrush = Plate?.Background?.GetType().Name,
+        visibility = Visibility.ToString(), layoutWidth = double.IsFinite(Width) ? Width : (double?)null, layoutHeight = double.IsFinite(Height) ? Height : (double?)null,
+        coverKey, loadedCoverKey = pixelsKey, fallbackPresent = fallbackArt.Source is not null, fallbackVisible = fallbackArt.Visibility == Visibility.Visible, plateBrush = Plate?.Background?.GetType().Name,
         plate = new { x = plateBounds.X, y = plateBounds.Y, width = plateBounds.Width, height = plateBounds.Height, insideFrame = plateBounds.X >= -.5 && plateBounds.Y >= -.5 && plateBounds.X + plateBounds.Width <= ActualWidth + .5 && plateBounds.Y + plateBounds.Height <= ActualHeight + .5 },
         backgroundColor = (Background as SolidColorBrush)?.Color.ToString(), plateColor = (Plate?.Background as SolidColorBrush)?.Color.ToString(),
         loaded, actualTheme = ActualTheme.ToString(), requestedTheme = RequestedTheme.ToString(), containBackdrop, adaptiveLandscape = AdaptiveLandscape, imageOpacity = fallbackArt.Opacity, decodeEdge = DecodeEdge, polarity = Polarity.ToString(), ambientSigma = AmbientSigma, allowed, highContrast, rendererActive = optical is not null, panelVisible = panel.Visibility == Visibility.Visible,

@@ -140,7 +140,7 @@ public sealed partial class DetailsPage
             if (refresh) presentations.Queue([saved.Id]);
             // Provenance stays inside the collapsed sources section, never on the CG overlay.
             ArtworkSourceText.Text = string.Join("\n", new[] { ViewModel.Draft?.Source.Relationship, ViewModel.Draft?.Source.CoverDescription,
-                choice is null ? UiText.Get("尚无合适横图；保留简洁背景") : choice.Kind == "local" ? UiText.Get("个人本地横幅 · 原图") : choice.ReferenceTitle is { } sourceTitle ? UiText.Get("横幅 CG · ") + sourceTitle + UiText.Get("（关联版本）") : UiText.Get("本版本横幅 CG") });
+                choice is null ? UiText.Get("尚无合适横图。") : choice.Kind == "local" ? UiText.Get("个人本地横幅 · 原图") : choice.ReferenceTitle is { } sourceTitle ? UiText.Get("横幅 CG · ") + sourceTitle + UiText.Get("（关联版本）") : UiText.Get("本版本横幅 CG") });
         }
         catch (OperationCanceledException) { }
         catch (OnlineException e) { if (Accept()) { CatalogReadStatus.Text = UiText.Get("已保留本地资料。") + e.Message; RetryCatalog.Visibility = Visibility.Visible; CatalogStatusRow.Visibility = Visibility.Visible; } }

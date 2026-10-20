@@ -15,7 +15,7 @@ internal static class BannerFrameLayout
         // Keep a loading surface in the tree for legacy selections/local originals
         // whose dimensions are known only after their first decode.
         if (stage.CoverKey is not null && sourceWidth <= 0) { sourceWidth = 1280; sourceHeight = 720; }
-        if (stage.CoverKey is null) sourceWidth = sourceHeight = 0;
+        if (stage.CoverKey is null || stage.ImageUnavailable) sourceWidth = sourceHeight = 0;
         return BannerLayout.Plan(width, sourceWidth, sourceHeight, 0, 0);
     }
     internal static BannerFrame Apply(Grid host, ArtworkStage stage, Grid overlay, Border plate, BannerChoice? choice)

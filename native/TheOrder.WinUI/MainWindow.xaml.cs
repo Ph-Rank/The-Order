@@ -120,7 +120,7 @@ public sealed partial class MainWindow : Window
         libraryPage.RecognizeSelected = async ids => { if (await ResolveUnsavedAsync()) { await recognition.StartAsync(ids, RecognitionMode.Reidentify); if (!ids.IsEmpty) await Navigate(WorkspacePage.Details, ids[0]); } };
         detailsPage.Recognize = async () => { if (workspace.SelectedId is { } id && await ResolveUnsavedAsync()) { await recognition.StartAsync([id], RecognitionMode.Reidentify); } };
         libraryPage.OpenPendingReview = OpenPendingReviewAsync;
-        libraryPage.OpenSettings = () => Navigate(WorkspacePage.Settings);
+        libraryPage.OpenSettings = async () => { await Navigate(WorkspacePage.Settings); settingsPage.RevealSources(); };
         libraryPage.RemoveSelected = ids => RemoveFromLibraryAsync(library, ids);
         recognition.ReviewCompleted = async (completed, next) =>
         {

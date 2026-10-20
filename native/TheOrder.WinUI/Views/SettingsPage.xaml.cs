@@ -100,7 +100,7 @@ public sealed partial class SettingsPage : Page
     }
     private void OnCancelUpdate(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) => Updates.Cancel();
     internal void ChooseUpdateChannelTest(int index) => UpdateChannelChoice.SelectedIndex = index;
-    internal void ShowUpdatesTest() => UpdateSection.StartBringIntoView(new Microsoft.UI.Xaml.BringIntoViewOptions { VerticalAlignmentRatio = 0 });
+    internal void ShowUpdatesTest() => RevealSettingsGroup(UpdatesGroup);
     private void OnBrowseState(object? sender, PropertyChangedEventArgs e) => SynchronizeBrowsing();
     private void OnLanguageState(object? sender, PropertyChangedEventArgs e) => SynchronizeLanguage();
     private void OnContentLanguageState(object? sender, PropertyChangedEventArgs e) => SynchronizeContentLanguage();
@@ -163,8 +163,15 @@ public sealed partial class SettingsPage : Page
     private void OnSettingsSizeChanged(object sender, Microsoft.UI.Xaml.SizeChangedEventArgs e)
     {
         var narrow = e.NewSize.Width < 641;
-        SettingsColumn.Padding = narrow ? new Microsoft.UI.Xaml.Thickness(16, 16, 16, 20) : new Microsoft.UI.Xaml.Thickness(32, 20, 32, 20);
-        SettingsColumn.Width = Math.Min(900, Math.Max(0, e.NewSize.Width));
+        SettingsColumn.Padding = narrow ? new Microsoft.UI.Xaml.Thickness(16, 12, 16, 28) : new Microsoft.UI.Xaml.Thickness(24, 12, 24, 32);
+        // Leave a scroll-bar gutter; a bounded centered column keeps settings legible
+        // on wide windows without forcing narrower windows to scroll horizontally.
+        SettingsColumn.Width = Math.Min(880, Math.Max(0, e.NewSize.Width - 12));
+        Grid.SetRow(SettingsVersion, narrow ? 1 : 0);
+        Grid.SetColumn(SettingsVersion, narrow ? 0 : 1);
+        SettingsVersion.Margin = new Microsoft.UI.Xaml.Thickness(0, narrow ? 6 : 0, 0, 0);
+        foreach (var group in TopSettingsGroups)
+            group.Padding = narrow ? new Microsoft.UI.Xaml.Thickness(16) : new Microsoft.UI.Xaml.Thickness(24, 20, 24, 20);
         ResizeSettingsControls();
     }
     private void ResizeSettingsControls()
@@ -174,7 +181,7 @@ public sealed partial class SettingsPage : Page
             : SettingsColumn.ActualWidth > 0
                 ? SettingsColumn.ActualWidth
                 : SettingsRoot.ActualWidth > 0
-                    ? Math.Min(900, SettingsRoot.ActualWidth)
+                    ? Math.Min(880, SettingsRoot.ActualWidth - 12)
                     : 0;
         if (columnWidth <= 0) return;
         foreach (var control in SettingsControls().Distinct())
@@ -202,12 +209,12 @@ public sealed partial class SettingsPage : Page
             else if (current is Grid g) inset += g.Padding.Left + g.Padding.Right + g.BorderThickness.Left + g.BorderThickness.Right;
             if (ReferenceEquals(current, root)) break;
             var parent = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current);
-            if (parent is null && ReferenceEquals(current, ApiKeyPanel.Content as Microsoft.UI.Xaml.DependencyObject))
+            if (parent is null && SettingsExpanders.FirstOrDefault(e => ReferenceEquals(current, e.Content)) is { } expander)
             {
-                var expanderPadding = ApiKeyPanel.Padding.Left + ApiKeyPanel.Padding.Right;
-                var expanderBorder = ApiKeyPanel.BorderThickness.Left + ApiKeyPanel.BorderThickness.Right;
+                var expanderPadding = expander.Padding.Left + expander.Padding.Right;
+                var expanderBorder = expander.BorderThickness.Left + expander.BorderThickness.Right;
                 inset += (expanderPadding > 0 ? expanderPadding : 32) + (expanderBorder > 0 ? expanderBorder : 2);
-                parent = ApiKeyPanel;
+                parent = expander;
             }
             current = parent;
         }
@@ -216,7 +223,8 @@ public sealed partial class SettingsPage : Page
     private static bool Inside(Microsoft.UI.Xaml.DependencyObject control, Microsoft.UI.Xaml.DependencyObject parent)
     { for (var current = control; current is not null; current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current)) if (ReferenceEquals(current, parent)) return true; return false; }
     private static bool IsVisible(Microsoft.UI.Xaml.DependencyObject control)
-    { for (var current = control; current is not null; current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current))
+    { if (control is Microsoft.UI.Xaml.FrameworkElement { IsLoaded: false }) return false;
+      for (var current = control; current is not null; current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current))
         if (current is Microsoft.UI.Xaml.FrameworkElement { Visibility: Microsoft.UI.Xaml.Visibility.Collapsed }) return false; return true; }
     private static IEnumerable<Microsoft.UI.Xaml.FrameworkElement> Descendants(Microsoft.UI.Xaml.DependencyObject root)
     {
@@ -231,6 +239,21 @@ public sealed partial class SettingsPage : Page
     public Microsoft.UI.Xaml.Visibility VisibleConnectionMessage(string message)
         => message == UiText.Get("尚未测试连接。") ? Microsoft.UI.Xaml.Visibility.Collapsed : VisibleText(message);
     internal object LayoutEvidence() => new { active = IsLoaded, columnWidth = SettingsColumn.ActualWidth, rootWidth = SettingsRoot.ActualWidth,
+        columnTop = SettingsColumn.TransformToVisual(SettingsRoot).TransformPoint(new Windows.Foundation.Point()).Y,
+        versionRow = Grid.GetRow(SettingsVersion),
+        headers = TopSettingsGroups.Select(g => {
+            var header = (Microsoft.UI.Xaml.FrameworkElement)g.Header;
+            return new { name = g.Name, height = header.ActualHeight, width = header.ActualWidth,
+                texts = Descendants(header).OfType<TextBlock>().Select(t => {
+                    var point = t.TransformToVisual(header).TransformPoint(new Windows.Foundation.Point());
+                    return new { text = t.Text, x = point.X, y = point.Y, width = t.ActualWidth, height = t.ActualHeight,
+                        fits = point.X >= -.5 && point.Y >= -.5 && point.X + t.ActualWidth <= header.ActualWidth + .5 && point.Y + t.ActualHeight <= header.ActualHeight + .5 };
+                }).ToArray() };
+        }).ToArray(),
+        groups = TopSettingsGroups.Select(g => new { name = g.Name, expanded = g.IsExpanded, width = g.ActualWidth, height = g.ActualHeight,
+            x = g.TransformToVisual(SettingsColumn).TransformPoint(new Windows.Foundation.Point()).X,
+            y = g.TransformToVisual(SettingsColumn).TransformPoint(new Windows.Foundation.Point()).Y }).ToArray(),
+        actionCaptions = Descendants(SettingsColumn).OfType<Button>().Where(IsVisible).Select(b => b.Content as string).Where(s => s is not null).ToArray(),
         controls = Descendants(SettingsColumn).Where(x => x is ComboBox or PasswordBox).Select(x => {
             var point = x.TransformToVisual(SettingsColumn).TransformPoint(new Windows.Foundation.Point());
             return new { name = x.Name, visible = IsLoaded && IsVisible(x), alignment = x.HorizontalAlignment.ToString(), x = point.X, width = x.ActualWidth, fits = point.X + x.ActualWidth <= SettingsColumn.ActualWidth + .5 }; }).ToArray(),

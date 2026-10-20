@@ -106,11 +106,13 @@ public sealed class CatalogFactsView : StackPanel
         }
         if (!string.IsNullOrWhiteSpace(work.ReleaseDate))
         {
-            var release = new TagFlowPanel { HorizontalSpacing = 6, VerticalSpacing = 2 };
-            release.Children.Add(Text(UiText.Get("最早收录发行 ·"), opacity: 0.78));
-            var dateText = Text(CatalogReleaseFacts.WorkDate(work.ReleaseDate, work.ReleaseDatePrecision));
-            dateText.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
-            release.Children.Add(dateText);
+            // Measure the label and date as one text paragraph. A nested flow can
+            // break the date during arrange after its parent reserved one row.
+            var release = Text(""); release.MaxLines = 2;
+            release.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = UiText.Get("最早收录发行 · ") });
+            release.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run {
+                Text = CatalogReleaseFacts.WorkDate(work.ReleaseDate, work.ReleaseDatePrecision),
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
             AddFact(release);
         }
         if (work.Presentation is { Engines.IsEmpty: false } p)

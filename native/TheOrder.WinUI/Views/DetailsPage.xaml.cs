@@ -70,6 +70,8 @@ public sealed partial class DetailsPage : Page, IImageHost
         // Current banner preference: no refraction; a lightly blurred, readable overlay.
         HeroStage.Variant = StageVariant.Unrefracted; HeroStage.AmbientSigma = 18; HeroStage.StageCornerRadius = 8;
         HeroStage.DecodeEdge = 1200; HeroStage.Images = images; HeroStage.Plate = HeroPlate;
+        HeroFallbackCover.Pipeline = images;
+        HeroFallbackCover.SourceStateChanged += UpdateArtworkAvailability;
         HeroStage.NaturalLandscape = true;
         heroPresentation = new(HeroFrame, HeroStage);
         heroPresentation.SetPending(true);
@@ -108,6 +110,7 @@ public sealed partial class DetailsPage : Page, IImageHost
         EditDetailsButton.IsEnabled = EditorCard.Visibility != Visibility.Visible && ViewModel.CanEditDetails;
         if (!ReferenceEquals(displayedDetail, detail)) {
         displayedDetail = detail;
+        HeroFallbackCover.SourceKey = detail?.CoverKey;
         _ = RefreshPersonalFactsAsync();
         var work = detail?.Metadata;
         HeroFacts.SetWork(work, detail?.Personal.Name);
@@ -158,7 +161,7 @@ public sealed partial class DetailsPage : Page, IImageHost
         artwork = HeroStage.CoverKey is not null, ready = HeroStage.HasCurrentPresentation,
         effective = HeroStage.Effective, stageWidth = HeroStage.ActualWidth, stageHeight = HeroStage.ActualHeight,
         safeToShow = !heroPresentation.Pending && (HeroStage.CoverKey is null || HeroStage.HasCurrentPresentation) };
-    internal object StageEvidence => new { placement = "Details hero", frameOpacity = HeroFrame.Opacity, presentationPending = heroPresentation.Pending, revealQueued = heroPresentation.Queued, catalogDataMilliseconds, catalogPrepared, catalogMediaPrepared, cardImages = RichCatalog.ImageEvidence, width = HeroStage.ActualWidth, height = HeroStage.ActualHeight, aspect = HeroStage.ActualHeight > 0 ? HeroStage.ActualWidth / HeroStage.ActualHeight : 0, hasCg = HeroStage.CoverKey is not null, textScreened = heroArtwork?.TextScreened, artworkSourceId = heroArtwork?.SourceWorkId, artworkReference = heroArtwork?.ReferenceTitle, catalogBrowser = CatalogHost.Visibility == Visibility.Visible ? browser?.Current : null, catalogHero = browser?.HeroEvidence, tagGroups = browser?.ShelfEvidence, overlayBounds = HeroOverlayBounds, overlay = new { title = HeroTitle.Text, titleWidth = HeroTitle.ActualWidth, titleHeight = HeroTitle.ActualHeight, titleFontSize = HeroTitle.FontSize, titleMaxLines = HeroTitle.MaxLines, titleWrapping = HeroTitle.TextWrapping.ToString(), zIndex = Canvas.GetZIndex(HeroLayout), facts = HeroFacts.Evidence }, actions = HeroActions.Children.OfType<FrameworkElement>().Where(e => e.Visibility == Visibility.Visible).Select(e => new { name = e.Name, width = e.ActualWidth, height = e.ActualHeight, x = e.TransformToVisual(HeroActions).TransformPoint(new Windows.Foundation.Point()).X, y = e.TransformToVisual(HeroActions).TransformPoint(new Windows.Foundation.Point()).Y }).ToArray(), plateTheme = HeroPlate.RequestedTheme.ToString(), plateWidth = HeroPlate.ActualWidth, plateHeight = HeroPlate.ActualHeight, stage = HeroStage.Evidence };
+    internal object StageEvidence => new { placement = "Details hero", frameOpacity = HeroFrame.Opacity, presentationPending = heroPresentation.Pending, revealQueued = heroPresentation.Queued, catalogDataMilliseconds, catalogPrepared, catalogMediaPrepared, cardImages = RichCatalog.ImageEvidence, fallbackCover = new { visible = HeroFallbackCover.Visibility == Visibility.Visible, loaded = HeroFallbackCover.HasImage, status = HeroFallbackCover.SourceStatus }, width = HeroStage.ActualWidth, height = HeroStage.ActualHeight, aspect = HeroStage.ActualHeight > 0 ? HeroStage.ActualWidth / HeroStage.ActualHeight : 0, hasCg = HeroStage.CoverKey is not null, textScreened = heroArtwork?.TextScreened, artworkSourceId = heroArtwork?.SourceWorkId, artworkReference = heroArtwork?.ReferenceTitle, catalogBrowser = CatalogHost.Visibility == Visibility.Visible ? browser?.Current : null, catalogHero = browser?.HeroEvidence, tagGroups = browser?.ShelfEvidence, overlayBounds = HeroOverlayBounds, overlay = new { title = HeroTitle.Text, titleWidth = HeroTitle.ActualWidth, titleHeight = HeroTitle.ActualHeight, titleFontSize = HeroTitle.FontSize, titleMaxLines = HeroTitle.MaxLines, titleWrapping = HeroTitle.TextWrapping.ToString(), zIndex = Canvas.GetZIndex(HeroLayout), facts = HeroFacts.Evidence }, actions = HeroActions.Children.OfType<FrameworkElement>().Where(e => e.Visibility == Visibility.Visible).Select(e => new { name = e.Name, width = e.ActualWidth, height = e.ActualHeight, x = e.TransformToVisual(HeroActions).TransformPoint(new Windows.Foundation.Point()).X, y = e.TransformToVisual(HeroActions).TransformPoint(new Windows.Foundation.Point()).Y }).ToArray(), plateTheme = HeroPlate.RequestedTheme.ToString(), plateWidth = HeroPlate.ActualWidth, plateHeight = HeroPlate.ActualHeight, stage = HeroStage.Evidence };
     private void OnDetailsSizeChanged(object sender, SizeChangedEventArgs e)
     {
         // Reflow the existing controls; drafts, launch state and image ownership stay in place.
@@ -191,11 +194,23 @@ public sealed partial class DetailsPage : Page, IImageHost
         UpdateHeroFrame(e.NewSize.Width);
     }
     private void SetHeroArtwork(BannerChoice? choice) { heroArtwork = choice; HeroStage.CoverKey = choice?.Key; UpdateHeroFrame(HeroFrame.ActualWidth); }
+    private void OnRetryHeroArtwork(object sender, RoutedEventArgs e)
+    { HeroStage.RetryFailedImage(); HeroFallbackCover.RetryFailed(); }
+    private void UpdateArtworkAvailability()
+    {
+        var failedPoster = HeroFallbackCover.Visibility == Visibility.Visible && HeroFallbackCover.SourceKey is not null &&
+            !HeroFallbackCover.HasImage && HeroFallbackCover.SourceStatus is not ("not-started" or "loading" or "no-source" or "cancelled");
+        HeroArtworkFailure.Visibility = ActionVisible(HeroStage.ImageUnavailable || failedPoster);
+    }
     private void UpdateHeroFrame(double width)
     {
         if (width < 1) return;
         var frame = BannerFrameLayout.ArtworkFrame(HeroFrame, HeroStage, heroArtwork);
         var compact = frame.Width < 560; var dense = frame.Height is > 0 and < 340;
+        HeroFallbackCover.Visibility = ActionVisible(frame.Height <= 0 && HeroFallbackCover.SourceKey is not null);
+        HeroPlateContent.ColumnSpacing = HeroFallbackCover.Visibility == Visibility.Visible ? 18 : 0;
+        HeroFallbackCover.Width = compact ? 64 : 108; HeroFallbackCover.Height = compact ? 86 : 144;
+        UpdateArtworkAvailability();
         HeroTitleLayout.Fit(HeroTitle, HeroPlate, frame.Width, compact, dense);
         HeroStatusText.FontSize = HeroRatingText.FontSize = compact ? 12 : 13;
         HeroFacts.Dense = dense;

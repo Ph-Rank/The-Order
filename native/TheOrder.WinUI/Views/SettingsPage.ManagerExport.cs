@@ -46,7 +46,7 @@ public sealed partial class SettingsPage
             ManagerExportProgress.Visibility = Visibility.Collapsed;
             if (await ShowManagerExportAsync(new() { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "确认导出范围",
                 Content = new ScrollViewer { Content = Text(text), MaxHeight = 420, MaxWidth = 540, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled },
-                PrimaryButtonText = "保存 ZIP…", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close }) != ContentDialogResult.Primary
+                PrimaryButtonText = "保存 ZIP", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close }) != ContentDialogResult.Primary
                 || revision != migrationGeneration || !IsLoaded) { ManagerExportMessage.Text = "已取消，未保存导出文件。"; return; }
             var path = await choose(manager);
             if (path is null || revision != migrationGeneration || !IsLoaded) { ManagerExportMessage.Text = "已取消，未保存导出文件。"; return; }

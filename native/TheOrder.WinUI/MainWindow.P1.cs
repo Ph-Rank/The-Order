@@ -241,8 +241,8 @@ public sealed partial class MainWindow
             if (await PickFolder() is not { } path) { notice.Text = "已取消选择。"; return; }
             await sources.AddAsync(path, kind, cancel.Token); sourceWatcher.Refresh(); await sources.ScanAsync(true, cancel.Token, waitForTurn: true); sourceError = null; await Refresh(); notice.Text = sources.Candidates.IsEmpty ? "文件夹已添加，本次没有发现可导入的新游戏。" : $"文件夹已添加，发现 {sources.Candidates.Length} 个新游戏。请继续选择要导入的游戏。";
         }, cancel.Token);
-        actions.Children.Add(ActionButton("添加游戏库文件夹…", () => Add(LibrarySourceKind.Folder), "AddFolderSource"));
-        actions.Children.Add(ActionButton("添加 Steam 库…", () => Add(LibrarySourceKind.Steam), "AddSteamSource"));
+        actions.Children.Add(ActionButton("添加游戏库文件夹", () => Add(LibrarySourceKind.Folder), "AddFolderSource"));
+        actions.Children.Add(ActionButton("添加 Steam 库", () => Add(LibrarySourceKind.Steam), "AddSteamSource"));
         scanButton = ActionButton("检查新游戏", () => RunP1Async(notice, async () => { await sources.ScanAsync(true, cancel.Token, waitForTurn: true); sourceError = null; await Refresh(); notice.Text = sources.Candidates.IsEmpty ? "检查完成，暂无待导入的新游戏。" : $"发现 {sources.Candidates.Length} 个新游戏，请选择要加入书架的游戏。"; }, cancel.Token), "ScanLibrarySources", () => !sources.Sources.IsEmpty);
         actions.Children.Add(scanButton);
         ignoreButton = ActionButton("不再提醒这批游戏", () => RunP1Async(notice, async () =>
@@ -322,13 +322,13 @@ public sealed partial class MainWindow
         time.Children.Add(records); RefreshTime();
         void RefreshGuides()
         {
-            guides.Children.Clear(); guides.Children.Add(Label("添加已有攻略文件，方便随时打开。这里只保存文件位置，不复制或删除原文件。")); guides.Children.Add(ActionButton("添加攻略文件…", () => RunP1Async(notice, async () =>
+            guides.Children.Clear(); guides.Children.Add(Label("添加已有攻略文件，方便随时打开。这里只保存文件位置，不复制或删除原文件。")); guides.Children.Add(ActionButton("添加攻略文件", () => RunP1Async(notice, async () =>
             { if (await PickFile(LocalDocuments.Extensions.ToArray()) is { } path) { await resources.ValidateGuideAsync(path, cancel.Token); await Commit((d, token) => extras.GuideAsync(d, path, token)); } else notice.Text = "已取消选择。"; }, cancel.Token), "AddLocalGuide"));
             foreach (var path in details.Entry.GuidePaths)
             {
                 var actions = new Views.TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 8 };
                 actions.Children.Add(ActionButton("打开攻略", () => RunP1Async(notice, async () => { await resources.OpenGuideAsync(path); notice.Text = "已交给系统默认程序打开。"; }, cancel.Token)));
-                actions.Children.Add(ActionButton("更换攻略文件…", () => RunP1Async(notice, async () => { if (await PickFile(LocalDocuments.Extensions.ToArray()) is { } replacement) { await resources.ValidateGuideAsync(replacement, cancel.Token); await Commit((d, token) => extras.ReplaceGuideAsync(d, path, replacement, token)); } else notice.Text = "已取消，攻略文件未更换。"; }, cancel.Token)));
+                actions.Children.Add(ActionButton("更换攻略文件", () => RunP1Async(notice, async () => { if (await PickFile(LocalDocuments.Extensions.ToArray()) is { } replacement) { await resources.ValidateGuideAsync(replacement, cancel.Token); await Commit((d, token) => extras.ReplaceGuideAsync(d, path, replacement, token)); } else notice.Text = "已取消，攻略文件未更换。"; }, cancel.Token)));
                 actions.Children.Add(ActionButton("移除攻略链接", () => RunP1Async(notice, () => Commit((d, token) => extras.GuideAsync(d, null, token, path)), cancel.Token)));
                 guides.Children.Add(Panel(Label(path), actions));
             }

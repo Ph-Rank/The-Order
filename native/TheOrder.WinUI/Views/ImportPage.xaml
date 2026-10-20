@@ -15,8 +15,8 @@
   <Border Grid.Row="1" Style="{StaticResource ToolbarSurfaceStyle}" Padding="16,12">
    <StackPanel Spacing="8">
     <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8" MaximumItemWidth="360">
-     <Button Click="OnChoose" IsEnabled="{x:Bind Workspace.CanEdit, Mode=OneWay}" Style="{StaticResource AccentButtonStyle}" AutomationProperties.AutomationId="ChooseScanRoot" l:Localize.Content="选择游戏文件夹…" />
-     <Button Click="OnLibrarySources" IsEnabled="{x:Bind Workspace.CanEdit, Mode=OneWay}" AutomationProperties.AutomationId="ImportLibrarySources" l:Localize.Content="从 Steam / 游戏库发现…" />
+     <Button Click="OnChoose" IsEnabled="{x:Bind Workspace.CanEdit, Mode=OneWay}" Style="{StaticResource AccentButtonStyle}" AutomationProperties.AutomationId="ChooseScanRoot" l:Localize.Content="选择游戏文件夹" />
+     <Button Click="OnLibrarySources" IsEnabled="{x:Bind Workspace.CanEdit, Mode=OneWay}" AutomationProperties.AutomationId="ImportLibrarySources" l:Localize.Content="从 Steam / 游戏库发现" />
      <Button Click="OnRetry" Visibility="{x:Bind Visible(ViewModel.CanRetryScan), Mode=OneWay}" IsEnabled="{x:Bind Workspace.CanEdit, Mode=OneWay}" AutomationProperties.AutomationId="RetryScan" l:Localize.Content="重新扫描" />
      <Button Click="OnCancel" Visibility="{x:Bind Visible(ViewModel.IsScanning), Mode=OneWay}" AutomationProperties.AutomationId="CancelScan" l:Localize.Content="取消扫描" />
     </views:TagFlowPanel>

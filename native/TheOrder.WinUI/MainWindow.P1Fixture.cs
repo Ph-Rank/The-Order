@@ -47,35 +47,33 @@ public sealed partial class MainWindow
                 if (list.Items.Count == 0) throw new InvalidOperationException("Test library must contain a row.");
                 list.SelectedItems.Add(list.Items[0]);
             }
-            else if (value is "settings-api" or "settings-api-close" or "settings-token" or "settings-token-close")
+            else if (value is "settings-api" or "settings-api-edit" or "settings-api-close" or "settings-token" or "settings-token-close")
             {
                 if (ViewModel.Page != TheOrder.Presentation.WorkspacePage.Settings) throw new InvalidOperationException();
+                settingsPage.RevealSettingsTest(value);
                 var controls = P1Elements(settingsPage).OfType<FrameworkElement>().ToArray();
-                if (value is "settings-api" or "settings-api-close") controls.OfType<Expander>().Single(e => e.Name == "ApiKeyPanel").IsExpanded = value == "settings-api";
-                else
+                if (value is "settings-api" or "settings-api-edit" or "settings-api-close")
+                {
+                    controls.OfType<Expander>().Single(e => e.Name == "ApiKeyPanel").IsExpanded = value != "settings-api-close";
+                    settingsPage.UpdateLayout();
+                    controls = P1Elements(settingsPage).OfType<FrameworkElement>().ToArray();
+                }
+                if (value is "settings-token" or "settings-token-close" || value == "settings-api-edit"
+                    && controls.OfType<StackPanel>().Single(b => b.Name == "CredentialEditor").Visibility != Visibility.Visible)
                 {
                     // Existing editor-open action only: no token input, network authorization or persistence.
-                    var button = controls.OfType<Button>().Single(b => AutomationProperties.GetAutomationId(b) == (value == "settings-token-close" ? "BangumiCloseEditor" : "BangumiAuthorize"));
+                    var button = value == "settings-api-edit" ? controls.OfType<Button>().Single(b => b.Name == "ChangeCredentialButton")
+                        : controls.OfType<Button>().Single(b => AutomationProperties.GetAutomationId(b) == (value == "settings-token-close" ? "BangumiCloseEditor" : "BangumiAuthorize"));
                     var peer = FrameworkElementAutomationPeer.CreatePeerForElement(button) ?? new ButtonAutomationPeer(button);
                     if (peer.GetPattern(PatternInterface.Invoke) is not IInvokeProvider invoke) throw new InvalidOperationException();
                     invoke.Invoke();
                 }
             }
-            else if (value is "settings-top" or "settings-online" or "settings-bangumi" or "settings-backups" or "settings-update")
+            else if (value is "settings-top" or "settings-online" or "settings-bangumi" or "settings-backups" or "settings-update"
+                or "settings-appearance" or "settings-launch" or "settings-library" or "settings-sync" or "settings-collapse-all")
             {
                 if (ViewModel.Page != TheOrder.Presentation.WorkspacePage.Settings) throw new InvalidOperationException();
-                var controls = P1Elements(settingsPage).OfType<FrameworkElement>().ToArray();
-                var scroll = controls.OfType<ScrollViewer>().Single(s => s.Content is FrameworkElement { Name: "SettingsColumn" });
-                FrameworkElement? section = value switch
-                {
-                    "settings-online" => controls.Single(e => e.Name == "NextMoeSection"),
-                    "settings-bangumi" => controls.Single(e => e.Name == "BangumiSection"),
-                    "settings-backups" => controls.Single(e => e.Name == "AutomaticBackup"),
-                    "settings-update" => controls.Single(e => e.Name == "UpdateSection"),
-                    _ => null
-                };
-                var y = section?.TransformToVisual((UIElement)scroll.Content).TransformPoint(new Windows.Foundation.Point()).Y ?? 0;
-                scroll.ChangeView(null, Math.Max(0, y - 12), null, true);
+                settingsPage.RevealSettingsTest(value);
             }
             else if (value == "clear-notice") NoticeBar.IsOpen = false;
             else throw new InvalidDataException("Unknown bounded page inspection.");
@@ -139,7 +137,7 @@ public sealed partial class MainWindow
         if (action == "p1ContextInvoke")
         {
             var text = request.GetProperty("value").GetString();
-            if (text is not ("打开详情" or "选择" or "启动设置（LE / Magpie）…")) throw new InvalidDataException();
+            if (text is not ("打开详情" or "选择" or "启动设置（LE / Magpie）")) throw new InvalidDataException();
             var item = libraryPage.ContextItemFixture(text); if (!item.IsEnabled) throw new InvalidOperationException();
             var peer = FrameworkElementAutomationPeer.CreatePeerForElement(item) ?? new MenuFlyoutItemAutomationPeer(item);
             if (peer.GetPattern(PatternInterface.Invoke) is not IInvokeProvider invoke) throw new InvalidOperationException();

@@ -20,13 +20,13 @@
           <Button Height="36" Padding="12,0" CornerRadius="6" Click="OnShowRelatedWorks" Content="关联作品" ToolTipService.ToolTip="浏览关联动画、音乐和书籍" AutomationProperties.AutomationId="GameRelatedJump" />
           <Button x:Name="HeroMore" Width="40" Height="36" Padding="8,0" CornerRadius="6" AutomationProperties.AutomationId="DetailsMore" l:Localize.Name="更多作品操作"><FontIcon Glyph="" FontSize="14" />
           <Button.Flyout><MenuFlyout Placement="BottomEdgeAlignedLeft" Opening="OnLaunchMenuOpening">
-           <MenuFlyoutItem Click="OnInstallations" l:Localize.Text="游戏文件与启动…"><MenuFlyoutItem.Icon><FontIcon Glyph="" /></MenuFlyoutItem.Icon></MenuFlyoutItem>
-           <MenuFlyoutItem Text="游玩记录、攻略与补充资料…" Click="OnGameTools" AutomationProperties.AutomationId="GameTools" />
+           <MenuFlyoutItem Click="OnInstallations" l:Localize.Text="游戏文件与启动"><MenuFlyoutItem.Icon><FontIcon Glyph="" /></MenuFlyoutItem.Icon></MenuFlyoutItem>
+           <MenuFlyoutItem Text="游玩记录、攻略与补充资料" Click="OnGameTools" AutomationProperties.AutomationId="GameTools" />
            <MenuFlyoutSubItem x:Name="LaunchInstallationsMenu" l:Localize.Text="本次启动哪个文件夹的游戏" />
            <MenuFlyoutItem x:Name="CoverButton" Click="OnCover" IsEnabled="{x:Bind ViewModel.CanEdit, Mode=OneWay}" AutomationProperties.AutomationId="ChooseLocalCover" l:Localize.Text="选择本地封面"><MenuFlyoutItem.Icon><FontIcon Glyph="" /></MenuFlyoutItem.Icon></MenuFlyoutItem>
-           <MenuFlyoutItem Click="OnWorkCover" IsEnabled="{x:Bind ViewModel.CanEdit, Mode=OneWay}" AutomationProperties.AutomationId="ChooseWorkCover" l:Localize.Text="选择作品封面…" />
+           <MenuFlyoutItem Click="OnWorkCover" IsEnabled="{x:Bind ViewModel.CanEdit, Mode=OneWay}" AutomationProperties.AutomationId="ChooseWorkCover" l:Localize.Text="选择作品封面" />
            <MenuFlyoutItem Click="OnDefaultCover" IsEnabled="{x:Bind ViewModel.CanEdit, Mode=OneWay}" AutomationProperties.AutomationId="RestoreDefaultCover" l:Localize.Text="恢复自动推荐封面" />
-           <MenuFlyoutItem Click="OnBanner" IsEnabled="{x:Bind ViewModel.CanEdit, Mode=OneWay}" AutomationProperties.AutomationId="ChooseLocalBanner" l:Localize.Text="选择本地横幅…"><MenuFlyoutItem.Icon><FontIcon Glyph="" /></MenuFlyoutItem.Icon></MenuFlyoutItem>
+           <MenuFlyoutItem Click="OnBanner" IsEnabled="{x:Bind ViewModel.CanEdit, Mode=OneWay}" AutomationProperties.AutomationId="ChooseLocalBanner" l:Localize.Text="选择本地横幅"><MenuFlyoutItem.Icon><FontIcon Glyph="" /></MenuFlyoutItem.Icon></MenuFlyoutItem>
            <MenuFlyoutItem Click="OnDefaultBanner" IsEnabled="{x:Bind ViewModel.CanEdit, Mode=OneWay}" AutomationProperties.AutomationId="RestoreDefaultBanner" l:Localize.Text="恢复自动横幅" />
            <MenuFlyoutItem x:Name="RecognizeButton" Click="OnRecognize" AutomationProperties.AutomationId="RecognizeOne" l:Localize.Text="重新识别"><MenuFlyoutItem.Icon><FontIcon Glyph="" /></MenuFlyoutItem.Icon></MenuFlyoutItem>
            <MenuFlyoutSeparator />
@@ -44,7 +44,10 @@
       <Grid.ColumnDefinitions><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
       <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
       <Border x:Name="HeroPlate" Grid.RowSpan="2" MaxWidth="620" HorizontalAlignment="Left" VerticalAlignment="Bottom" Padding="24,18,24,18" CornerRadius="23">
-       <StackPanel Spacing="5">
+       <Grid x:Name="HeroPlateContent">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+        <views:CoverPresenter x:Name="HeroFallbackCover" Width="108" Height="144" VerticalAlignment="Top" Visibility="Collapsed" PreserveEntireImage="True" l:Localize.Name="作品封面" />
+       <StackPanel Grid.Column="1" Spacing="5">
          <TextBlock x:Name="HeroTitle" Text="{x:Bind ViewModel.Draft.Source.Personal.Name, Mode=OneWay}" Style="{StaticResource WorkTitleStyle}" TextWrapping="NoWrap" MaxLines="1" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="DetailTitle" AutomationProperties.HeadingLevel="Level1" />
         <views:CatalogFactsView x:Name="HeroFacts" />
         <Border x:Name="HeroPersonalDivider" Height="1" Margin="0,2,0,1" Opacity="0.18" Background="{ThemeResource TextPrimaryBrush}" />
@@ -59,9 +62,14 @@
         </views:TagFlowPanel>
         <TextBlock x:Name="PersonalLabelsText" FontSize="12" Opacity=".82" TextWrapping="Wrap" />
        </StackPanel>
+       </Grid>
       </Border>
      </Grid>
     </Grid>
+    <views:TagFlowPanel x:Name="HeroArtworkFailure" Visibility="Collapsed" HorizontalSpacing="10" VerticalSpacing="6" MaximumItemWidth="1000">
+     <TextBlock l:Localize.Text="图片暂未载入，作品资料已保留。" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
+     <Button l:Localize.Content="重试图片" MinHeight="28" Padding="10,2" Click="OnRetryHeroArtwork" AutomationProperties.AutomationId="RetryHeroArtwork" />
+    </views:TagFlowPanel>
     <Border Visibility="{x:Bind TextVisible(Launch.Message), Mode=OneWay}" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource StrokeBrush}" BorderThickness="1" CornerRadius="6" Padding="12,8">
      <Grid ColumnSpacing="10">
       <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>

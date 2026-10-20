@@ -64,7 +64,7 @@ public sealed partial class MainWindow
         if (folder is not null) content.Children.Add(new TextBlock { Text = folder, TextWrapping = TextWrapping.Wrap, Opacity = .7 });
         if (message.Length > 0) content.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
         content.Children.Add(list);
-        var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, Title = title, Content = content, PrimaryButtonText = UiText.Get(folder is null ? "下一步" : "选择并启动"), SecondaryButtonText = folder is null ? "" : UiText.Get("浏览本目录…"), CloseButtonText = UiText.Get("取消"), IsPrimaryButtonEnabled = false };
+        var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, Title = title, Content = content, PrimaryButtonText = UiText.Get(folder is null ? "下一步" : "选择并启动"), SecondaryButtonText = folder is null ? "" : UiText.Get("浏览本目录"), CloseButtonText = UiText.Get("取消"), IsPrimaryButtonEnabled = false };
         list.SelectionChanged += (_, _) => dialog.IsPrimaryButtonEnabled = list.SelectedItem is not null;
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Secondary && folder is not null)

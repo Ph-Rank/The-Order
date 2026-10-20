@@ -48,7 +48,7 @@
          <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
          <TextBox Text="{x:Bind ViewModel.Draft.Executable, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="InstallationExecutable" Header="启动文件" PlaceholderText="选择平时用来打开游戏的 exe 或 cmd" AutomationProperties.Name="游戏启动文件" />
-         <Button x:Name="ExecutableBrowseButton" Grid.Column="1" VerticalAlignment="Bottom" Click="OnExecutable" Content="选择启动文件…" />
+         <Button x:Name="ExecutableBrowseButton" Grid.Column="1" VerticalAlignment="Bottom" Click="OnExecutable" Content="选择启动文件" />
         </Grid>
         <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="选择文件不会启动游戏；留空可在首次启动时再选择。" TextWrapping="Wrap" />
        </StackPanel>
@@ -62,7 +62,7 @@
            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
            <TextBox x:Name="SaveFolderPath" Header="存档位置" PlaceholderText="未设置" Text="{x:Bind ViewModel.Draft.SaveFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="SaveFolderPath" />
-           <Button x:Name="SaveFolderBrowseButton" Grid.Column="1" VerticalAlignment="Bottom" Content="选择存档文件夹…" Click="OnSaveFolder" />
+           <Button x:Name="SaveFolderBrowseButton" Grid.Column="1" VerticalAlignment="Bottom" Content="选择存档文件夹" Click="OnSaveFolder" />
           </Grid>
           <Button x:Name="FindSaveFolderButton" Content="在游戏目录中查找" Click="OnFindSave" HorizontalAlignment="Left" />
          </StackPanel>
@@ -87,7 +87,7 @@
           <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
           <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
           <TextBox Text="{x:Bind ViewModel.Draft.WorkingDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="InstallationWorkingDirectory" Header="启动工作目录" PlaceholderText="留空使用启动文件所在文件夹" AutomationProperties.Name="启动工作目录，可留空" />
-          <Button x:Name="WorkingDirectoryBrowseButton" Grid.Column="1" VerticalAlignment="Bottom" Click="OnWorking" Content="选择工作目录…" />
+          <Button x:Name="WorkingDirectoryBrowseButton" Grid.Column="1" VerticalAlignment="Bottom" Click="OnWorking" Content="选择工作目录" />
          </Grid>
          <CheckBox IsChecked="{x:Bind ViewModel.Draft.Administrator, Mode=TwoWay}" HorizontalContentAlignment="Stretch" AutomationProperties.Name="以管理员身份启动，Windows 会请求授权"><TextBlock Text="以管理员身份启动（Windows 会请求授权）" TextWrapping="Wrap" /></CheckBox>
          <CheckBox IsChecked="{x:Bind ViewModel.Draft.HighDpi, Mode=TwoWay}" HorizontalContentAlignment="Stretch" AutomationProperties.Name="由游戏处理高分辨率缩放"><TextBlock Text="由游戏处理高分辨率缩放（DPI）" TextWrapping="Wrap" /></CheckBox>

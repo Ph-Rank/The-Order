@@ -495,7 +495,7 @@ public sealed partial class LibraryPage : Page, IImageHost
         {
             menu.Items.Add(Entry(UiText.Get("打开详情"), "", () => OpenItem(item), accelerator: "Enter"));
             menu.Items.Add(Entry(UiText.Get("启动游戏"), "", () => QuickLaunch?.Invoke(item) ?? Task.CompletedTask, item.InstallationCount > 0, "Ctrl+Enter"));
-            menu.Items.Add(Entry("启动设置（LE / Magpie）…", "", () => OpenLaunchSettings?.Invoke(item.Id) ?? Task.CompletedTask, item.InstallationCount > 0 && ViewModel.CanEdit));
+            menu.Items.Add(Entry("启动设置（LE / Magpie）", "", () => OpenLaunchSettings?.Invoke(item.Id) ?? Task.CompletedTask, item.InstallationCount > 0 && ViewModel.CanEdit));
             menu.Items.Add(new MenuFlyoutSeparator());
             menu.Items.Add(Entry(UiText.Get("选择"), "", () => { SetSelectionMode(true); Active.SelectedItems.Add(item); return Task.CompletedTask; }));
             menu.Items.Add(Entry("从书架移除", "", () => RemoveSelected?.Invoke([item.Id]) ?? Task.CompletedTask, ViewModel.CanEdit));

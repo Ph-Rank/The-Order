@@ -808,7 +808,6 @@
   "选择一项核对建议": "Choose a review suggestion",
   "选择作品": "Select game",
   "选择作品封面": "Choose cover",
-  "选择作品封面…": "Choose cover…",
   "选择作品查看详情。": "Select a game for details.",
   "选择作品（Ctrl+单击）": "Select games (Ctrl+click)",
   "选择保存的筛选": "Choose a saved filter",
@@ -974,5 +973,17 @@
   "请选择游戏安装目录或数据盘，不能浏览系统盘根目录、系统目录或网络共享根目录。": "Choose a game installation folder or data drive. System drive roots, system folders and network share roots cannot be browsed.",
   "请选择可读取的库目录或数据盘，不能使用系统盘根目录、系统目录、网络共享根目录或目录链接。": "Choose a readable library folder or data drive. System drive roots, system folders, network share roots and folder links cannot be used.",
   "数据盘根目录仅支持手动检查；自动检查请选择具体游戏库文件夹。": "Data drive roots support manual checks only. Choose a specific library folder for automatic checks.",
-  "可选择游戏文件夹或数据盘根目录。只记录游戏位置，不复制或移动文件；系统目录会自动跳过。": "Choose a game folder or data drive root. Only game locations are recorded; no files are copied or moved. System folders are skipped."
+  "可选择游戏文件夹或数据盘根目录。只记录游戏位置，不复制或移动文件；系统目录会自动跳过。": "Choose a game folder or data drive root. Only game locations are recorded; no files are copied or moved. System folders are skipped.",
+  "NextMoe、番组计划与内容显示": "NextMoe, Bangumi and content visibility",
+  "主题、材质效果与资料语言": "Theme, materials and metadata language",
+  "书架与识别": "Library and recognition",
+  "书架备份、恢复与管理器互通": "Backups, restore and manager interchange",
+  "备份与迁移": "Backup and migration",
+  "外观与语言": "Appearance and language",
+  "更新通道、版本与发布说明": "Update channel, version and release notes",
+  "游戏发现、在线补充与识别规则": "Game discovery, online details and recognition rules",
+  "游戏启动": "Game launch",
+  "程序更新": "App updates",
+  "资料与账号": "Metadata and accounts",
+  "默认启动行为与辅助工具": "Default launch behavior and helper tools"
 }

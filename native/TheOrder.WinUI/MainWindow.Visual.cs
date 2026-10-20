@@ -335,6 +335,8 @@ public sealed partial class MainWindow
                     var heroAudit = await AuditHeroFramesAsync(root.GetProperty("id").GetString());
                     await File.WriteAllTextAsync(Path.Combine(fixtureDirectory, "hero-frames.json"), JsonSerializer.Serialize(heroAudit));
                     break;
+                case "artworkRegression": await RunArtworkRegressionAsync(); break;
+                case "artworkDetails": await RunArtworkDetailsAsync(root.GetProperty("value").GetString() ?? ""); break;
                 case "heroStageAudit":
                     var heroStageAudit = await detailsPage.AuditStageAsync();
                     await File.WriteAllTextAsync(Path.Combine(fixtureDirectory, "hero-stage-audit.json"), JsonSerializer.Serialize(heroStageAudit));
