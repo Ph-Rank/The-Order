@@ -37,9 +37,20 @@ public sealed class WindowsScanFilesystem : IScanFilesystem
     }
     public bool IsForbiddenRoot(PathObservation root)
     {
-        var final = root.FinalPath.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase) ? @"\\" + root.FinalPath[8..] : root.FinalPath.StartsWith(@"\\?\", StringComparison.Ordinal) ? root.FinalPath[4..] : root.FinalPath;
-        var forbidden = new[] { Path.GetPathRoot(final), Environment.GetFolderPath(Environment.SpecialFolder.Windows), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData) };
-        return forbidden.Any(p => !string.IsNullOrEmpty(p) && string.Equals(Path.TrimEndingDirectorySeparator(p), Path.TrimEndingDirectorySeparator(final), StringComparison.OrdinalIgnoreCase));
+        return IsForbiddenPath(root.FinalPath, Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            [Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)]);
+    }
+    internal static bool IsForbiddenPath(string path, string windows, IEnumerable<string> specialFolders)
+    {
+        var final = Path.TrimEndingDirectorySeparator(ScanDirectoryPolicy.DosPath(path));
+        var drive = Path.GetPathRoot(final);
+        bool equal(string? a, string? b) => !string.IsNullOrEmpty(a) && !string.IsNullOrEmpty(b)
+            && string.Equals(Path.TrimEndingDirectorySeparator(a), Path.TrimEndingDirectorySeparator(b), StringComparison.OrdinalIgnoreCase);
+        // A data volume is an explicit bounded scan root. The system volume and UNC share roots
+        // remain blocked; aliases are judged by the actual resolved target, not their drive letter.
+        if (equal(drive, final) && (!ScanDirectoryPolicy.IsLocalDriveRoot(final) || equal(drive, Path.GetPathRoot(windows)))) return true;
+        if (equal(windows, final) || !string.IsNullOrEmpty(windows) && InstallationPreflightService.Within(final, windows)) return true;
+        return specialFolders.Any(p => equal(p, final));
     }
     [DllImport("kernel32.dll", EntryPoint = "CreateFileW", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern SafeFileHandle CreateFile(string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);

@@ -50,7 +50,9 @@ public sealed class OfflineFilesystemTests : IDisposable
         using var cancel = new CancellationTokenSource(); cancel.Cancel();
         Assert.Equal(ScanStatus.Cancelled, (await scanner.ScanAsync(root, [], cancellation: cancel.Token)).Status);
         Assert.Equal(ScanStatus.Failed, (await scanner.ScanAsync(root + "-gone", [])).Status);
-        Assert.Equal(ScanStatus.Failed, (await scanner.ScanAsync(Path.GetPathRoot(root)!, [])).Status);
+        // Data-drive roots are now valid. This control must never enumerate an actual data volume.
+        var systemRoot = Path.GetPathRoot(Environment.GetFolderPath(Environment.SpecialFolder.Windows))!;
+        Assert.Equal(ScanStatus.Failed, (await scanner.ScanAsync(systemRoot, [])).Status);
     }
     [Fact] public async Task BatchImportUsesSingleDurableTransactionThenSkipsDuplicates()
     {

@@ -50,7 +50,7 @@ public sealed partial class BoundedScanner(IFilesystemIdentity identity, IScanFi
                 throw new InvalidDataException(UiText.Get("扫描上限不在允许范围内。"));
             var probe = identity.Inspect(root); if (!probe.IsValid) throw new InvalidDataException(probe.Message);
             if (filesystem.IsForbiddenRoot(probe.Observation!) || PatchDirectory().IsMatch(probe.Observation!.FinalPath))
-                throw new InvalidDataException(UiText.Get("请选择具体游戏目录；不能扫描磁盘根目录、系统目录或补丁备份目录。"));
+                throw new InvalidDataException(UiText.Get("请选择游戏目录或数据盘；不能扫描系统盘根目录、系统目录、网络共享根目录或补丁备份目录。"));
             // This authorization never moves to a newly resolved root during the scan.
             var authorizedRoot = probe.Observation!;
             var queue = new Queue<(PathObservation Observation, int Depth)>(); queue.Enqueue((authorizedRoot, 0));
@@ -78,13 +78,15 @@ public sealed partial class BoundedScanner(IFilesystemIdentity identity, IScanFi
                         current = current with { Entries = current.Entries + 1 };
                         if (current.Entries > limits.MaxEntries) throw new ScanLimitException();
                         if (entry.IsReparsePoint) continue; // Old scanner excludes links. Never follow loops or read external trees.
-                        if (entry.IsDirectory && !SkippedDirectories.Contains(entry.Name))
+                        if (entry.IsDirectory)
                         {
+                            if (ScanDirectoryPolicy.SkipChild(item.Observation, entry.Name)) continue;
                             deeperDirectory = true;
                             if (item.Depth < limits.MaxDepth)
                             {
                                 var child = identity.Inspect(entry.Path);
-                                if (child.IsValid && InScope(child.Observation!)) subdirectories.Add(child.Observation!);
+                                if (child.IsValid && InScope(child.Observation!))
+                                { if (!filesystem.IsForbiddenRoot(child.Observation!)) subdirectories.Add(child.Observation!); }
                                 else Warn(UiText.Get("子目录不可读取或包含不支持的链接，已跳过。"));
                             }
                         }
@@ -103,7 +105,7 @@ public sealed partial class BoundedScanner(IFilesystemIdentity identity, IScanFi
                 if (executables.Count == 0) executables.AddRange(scripts);
                 if (executables.Count > 0)
                 {
-                    var name = Path.GetFileName(directory.Observation.DisplayPath);
+                    var name = ScanDirectoryPolicy.CandidateName(directory.Observation);
                     var sorted = executables.OrderByDescending(p => Compact(Path.GetFileNameWithoutExtension(p)) == Compact(name))
                         .ThenBy(p => p, StringComparer.CurrentCulture).ToImmutableArray();
                     candidates.Add(new(Guid.NewGuid().ToString(), name, directory.Observation, sorted,
