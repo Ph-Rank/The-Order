@@ -15,6 +15,7 @@ public static class CandidateDetailLinks
             if(!Allowed(url))return;var uri=new Uri(url!);var site=Sites[uri.IdnHost];
             // Work refs are authoritative anchors; releases, characters and staff are separate entities.
             if(site=="VNDB"&&!Regex.IsMatch(uri.AbsolutePath,@"^/v[0-9]+/?$"))return;
+            if(site=="DLsite"&&!Regex.IsMatch(uri.AbsolutePath,@"^/(?:home|soft|pro|maniax|books|girls|bl|appx)/work/=/product_id/(?:RJ|VJ|BJ)[0-9]{6,12}\.html$"))return;
             if(seen.Add(site))links.Add(new(site,url!));
         }
         // KunGal's detail route uses the catalog work ID even when no community claim exists.

@@ -24,4 +24,25 @@ public sealed class CandidateDetailLinkTests
     public void UnsafeOrUnrelatedTargetsAreNotLaunchable(string value) => Assert.False(CandidateDetailLinks.Allowed(value));
     [Fact]
     public void MissingForeignLinksKeepOnlyCatalogKunGalRoute() { var link = Assert.Single(CandidateDetailLinks.From(Work())); Assert.Equal("KunGal", link.Title); Assert.Equal("https://www.kungal.com/galgame/" + Work().Id, link.Url); }
+    [Theory]
+    [InlineData("RJ297925")][InlineData("VJ01001079")][InlineData("BJ123456")]
+    public void DlsiteCatalogProductIdsAppearAsAnOrdinarySource(string id)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(new { @object="work", id="123", display_name="Synthetic", refs=new[]{new{source="dlsite",external_id=id}} }));
+        var work = new TheOrder.Infrastructure.Online.RemoteWorkDto(doc.RootElement).Map(false, DateTimeOffset.UtcNow);
+        var link = Assert.Single(CandidateDetailLinks.From(work), x=>x.Title=="DLsite");
+        Assert.Equal("https://www.dlsite.com/home/work/=/product_id/"+id+".html",link.Url);
+        Assert.Equal(id,Assert.Single(work.References).Id);
+    }
+    [Theory]
+    [InlineData("../RJ297925")][InlineData("RJ297925?affiliate=x")][InlineData("123456")][InlineData("rj297925")]
+    public void InvalidDlsiteIdsNeverGeneratePurchaseLinks(string id)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(new { @object="work", id="123", display_name="Synthetic", refs=new[]{new{source="dlsite",external_id=id}} }));
+        var work = new TheOrder.Infrastructure.Online.RemoteWorkDto(doc.RootElement).Map(false, DateTimeOffset.UtcNow);
+        Assert.DoesNotContain(CandidateDetailLinks.From(work),x=>x.Title=="DLsite");
+    }
+    [Theory]
+    [InlineData("https://www.dlsite.com/")][InlineData("https://www.dlsite.com/home/fsr/=/keyword/test")]
+    public void DlsiteHomeAndSearchPagesAreNotProductSources(string url) => Assert.DoesNotContain(CandidateDetailLinks.From(Work() with { References=[new("dlsite","x",url)] }),x=>x.Title=="DLsite");
 }

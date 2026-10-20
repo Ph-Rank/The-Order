@@ -1,0 +1,251 @@
+{
+  "result": "ok",
+  "response": "collection",
+  "limit": 10,
+  "offset": 0,
+  "total": 6,
+  "data": [
+    {
+      "id": "801513ba-a712-498c-8f57-cae55b38cc92",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "ja-ro": "Berserk"
+        },
+        "altTitles": [
+          {
+            "ja": "ベルセルク"
+          },
+          {
+            "ko": "베르세르크"
+          },
+          {
+            "zh": "烙印勇士"
+          },
+          {
+            "zh-hk": "劍風傳奇"
+          },
+          {
+            "ar": "برسرك"
+          },
+          {
+            "ar": "بيرسيرك"
+          },
+          {
+            "be": "Бярсерк"
+          },
+          {
+            "de": "Berserk"
+          },
+          {
+            "he": "ברזרק"
+          },
+          {
+            "ne": "बर्सर्क"
+          },
+          {
+            "fa": "برزرک"
+          },
+          {
+            "ru": "Берсерк"
+          },
+          {
+            "th": "เบอร์เซิร์ก"
+          },
+          {
+            "th": "เทพมรณะ"
+          },
+          {
+            "uk": "Берсерк"
+          },
+          {
+            "bg": "Берсерк"
+          },
+          {
+            "bn": "রণোন্মত্ত"
+          },
+          {
+            "en": "Berserk"
+          },
+          {
+            "id": "Berserk"
+          }
+        ],
+        "links": {
+          "al": "30002",
+          "ap": "berserk",
+          "bl": "181526",
+          "bw": "series/16664/list",
+          "kt": "8",
+          "mu": "njeqwry",
+          "amz": "https://www.amazon.co.jp/-/en/dp/B074C597F1",
+          "cdj": "https://www.cdjapan.co.jp/product/NEOBK-3115032",
+          "ebj": "https://ebookjapan.yahoo.co.jp/books/127562/",
+          "mal": "2",
+          "raw": "https://younganimal.com/series/f68f676b354d4/",
+          "engtl": "https://www.darkhorsedirect.com/products/berserk-multi-volume-books"
+        },
+        "officialLinks": null
+      }
+    },
+    {
+      "id": "dd86e9c2-5cff-4097-9cda-48bca16dce38",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "en": "Berserk - Cruel (Doujinshi)"
+        },
+        "altTitles": [
+          {
+            "ja": "Cruel (ベルセルク)"
+          }
+        ],
+        "links": {
+          "mu": "rq4drct"
+        },
+        "officialLinks": null
+      }
+    },
+    {
+      "id": "4a5d677d-e3ac-4c23-a6bf-bb92c984fee4",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "en": "Berserk - The Prototype"
+        },
+        "altTitles": [
+          {
+            "ja": "ベルセルク・プロトタイプ"
+          },
+          {
+            "ru": "Берсерк Прототип"
+          }
+        ],
+        "links": {
+          "al": "36408"
+        },
+        "officialLinks": null
+      }
+    },
+    {
+      "id": "5a143603-d575-4062-9528-12c2ddb83af3",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "en": "Berserk Gaiden"
+        },
+        "altTitles": [
+          {
+            "en": "Berserk Side Story"
+          },
+          {
+            "ja": "ベルセルク外伝"
+          },
+          {
+            "ja": "4コマGAGフェスティバル"
+          },
+          {
+            "ja-ro": "4 Koma GAG Festival (Kentaro Miura)"
+          }
+        ],
+        "links": {
+          "mu": "3txb7zc"
+        },
+        "officialLinks": null
+      }
+    },
+    {
+      "id": "f4e9f182-8345-449b-98b3-54ba4f29493d",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "ja-ro": "Boushoku no Berserk: Ore Dake Level to Iu Gainen wo Toppa Shite Saikyou"
+        },
+        "altTitles": [
+          {
+            "ja": "暴食のベルセルク～俺だけレベルという概念を突破して最強～"
+          },
+          {
+            "en": "Berserk of Gluttony"
+          }
+        ],
+        "links": {
+          "mu": "43z3ja6",
+          "raw": "https://comicride.jp/series/f77308354d149"
+        },
+        "officialLinks": null
+      }
+    },
+    {
+      "id": "30196491-8fc2-4961-8886-a58f898b1b3e",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "ja-ro": "Boushoku no Berserk: Ore dake Level to Iu Gainen o Toppa Suru"
+        },
+        "altTitles": [
+          {
+            "ja": "暴食のベルセルク～俺だけレベルという概念を突破する～ THE COMIC"
+          },
+          {
+            "en": "Berserk of Gluttony: The One that Exceeds the Concept of Levels"
+          },
+          {
+            "ko": "폭식의 베르세르크 ~나만 레벨이라는 개념을 돌파한다~"
+          },
+          {
+            "zh": "狂怒的暴食 ～只有我突破了等级这概念～"
+          },
+          {
+            "zh-hk": "狂怒的暴食 ～僅自己突破了等級這概念～"
+          },
+          {
+            "fr": "Berserk de la Gourmandise : Celui qui surpasse le concept même de niveaux"
+          },
+          {
+            "pl": "Berserk obżarstwa"
+          },
+          {
+            "ru": "Берсерк Ненажерливості"
+          },
+          {
+            "vi": "Bạo Thực Cuồng Nhân"
+          },
+          {
+            "bg": "Ненаситен берсерк - отвъд рамката на нивата"
+          },
+          {
+            "lt": "Godumo įniršis"
+          },
+          {
+            "tr": "Savaşının Açlığı: Seviye Denen Kavramı Sadece Ben Aşabilirim"
+          },
+          {
+            "uk": "Берсерк Обжорства"
+          },
+          {
+            "th": "จอมตะกละดาบคลั่ง -ข้านี่แหละจะทะลวงแนวความคิดที่เรียกว่าเลเวลเอง-"
+          },
+          {
+            "th": "จอมตะกละดาบคลั่ง The Comic"
+          }
+        ],
+        "links": {
+          "al": "101625",
+          "ap": "berserk-of-gluttony",
+          "bl": "553482",
+          "bw": "series/175790/list",
+          "kt": "40812",
+          "mu": "y10mhma",
+          "nu": "berserk-of-gluttony",
+          "amz": "https://www.amazon.co.jp/dp/B07PGBXYQZ",
+          "ebj": "https://ebookjapan.yahoo.co.jp/books/436470",
+          "mal": "113958",
+          "raw": "https://comicride.jp/series/f77308354d149",
+          "engtl": "https://sevenseasentertainment.com/series/berserk-of-gluttony-manga"
+        },
+        "officialLinks": null
+      }
+    }
+  ]
+}

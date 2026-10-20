@@ -50,6 +50,7 @@ public sealed class AniListDetailView : Grid, IDisposable
     private string? episodeSource;
     private IBangumiSubjectDetailsReader? bookSubjects;
     private IBookBibliographyReader? bookReader;
+    private IAniListReader? bookLinkReader;
     private IBangumiBookRelationsReader? bookRelations;
     private AniListDetailsViewModel? model; private IImagePipeline? images; private IRemoteCoverRegistry? registry;
     private Func<string, Task>? openBangumi; private string origin = "", label = "", evidence = "";
@@ -140,13 +141,14 @@ public sealed class AniListDetailView : Grid, IDisposable
         watchLinks.Configure(watchPreferences);
         watchData = watchReader;
         bookSubjects = subjects;
-        if (bookReader is not null && bookRelations is not null) publications.Configure(subjects, bookReader, bookRelations);
+        bookLinkReader = reader;
+        if (bookReader is not null && bookRelations is not null) publications.Configure(subjects, bookReader, bookRelations, reader);
         model = new(subjects, reader); model.PropertyChanged += StateChanged;
     }
     public void ConfigureBooks(IBookBibliographyReader books, IBangumiBookRelationsReader relations)
     {
         bookReader = books; bookRelations = relations;
-        if (bookSubjects is not null) publications.Configure(bookSubjects, books, relations);
+        if (bookSubjects is not null) publications.Configure(bookSubjects, books, relations, bookLinkReader);
         if (active && !disposed) Render();
     }
     public void ConfigureEpisodes(IBangumiEpisodesReader episodes) => episodeList.Configure(episodes);
@@ -176,7 +178,7 @@ public sealed class AniListDetailView : Grid, IDisposable
         if (episodeSource != episodeId) { episodeSource = episodeId; episodeList.SetSource(episodeId); }
         // An internal AniList relation has no established Bangumi identity. A
         // candidate preview also cannot reuse the starting bridge's book ID.
-        publications.SetSource(bridge, details, useBangumiSource);
+        publications.SetSource(bridge, details, useBangumiSource, linksAllowed: !preview && model?.IsBusy != true);
         var watchIdentity = isAnime ? new AnimeWatchIdentity(media?.Id, useBangumiSource ? model?.Item?.Id : null) : null;
         var query = watchIdentity is null || preview || model?.IsBusy == true ? null : new WatchDataQuery(watchIdentity, media?.Format ?? bridge?.Platform, media?.StartDate ?? bridge?.ReleaseDate);
         if (watchQuery != query) { CancelWatchRead(); watchQuery = query; watchResult = null; if (query is not null && watchData is not null) { watchStop = new(); _ = ReadWatchAsync(query, ++watchVersion, watchStop.Token); } }

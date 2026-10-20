@@ -64,7 +64,7 @@ public sealed partial class DetailsPage : Page, IImageHost
     public DetailsPage(WorkspaceViewModel viewModel, IImagePipeline images, LaunchViewModel launch, RecognitionViewModel recognition)
     {
         ViewModel = viewModel; Images = images; Launch = launch; Recognition = recognition; InitializeComponent();
-        RichCatalog.Sources = SourcesInfo;
+        RichCatalog.Sources = SourcesInfo; RichCatalog.BeforeTags = GameVideosHost;
         HeroTitle.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => UpdateHeroFrame(HeroFrame.ActualWidth));
         ReviewHost.Content = new RecognitionReview(recognition, images);
         // Current banner preference: no refraction; a lightly blurred, readable overlay.
@@ -120,6 +120,7 @@ public sealed partial class DetailsPage : Page, IImageHost
         ArtworkSourceText.Text = string.Join("\n", new[] { detail?.Relationship, detail?.CoverDescription, detail?.BackdropDescription });
         SourceLinks.ItemsSource = work is null ? null : CandidateDetailLinks.From(work).Select(l => new DetailSourceLink(l.Title, l.Url)).ToArray();
         }
+        SynchronizeGameVideos(detail);
         if (!ViewModel.IsDetailsLoading) SynchronizeBangumi();
         SynchronizeReview();
         var title = ViewModel.Draft?.Source.Personal.Name ?? "";

@@ -1,0 +1,186 @@
+{
+  "frozenUtc": "2026-10-18T19:09:44.7614238+08:00",
+  "samples": [
+    {
+      "sample": 1,
+      "phase": "pilot",
+      "title": "CLANNAD"
+    },
+    {
+      "sample": 2,
+      "phase": "pilot",
+      "title": "千恋＊万花"
+    },
+    {
+      "sample": 3,
+      "phase": "pilot",
+      "title": "9-nine-ここのつここのかここのいろ"
+    },
+    {
+      "sample": 4,
+      "phase": "pilot",
+      "title": "Fate/stay night (2004 original)"
+    },
+    {
+      "sample": 5,
+      "phase": "pilot",
+      "title": "素晴らしき日々～不連続存在～"
+    },
+    {
+      "sample": 6,
+      "phase": "pilot",
+      "title": "魔法使いの夜 (2012 Windows)"
+    },
+    {
+      "sample": 7,
+      "phase": "pilot",
+      "title": "Kanon (1999 original)"
+    },
+    {
+      "sample": 8,
+      "phase": "pilot",
+      "title": "AIR (2000 Windows)"
+    },
+    {
+      "sample": 9,
+      "phase": "pilot",
+      "title": "ヨスガノソラ"
+    },
+    {
+      "sample": 10,
+      "phase": "pilot",
+      "title": "サクラノ詩"
+    },
+    {
+      "sample": 11,
+      "phase": "extension",
+      "title": "Fate/stay night REMASTERED"
+    },
+    {
+      "sample": 12,
+      "phase": "extension",
+      "title": "魔法使いの夜 (2022 console)"
+    },
+    {
+      "sample": 13,
+      "phase": "extension",
+      "title": "9-nine- (complete collection)"
+    },
+    {
+      "sample": 14,
+      "phase": "extension",
+      "title": "9-nine-そらいろそらうたそらのおと"
+    },
+    {
+      "sample": 15,
+      "phase": "extension",
+      "title": "9-nine-はるいろはるこいはるのかぜ"
+    },
+    {
+      "sample": 16,
+      "phase": "extension",
+      "title": "9-nine-ゆきいろゆきはなゆきのあと"
+    },
+    {
+      "sample": 17,
+      "phase": "extension",
+      "title": "RIDDLE JOKER"
+    },
+    {
+      "sample": 18,
+      "phase": "extension",
+      "title": "サノバウィッチ"
+    },
+    {
+      "sample": 19,
+      "phase": "extension",
+      "title": "DRACU-RIOT!"
+    },
+    {
+      "sample": 20,
+      "phase": "extension",
+      "title": "天使☆騒々 RE-BOOT!"
+    },
+    {
+      "sample": 21,
+      "phase": "extension",
+      "title": "ATRI -My Dear Moments-"
+    },
+    {
+      "sample": 22,
+      "phase": "extension",
+      "title": "STEINS;GATE"
+    },
+    {
+      "sample": 23,
+      "phase": "extension",
+      "title": "STEINS;GATE ELITE"
+    },
+    {
+      "sample": 24,
+      "phase": "extension",
+      "title": "ひぐらしのなく頃に (original)"
+    },
+    {
+      "sample": 25,
+      "phase": "extension",
+      "title": "ひぐらしのなく頃に奉"
+    },
+    {
+      "sample": 26,
+      "phase": "extension",
+      "title": "うみねこのなく頃に"
+    },
+    {
+      "sample": 27,
+      "phase": "extension",
+      "title": "月姫 (2000 original)"
+    },
+    {
+      "sample": 28,
+      "phase": "extension",
+      "title": "月姫 -A piece of blue glass moon-"
+    },
+    {
+      "sample": 29,
+      "phase": "extension",
+      "title": "WHITE ALBUM2 -introductory chapter-"
+    },
+    {
+      "sample": 30,
+      "phase": "extension",
+      "title": "WHITE ALBUM2 -closing chapter-"
+    },
+    {
+      "sample": 31,
+      "phase": "extension",
+      "title": "リトルバスターズ！"
+    },
+    {
+      "sample": 32,
+      "phase": "extension",
+      "title": "リトルバスターズ！エクスタシー"
+    },
+    {
+      "sample": 33,
+      "phase": "extension",
+      "title": "この世の果てで恋を唄う少女YU-NO (1996)"
+    },
+    {
+      "sample": 34,
+      "phase": "extension",
+      "title": "YU-NO: A Girl Who Chants Love at the Bound of this World (2017)"
+    },
+    {
+      "sample": 35,
+      "phase": "extension",
+      "title": "CROSS†CHANNEL"
+    },
+    {
+      "sample": 36,
+      "phase": "extension",
+      "title": "SWAN SONG"
+    }
+  ],
+  "selection": "Frozen before any IGDB request; no per-title IDs or video answers"
+}

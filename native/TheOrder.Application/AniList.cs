@@ -74,6 +74,8 @@ public sealed record AniListDetails(AniListMedia Media, string Description, stri
     public AniListWatchLink[] WatchLinks { get; init; } = [];
     public AniListTrailer? Trailer { get; init; }
     public bool HasPlaybackMetadata { get; init; }
+    public BookExternalLink[] BookLinks { get; init; } = [];
+    public bool HasBookLinkMetadata { get; init; }
 }
 public sealed record AniListBinding(string SourceFingerprint, int MediaId, AniListMediaKind Kind, string Evidence)
 {
@@ -90,6 +92,8 @@ public sealed record AniListCacheValue(string Key, DateTimeOffset CachedAtUtc, A
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool SearchComplete { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BookLinkSupplement? BookSupplement { get; init; }
 }
 public sealed record AniListSearchCandidates(AniListMedia[] Items, bool Complete);
 public sealed record AniListMatch(AniListMedia[] Candidates, AniListBinding? Binding, string? Notice = null)
@@ -232,15 +236,17 @@ public static class AniListValidation
         && d.Staff is { Length: <= 32 } && d.Staff.All(x => x is not null && Person(x.Person) && Text(x.Role, 300))
         && d.Relations is { Length: <= 100 } && d.Relations.All(x => x is not null && RelationMedia(x.Media) && Text(x.Relation, 100, false))
         && d.WatchLinks is { Length: <= 24 } && d.WatchLinks.All(AniListPlayback.ValidWatchLink)
+        && d.BookLinks is { Length: <= 96 } && d.BookLinks.All(BookOutlets.ValidRaw)
         && (d.Trailer is null || AniListPlayback.ValidTrailer(d.Trailer))
         && d.PeoplePage is > 0 and <= 10 && d.FetchedAtUtc != default;
     public static bool Cache(AniListCacheValue? v) => v is not null && Text(v.Key, 100, false) && v.CachedAtUtc != default
-        && (v.Rejected ? v.Search is null && v.Details is null && v.Binding is null
-            : (v.Search is not null ? 1 : 0) + (v.Details is not null ? 1 : 0) + (v.Binding is not null ? 1 : 0) == 1)
+        && (v.Rejected ? v.Search is null && v.Details is null && v.Binding is null && v.BookSupplement is null
+            : (v.Search is not null ? 1 : 0) + (v.Details is not null ? 1 : 0) + (v.Binding is not null ? 1 : 0) + (v.BookSupplement is not null ? 1 : 0) == 1)
         && (v.Search is null || v.Search.Length <= 20 && v.Search.All(Media)) && (v.Details is null || Details(v.Details))
         && (v.Binding is null || v.Binding.SourceFingerprint is { Length: 64 } && v.Binding.SourceFingerprint.All(Uri.IsHexDigit)
             && v.Binding.MediaId > 0 && Enum.IsDefined(v.Binding.Kind) && Text(v.Binding.Evidence, 1000, false)
             && v.Binding.AutomaticPolicyVersion is >= 0 and <= 1)
         && (v.Binding is null || v.Key == "binding:" + v.Binding.SourceFingerprint)
-        && (v.Details is null || v.Key == $"media:{(int)v.Details.Media.Kind}:{v.Details.Media.Id}:{v.Details.PeoplePage}");
+        && (v.Details is null || v.Key == $"media:{(int)v.Details.Media.Kind}:{v.Details.Media.Id}:{v.Details.PeoplePage}")
+        && (v.BookSupplement is null || v.BookSupplement.IsValid && v.Key == v.BookSupplement.Key && v.CachedAtUtc == v.BookSupplement.FetchedAtUtc);
 }

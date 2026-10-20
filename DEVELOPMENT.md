@@ -1,16 +1,116 @@
 # 开发与维护
 
-## 1.2.0 正式发布与后续音乐入口（2026-10-18，进行中）
+## 1.2.1 Beta 1 发布候选（2026-10-19）
 
-本轮新授权：先完成五类关联/资料体验修复和最终包 Gate，通过后直接推送、创建 v1.2.0、正式发布；仅在公开发布核验成功后，从冻结提交建立独立分支开发音乐收听入口，不自动发布第二个版本。此前待下次发布的 NextMoe 提示修复已保存为本分支检查点 67175a1。当前维护仍在 update-channels-20261016 工作树，分支 codex/release-1-2-0-20261018；根仓库及其他 dirty 工作树保留，Production、日用安装及真实凭据不作为测试输入。
+维护分支 codex/public-beta-1.2.1-20261019。已将接手时未提交、但已在日用版验收的音乐/书籍增量单独提交为ccd15ee；未混入reports或research_notes。版本按现有更新器协议采用1.2.1-beta.1（数字1.2.1.1），GitHub必须Pre-release，不修改稳定latest及旧附件。
+
+修复IGDB有合法YouTube关系但名称缺失时被丢弃：保留原名称null，中性显示“宣传影像”，不声称官方PV；105342真实公网返回68884/lVNrSOc0wG0且originalName为null，修复前同ID空列表。服务继续使用原Worker、原SQLite namespace和single-app-quota-v1；缓存命名升级，不创建第二套配额或修改Secrets。客户端保留旧正缓存离线降级，旧空缓存重新读取；主库、人工确认/排除/默认schema不变。
+
+NextMoe已收录DLsite的RJ/VJ/BJ商品编号转换为普通来源蓝色链接，首页/搜索页不进入商品来源，不后台逐条探测商品。上游旧商品可能404；已以真实RJ297925核对《星空铁道与白的旅行》商品页。宣传影像放到标签上方，高级撤销/重置收进影像选项。播放器显式启用YouTube原生控件与中文界面，分辨率由YouTube自身决定；不使用失效的强制画质API。
+
+本轮隔离证据目录.artifacts/release-1.2.1-beta-20261019/。最终完整客户端4443/0/0（含既有本地合成Worker闭环）、服务Node36/36与workerd/SQLite7/7通过。真实IGDB复核31个既有人工审定编号全部成功，29个有影像、5个原有歧义仍保留。实际WinUI已播放Sabbat影像，并打开原生画质列表及选择720p；不是物理设备验收。补充发现并以先失败/后通过测试修复CSP脚本哈希的HTML换行规范化问题，不放宽CSP。最终安装包、回退、日用切换及GitHub发布须以对应回执确认，不能视作已交付。所有测试仅合成Test Profile，不读取Production或游戏数据。后续以该目录最终report.md和completion.json确认实际完成范围。
+
+
+## IGDB 公网服务维护（2026-10-19）
+
+独立the-order-igdb-game-videos已获用户批准并部署在现有Workers Free账户；实际根地址https://the-order-igdb-game-videos.zyx2251721565.workers.dev/已核对，Secrets仅在服务端。部署载荷冻结29e8ef4，SQLite迁移v1、固定single-app-quota-v1及限流/持久预算保持。wrangler.production.jsonc仍默认IGDB_ENABLED=false；正常重部署会关闭服务，启用必须显式覆盖。不要删除命名空间或同时用同一Twitch凭据另起本地/staging协调器，不操作Bangumi Worker或升级套餐。
+
+使用已审查.artifacts/igdb-production-ready-20261018/predeployment-review.json及worker-qualified-v3：operate-approved.mjs disable --user-approved --review=<该文件>可关闭；重新启用加enable --free-plan-confirmed --local-use-stopped。命令标记不是授权，须核对具体操作已获授权。首次bootstrap已完成，不应重复建立命名空间；Secrets不进入配置普通变量、客户端、日志或仓库。详细安全部署与回退见services/igdb-game-videos/README.md。
+
+Production/Beta默认内置HTTPS；Test/Development无默认公网。实际隔离验收使用本轮Start-Test.ps1 -Run ui-<全新名> -Payload <portable-rc绝对路径> -ExpectedVersion 1.2.0 -HttpsService https://the-order-igdb-game-videos.zyx2251721565.workers.dev/；不能裸启动EXE。不要重启共享开发凭据的18787/8787服务。两部真实公网视频由用户点击开始、应用探针确认playing；其余原生peer流程、缓存故障、恢复及重启均有独立回执，不作为完整物理输入验证。新桌面截图受工具故障阻塞，应用内渲染截图已排除。
+
+完整冻结回归4428/0/0、Node35/35、workerd SQLite7/7和Release x64不变；新增公网16项、停用恢复、确认/默认和5文件哈希检查通过。线上CPU样本1–6ms无异常；Free共享账户100000调用/日，DO每日行数/存储用量及长期/不同地区网络仍待运营观察。本轮无库schema迁移、Production访问、日用替换、版本提升、推送或Release；本机候选不等于已向公开用户分发。报告、最终线上版本及冻结哈希见.artifacts/igdb-production-ready-20261018/public-deployment-report.md。
+
+用户随后明确授权替换本机正式版：2026-10-19已将同一已验收IGDB程序载荷切换至原C:/Users/MUSK/AppData/Local/Programs/The Order/TheOrder.exe，版本仍1.2.0。源码检查点382b322、应用代码29e8ef4，保留全部继承音乐/书籍工作；没有重新编译应用。标准Setup隔离安装通过，实际日用654份载荷、3份入口附件及更新基包一致，4份未知/路由文件保留。原安装目录WinUI以全新空Test资料启动并退出0，辅助工具默认全关；未打开、迁移或复制Production及凭据，未启动真实游戏、推送或发布。旧日用662份程序及旧Setup已核验备份在C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261019-003803-igdb-public-pv，仅供程序回退。当前客户端可使用内置公网IGDB地址，收尾只读请求返回200；实际播放沿用此前相同程序字节的公网验收证据，不宣称本次私库/实机游戏已验收。切换凭据以.artifacts/local-igdb-daily-20261019/completion.json为准。
+
+## IGDB真实API验收与版本核对（2026-10-18，当前增量）
+
+codex/igdb-live-qualification-20261018从6665e5d和原dirty继续。真实凭据仅在services/igdb-game-videos/.dev.vars（Git ignored），不复制/回显/打包；客户端只有固定服务地址。Wrangler本地仅127.0.0.1:8787，默认公开配置仍禁用、无路由，无部署。game_type.type是当前实际字段；IGDB_DIAGNOSTICS默认false，开发诊断仅返回白名单阶段/状态，不输出原异常或认证内容。
+
+最终Release x64载荷为.artifacts/igdb-live-20261018/publish-live-v4。仅经该目录Start-Test-V2.ps1 -Run ui-<全新名> -Payload <publish-live-v4绝对路径> -ExpectedVersion 1.2.0启动，固定自己的test-profile-ui-v2和Test标记，显式注入本地服务；不能裸启动默认Production。首修Start-Test.ps1使用另一个test-profile，旧证据单独保留。退出用Control.ps1 -Control <本轮ui目录> -Action exit并检查exitCode=0。不要使用先前build的截图替代最终构建验收。
+
+固定SDK10.0.401及锁依赖。最终完整含既有Worker合成契约4409/0/0，服务Node17/17；定向与各中间全套均为重叠阶段。全套入口沿用既有run-client-bridge.mjs --all-client-tests，仅把启动器输出改为本轮新目录；未改Bangumi Worker。真实覆盖36部、人工复核31、视频28不等于自动匹配或播放率；首修实际播放5部，最终构建复验本地Steam版自动对应/播放与重制版。测试目录安装和NextMoe输入是合成的，不读取Production和真实游戏。
+
+PC候选分组不写身份事实，用户可展开其他结果；英文/日文检索不生成译名。只把默认安装的Steam编号作为自动发行版证据，目录链接不等于当前安装；拒绝、撤销和并发revision保护保持。旧主库及人工确认无schema迁移，新增ParentGame可选；服务旧缓存缺字段重新获取。缓存移走/重启的用户决定哈希、失败与负对照、截图、源码及载荷清单均在.artifacts/igdb-live-20261018/。未推送、发布、提升版本或替换日用。
+
+
+## IGDB 游戏宣传影像 v1（2026-10-18，最新增量）
+
+当前codex/igdb-game-videos-20261018基于3ed4463及全部继承dirty，只做IGDB游戏对应/影像、Native Profile决定、共享动画播放器复用。无新版本、真实资料迁移、日用替换、推送或发布。完整设计、凭据及样本口径见docs/igdb-game-videos-v1.md；独立Worker未部署，默认IGDB_ENABLED=false、无公开路由，不改生产Bangumi OAuth Worker。
+
+固定SDK10.0.401、锁依赖。Release x64/NativeProductionCandidate=true/UseSharedCompilation=true/PathMap/CopyOutputSymbolsToPublishDirectory=false的publish-v4为最终应用载荷。只用.artifacts/igdb-game-pv-20261018/Start-Test.ps1 -Run ui-<全新名> -Payload <本轮publish-v4绝对路径> -ExpectedVersion 1.2.0启动，固定自己的Test Profile，不能裸启动默认Production。-WithoutService验证开发配置缺失；默认读取本轮合成Miniflare地址。退出用该目录Control.ps1 -Action exit并检查exitCode=0。测试创建的cache可删除，不能删除用户身份目录来模拟撤销。
+
+最终完整客户端4371/0/0含既有Worker合成契约；启动器输出重定向本轮新目录，未改既有Worker源代码。独立服务14项Node测试使用node --test services/igdb-game-videos/test/worker.test.mjs。真实IGDB尚无开发凭据，36样本及前10pilot保持未验证；coverage.mjs --all --output=<全新文件>无配置时零网络并输出BLOCKED报告，有地址也不自动证明真实上游或身份准确。测试脚本、日志、真实WinUI截图与源码/载荷哈希保留于.artifacts/igdb-game-pv-20261018；Mock、真实原站嵌入和物理输入不得混称。
+
+## 书籍阅读与购买入口 v1（2026-10-18，最新增量）
+
+维护 `codex/book-outlets-v1-20261018`，当前工作树 `update-channels-20261016/The-Order`；保留9147b06上全部未提交音乐增量。本轮仅书籍入口。`BookOutlets`做纯分类、保参去重和层级/来源保留；`BookReadingViewModel`只在展开时刷新缺字段和补充元数据，带取消、世代和旧资料保留。MangaDex仅已确认AniList漫画，原题单页10条，完整/唯一跨站编号、标题和已知MAL编号均核对；只使用实际完整网址，不扩展bw等标识短键，不写人工身份。
+
+复用固定SDK10.0.401、locked依赖与现有客户端回归入口。本轮最终 `.artifacts/book-outlets-v1-20261018/tests-full-accepted/` 为 **4327/0/0**，包含本地合成Worker；`tests-books-qualified/`165/0/0是重叠子集，新书籍64项。`tests-before-mal/`保留同ID核对编号变化的实际失败反例；恢复保护后的源文件逐字节核验。两次早期全套既有launcher/chain超时、一次中间全套4325/0/0及全部原日志也保留，不放宽启动标准、不伪称环境根因已修复。
+
+最终 `publish-accepted` 是Release x64/NativeProductionCandidate=true载荷；只经本轮 `Start-Test.ps1 -Run ui-<全新名> -Payload <本轮publish-accepted绝对路径> -ExpectedVersion 1.2.0` 启动，固定自己的 `test-profile`，不可裸启动EXE默认Production。`Control.ps1`/`Native-Step.ps1`仅已有Test受限peer，平台按钮只inspect，实际外部点击由定向桌面工具完成。final为`ui-accepted-books`，其前`ui-qualified-books`含实际平台点击；每阶段源码/载荷、控制回执与截图均独立保留。已退出自己的全部Test进程，未操作日用程序。
+
+新缓存字段为可选附加，MangaDex补充使用现有AniList远程缓存的 `booklinks:md-v1:<format>:<id>`，24小时新鲜/14天最大离线及原子封装不变；旧版无法识别时忽略该可丢弃行，无主库或人工确认schema迁移。不能将Provider编号声明视为人工确认；同源编号相同但MAL发生冲突时，每次重建展示仍重新验证。实际断网、其他Windows/DPI及物理输入不属本轮已验收范围。
+
+28项冻结样本与平台证据见 `coverage-final.json`、`md-coverage.json`、`*-platform-evidence.json` 和 `ui-and-test-gate.json`；16/25主入口、MangaDex新增3部电子书类别，不代表具体版本准确商品覆盖。NDL429/超时和MangaDex网页安全拦截另列，未绕过。新功能详见 `docs/book-reading-outlets-v1.md`。只提交书籍增量；音乐原dirty继续保留，实际构建须同时保留其工作树内容，不可仅凭新HEAD声称已包含它们。本轮无发布、安装切换或Production操作。
+
+
+
+## 书籍入口排版与音乐来源按钮（2026-10-18，最新增量）
+
+用户授权两项视觉调整及日用替换。在现有3ed4463与全部继承音乐dirty上，只改BookReadingView、MusicListeningView：书籍所有有效主入口共用一个按可用宽度换行的布局，用途、语言及卷册版本说明保留；不再按类别强制另起一行。音乐“资料与来源”改成与书籍相同的普通Button，沿用主题文字颜色，展开、收起和链接内容不变。
+
+完整客户端含本地合成Worker回归4327 passed / 0 failed / 0 skipped；Release x64通过。真实隔离WinUI验证1180请求宽四个书籍入口同排、560宽自然换两行、浅/深主题及来源展开；音乐按钮原生角色Button、自动鼠标点击展开和受限peer收起通过。冻结公共元数据与明确合成的音乐版本/导航不作为新覆盖率、实际播放或物理输入证明。早期书籍展开在确认弹窗尚未关闭时被拒绝，确认后通过；无产品修复扩大范围，无新增低价值镜像单元测试。证据 .artifacts/outlet-layout-20261018/。
+
+已用标准Setup替换原日用目录，仍显示1.2.0。654份载荷、3份入口附件及更新基包一致，4份未知/路由文件保留；原目录WinUI仅用全新空Test资料启动，辅助工具默认全关，正常退出0。662份旧程序及上一书籍版本Setup备份在 C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261018-182404-outlet-layout/，仅供程序回退。未访问或迁移Production、读取真实凭据、提交、推送或修改公开附件。当前包含新UI及继承音乐的工作树增量，不能单靠HEAD重建相同载荷；源码及载荷哈希、切换最终凭据见 .artifacts/local-outlet-layout-daily-20261018/completion.json 和 source-freeze.json。
+
+随后用户授权本机日用替换：标准包及安装、备份、替换后空Test启动凭据统一在 .artifacts/local-book-outlets-daily-20261018/，completion.json 为最终依据。654份载荷、3份入口附件及更新基包核对，4份未知文件保留；Test正常退出0、默认辅助工具全关。旧音乐版662份程序和Setup已核对备份到 C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261018-172357-book-outlets/。只替换程序，不访问Production、不迁移用户资料、不推送或改动公开附件，版本仍1.2.0。
+
+## 音乐数字版自动加载与固定排序（2026-10-18，最新）
+
+当前`codex/music-auto-digital-20261018`基于9147b06及全部继承dirty成果。`MusicListeningViewModel.ExpandAsync`将当前入口和数字发行版纳入同一次请求/取消/时效管理：先展示当前资料，再自动加载有明确专辑组的Release数字版；Recording或缺少组编号不推测查询。成功展开去重，失败/取消保留当前结果并允许再展开重试，刷新更新两阶段。视图移除查找数字版按钮和排序控件，平台及资料站按显示名称排序；原始MusicBrainz身份、关系和当前发行版保持。
+
+固定SDK10.0.401、锁定依赖，`.artifacts/music-auto-digital-20261018/`保存冻结源码清单、publish、package和真实窗口截图。完整4263/0/0含本地合成Worker契约，85项定向为重叠子集；新增11项请求次序、去重、取消、迟到、失败保留测试。首次定向Recording夹具误带Official发行版状态被既有校验拒绝，只修正夹具、不降标准，失败记录保留。实际WinUI一次展开/定向自动鼠标点击即显示2组数字版；Apple Music、Deezer、Spotify及Amazon、Discogs、VGMdb按显示名称排列，7个来源入口保留，无额外搜索或排序控件。明确合成的发行/关系不作真实覆盖或播放证据，不宣称物理输入通过。
+
+`.artifacts/local-music-auto-daily-20261018/`标准Setup、候选启动和独立AppID/Mutex隔离安装已通过。用户正常退出后完成原日用目录替换，654份载荷、3份入口附件及更新基包一致，4份未知/路由文件保留；实际安装目录WinUI使用全新空Test资料启动、默认辅助工具全关、正常退出0。662份旧程序及上一排版构建Setup备份至`C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261018-142540-music-auto/`，仅回退程序；没有打开或迁移Production、复制凭据、Git提交、推送或发布。版本仍1.2.0，最终安装状态以本轮completion.json为准。
+
+## 音乐详情排版与本机替换（2026-10-18，上一节点）
+
+当前`codex/music-layout-20261018`基于9147b06及继承的dirty音乐外链成果，不清理、提交或覆盖无关工作。仅调整音乐详情布局、来源折叠及提示投影；不更换Provider，不迁移书架或人工身份schema。新`NeedsAttention`区分普通成功/有界查询说明与错误、离线回退、取消和空结果；完整消息及来源保留，不以简洁为由删除真实错误。
+
+固定SDK10.0.401和锁定依赖；最终publish-v2→package-final位于`.artifacts/music-layout-20261018/`。4252/0/0完整客户端含本地合成Worker，74项定向为重叠子集。WinUI真实窗口的浅/深主题、1180/560宽度、资料展开及排序通过；原生peer证据与窗口截图分开保存。P1枚举会包含已实现但祖先折叠的XAML子控件，按钮边界断言须限定主区收听/购买控件，不能把折叠资料区当作主区可见；首次误断言保留在verification-attempt-1.json。合成夹具项目有既有NU1603依赖下界提示，未改变产品锁文件。没有真实播放、物理设备、干净OS或全部DPI验收。
+
+用户授权替换并回复托盘已退出后，在`.artifacts/local-music-layout-daily-20261018/`完成标准包、独立AppID/Mutex且无注册的隔离安装、备份和真实目录替换。654份程序载荷、3份入口附件及更新基包一致，4份未知/路由文件保留。原安装路径WinUI仅用新建Test资料启动、工具默认关闭、退出0；不打开真实Production或读取凭据。回退为`C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261018-135533-music-layout/`中的662份旧程序及上次MB外链体验构建Setup，只回退程序。版本仍1.2.0，公开GitHub附件和Tag未改，最终状态看本轮completion.json。此前历史阶段的旧“当前”不能覆盖本节。
+
+## MusicBrainz统一音乐外链来源（2026-10-18，当前增量）
+
+在update-channels-20261016工作树的`codex/music-mb-links-20261018`基于9147b06继续开发。MusicBrainz为远程音乐外链的唯一来源；国内平台只保留已有url-rels，不进行独立API/搜索/授权/代理。生产界面及DI停用主动iTunes查询，历史个人Related页面保留。原始关系证据和URL去重不改变书架、人工映射或Native Profile schema；旧远程缓存缺少原始URL时不补造证据。
+
+验证继续使用固定SDK10.0.401及锁定依赖。新证据根`.artifacts/music-mb-links-20261018/`，当前publish/package仅在其下新建的合成Test Profile启动；完整客户端经本地合成Worker闭环4247 passed / 0 failed / 0 skipped，84项定向为重叠子集。真实隔离窗口验证三种排序保留全部四个平台及历史个人页面，国内记录为合成，未打开平台或播放。MB streaming/free streaming标签采用“正版收听 · MusicBrainz 收录”，不扩大成独立版权认证。具体边界见`docs/music-listening-v1.md`。
+
+源码未执行Git提交、推送或发布；保留继承的两份文档修改及reports/research_notes，不清理其他工作树。用户随后明确授权本机替换，已在新证据根`.artifacts/local-mb-links-daily-20261018/`冻结当前dirty源码并复用已验收publish字节，生成标准安装包，完成独立AppID/Mutex/路径的隔离安装和程序校验。旧日用662份受管程序文件备份至`C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261018-132514-music-mb-links/Program`，同级Setup可回退至之前的8edaa72体验构建。实际日用654份载荷、3份入口附件及更新基包一致，4份未知/路由文件保留；原安装目录的WinUI以全新空Test资料启动和正常退出0，默认辅助工具全关。版本保持1.2.0，不启动Production或复制、迁移用户资料。新的`completion.json`和安装回执为本次切换依据，先前切换记录仅属历史。
+
+## 1.2.0 已发布；后续音乐入口独立开发（2026-10-18）
+
+v1.2.0 已在 Ph-Rank/The-Order 正式发布，draft=false、prerelease=false、Latest；Tag 与远端 main 对应 453c671d00e16d78cd665e0ec3610b282c2d7778。公开六份附件均匿名重新下载并核对 SHA-256，旧稳定版和 Beta 4 资产保持。完成凭据：.artifacts/release-1.2.0-20261018/publication-complete.json。此前 NextMoe 提示修复 67175a1 已随此版发布。
+
+当前维护仍在 update-channels-20261016 工作树，音乐分支 codex/music-listening-20261018 从上述发布提交建立，仅本地开发、不推送、不发布第二版、不移动 v1.2.0 Tag 或修改附件。根仓库及其他 dirty 工作树保留，Production、日用安装及真实凭据不作为测试输入。下方历史阶段的旧“当前”路径与授权须结合此首节阅读，不能覆盖本轮边界。
 
 已实施：手动对应将普通日期/标题差异与类型、发行形式、卷册层级及明确编号冲突分开；后者可保存有方向的相关作品，不融合身份。有效目标链接可待核验保存；确认、拒绝、恢复自动选择沿用既有身份组件，新链接使用同目录的独立原子封装，既有确认结构与书架 schema 不变。补充 KunGal 链接解析、游戏候选直接操作及封面重试。Bangumi 403 不再清除有效授权；网络与账号状态分开。
 
-本轮最终完整客户端回归4176 passed / 0 failed / 0 skipped（含本地合成Worker契约）；人工关联及持久化定向43/0/0，更新器/Worker数字版本协议定向57/0/0。实际WinUI已验证普通年份差异确认与取消、跨媒体相关作品、其他音乐发行版、单卷与系列隔离及返回个人资料保留。最终分发包、安装/回退及公开发布仍须独立核验，不能把测试通过视为已发布。证据根 .artifacts/release-1.2.0-20261018；保留失败日志、各轮构建、真实匿名请求、合成资料与 UI 回执的范围区别。
+正式版完整客户端回归4176 passed / 0 failed / 0 skipped（含本地合成Worker契约）；人工关联及持久化定向43/0/0，更新器/Worker数字版本协议定向57/0/0。最终载荷完成稳定1.1.2/Beta4升级、程序回退、运行中拒绝和退出后重试：6次成功安装、2次预期拒绝，42份合成用户文件字节不变。最终安装后普通 Test 入口启动和关联导航、异常退出恢复通过。所有实验独立AppID/Mutex/路径且无正式安装注册；不是干净 Windows 或真实 Production 的升级验收。证据根 .artifacts/release-1.2.0-20261018，实际系统为 Windows11 x64，完整物理输入、干净Win10和真实OAuth自然到期未验证。
 
 程序语义版本为1.2.0，程序、启动器和安装器FileVersion统一为既有协议要求的1.2.0.0。旧Worker同时校验安装后的程序；曾准备的65535修订号候选会被误报失败，已排除，不可发布。SemVer认定正式版高于Beta，安装器按清单哈希/ignoreversion替换文件，必须用最终载荷验证Beta升级。详见 docs/release/1.2.0/BUILD.md，不得把数字版本差异漏检为单纯删除Beta后缀。稳定/Beta现有安装与物理书架选择规则不变，不静默复制/合并旧Beta资料。
 
-远端稳定main与ACGN分支没有共同祖先；集成须保留双方历史、核对稳定修复已在ACGN线，并以正常快进可接受的合并提交接入，不强推或覆盖旧Tag。公开发布若实际阻塞，保留成果并不启动音乐阶段。
+稳定main与ACGN历史已在942da21保留双亲整合；核对稳定启动/通道修复后正常快进推送。源码归档逐文件对照冻结Git内容通过，15项仅Windows checkout与Git archive的UTF-8行尾差异。原始Windows构建清单不可直接当Git归档字节清单，详见source-archive-proof.json。
+
+音乐开发最终完整回归4224 passed / 0 failed / 0 skipped（含本地合成Worker契约）；251项定向是重叠子集，不相加。实际WinUI发现并修复发行版browse缺media、旧group缓存遮蔽数字版的问题；两项反例修复前失败、修复后通过。既有group缓存保留，新列表使用group-v2键，主库与人工映射无schema迁移。实现与边界见 docs/music-listening-v1.md。
+
+最终音乐应用代码为8edaa7207b1f668410b58d6ee086c3d1e8bd20fb，后续提交仅验收测试与文档；publish-dev-qualified/package-dev-qualified为载荷。实际无缓存重新联网找到魔法使之夜数字发行版；清音乐缓存、重启后CLANNAD人工商店选择仍在，原有5份书架/身份文件哈希不变。普通无诊断入口也完成鼠标导航/展开/滚轮浏览，没有打开平台或播放。
+
+独立试用：.artifacts/music-listening-20261018/Start-Music-Samples.cmd仅打开本轮合成Test书架；The-Order-Music-Dev-8edaa72-x64.zip无需SDK、首次为空Test书架，资料在解压目录相邻profile，不附带测试Profile。旧4b69c9d包保留为失败证据，不作为交付。证据与源码提交索引以该目录completion.json/report.md为准。音乐功能没有第二次公开发布或推送。
+
+用户随后明确授权本机日用替换并回复已从托盘退出：2026-10-18已将8edaa72音乐应用构建、9147b06源码检查点的安装载荷切换至原C:/Users/MUSK/AppData/Local/Programs/The Order/TheOrder.exe。版本仍为1.2.0，这是本机音乐体验构建，与GitHub正式1.2.0的453c671载荷有区别。654份程序载荷、3份入口附件和更新基包核对通过，原安装目录4份未知/路由文件按元数据验证保留；没有读取、复制、迁移或启动Production资料。662份受管旧程序文件已核验备份至C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261018-114014-music-local-8edaa72/Program，同级保留原正式1.2.0回退Setup。安装目录实际WinUI使用全新空Test资料启动、默认工具全关、正常退出0。该启动检查不代表真实私库或物理输入验收。证据根.artifacts/local-music-daily-20261018；本次没有远端推送、Tag或Release变更。
 
 ## NextMoe 访问状态提示修复（2026-10-16，待下次发布）
 

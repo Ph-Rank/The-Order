@@ -48,7 +48,7 @@ internal static class MusicTestData
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         {
             Assert.Equal(HttpMethod.Get, request.Method); Assert.Null(request.Headers.Authorization); Assert.False(request.Headers.Contains("Cookie"));
-            Assert.Contains("TheOrder/1.1.0", request.Headers.UserAgent.ToString()); Assert.Contains("https://github.com/", request.Headers.UserAgent.ToString());
+            Assert.Contains("TheOrder/" + AppReleaseIdentity.Version, request.Headers.UserAgent.ToString()); Assert.Contains("https://github.com/Ph-Rank/The-Order", request.Headers.UserAgent.ToString());
             lock (Urls) Urls.Add(request.RequestUri!.AbsoluteUri); return action(request, token);
         }
     }

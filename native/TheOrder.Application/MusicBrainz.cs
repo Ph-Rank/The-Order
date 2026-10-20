@@ -107,7 +107,13 @@ public sealed record MusicBrainzMatchResult(MusicBrainzSearchResult Search, stri
 public sealed record MusicBrainzAlbumResult(MusicBrainzAlbum Album, bool FromCache, bool IsStale, string? Warning);
 public sealed record MusicBrainzBinding(string SourceFingerprint, string ReleaseId);
 public sealed record MusicBrainzCacheValue(string Key, DateTimeOffset CachedAtUtc, MusicBrainzSearchResult? Search = null,
-    MusicBrainzAlbum? Album = null, MusicBrainzBinding? Binding = null, bool Rejected = false);
+    MusicBrainzAlbum? Album = null, MusicBrainzBinding? Binding = null, bool Rejected = false)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public MusicOutletSnapshot? Outlets { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public AppleCatalogResult? Apple { get; init; }
+}
 public enum MusicBrainzFailure { Offline, Timeout, RateLimited, Server, Unavailable, InvalidResponse, ResponseTooLarge }
 public sealed class MusicBrainzException(MusicBrainzFailure failure, string message) : Exception(message)
 { public MusicBrainzFailure Failure { get; } = failure; }
@@ -248,17 +254,31 @@ public static class MusicBrainzValidation
         return false;
     }
     public static bool ArchiveHost(string host) => host == "archive.org" || Regex.IsMatch(host, @"^(ia|dn)\d+\.(us|eu|ca)\.archive\.org$");
-    public static bool Cache(MusicBrainzCacheValue? v) => v is not null && v.CachedAtUtc != default && v.Key is not null && v.Key.Length <= 100
+    public static bool Cache(MusicBrainzCacheValue? v)
+    {
+        if (v is null || v.CachedAtUtc == default || v.Key is null || v.Key.Length > 100) return false;
+        if (v.Outlets is not null) return !v.Rejected && v.Search is null && v.Album is null && v.Binding is null && v.Apple is null
+            && MusicOutlets.Valid(v.Outlets) && v.Outlets.CacheKey == v.Key && v.Outlets.FetchedAtUtc <= v.CachedAtUtc.AddMinutes(5);
+        if (v.Apple is not null) return !v.Rejected && v.Search is null && v.Album is null && v.Binding is null
+            && v.Apple.IsValid && v.Apple.Query.Key == v.Key && v.Apple.FetchedAtUtc <= v.CachedAtUtc.AddMinutes(5);
+        if (v.Rejected && (v.Key.StartsWith("apple:", StringComparison.Ordinal) && Hash(v.Key[6..])
+            || System.Text.RegularExpressions.Regex.IsMatch(v.Key, @"^outlets:(1|2):[a-f0-9-]{36}$") && MusicBrainzReference.ValidId(v.Key[10..])))
+            return v.Search is null && v.Album is null && v.Binding is null;
+        var groupPrefix = v.Key.StartsWith(MusicBrainzService.EditionCachePrefix, StringComparison.Ordinal) ? MusicBrainzService.EditionCachePrefix.Length
+            : v.Key.StartsWith("group:", StringComparison.Ordinal) ? 6 : 0;
+        var validGroup = groupPrefix > 0 && MusicBrainzReference.ValidId(v.Key[groupPrefix..]);
+        return true
         && (v.Rejected ? v.Search is null && v.Album is null && v.Binding is null &&
                 (v.Key.StartsWith("release:", StringComparison.Ordinal) && MusicBrainzReference.ValidId(v.Key[8..])
-                    || v.Key.StartsWith("group:", StringComparison.Ordinal) && MusicBrainzReference.ValidId(v.Key[6..])
+                    || validGroup
                     || v.Key.StartsWith("search:", StringComparison.Ordinal) && Hash(v.Key[7..]))
             : v.Key.StartsWith("search:", StringComparison.Ordinal) && Hash(v.Key[7..]) && Search(v.Search) && v.Album is null && v.Binding is null
-            || v.Key.StartsWith("group:", StringComparison.Ordinal) && MusicBrainzReference.ValidId(v.Key[6..]) && Search(v.Search)
-                && v.Search!.Candidates.All(c => c.ReleaseGroupId == v.Key[6..]) && v.Album is null && v.Binding is null
+            || validGroup && Search(v.Search)
+                && v.Search!.Candidates.All(c => c.ReleaseGroupId == v.Key[groupPrefix..]) && v.Album is null && v.Binding is null
             || v.Key.StartsWith("release:", StringComparison.Ordinal) && Album(v.Album) && v.Album!.Release.Id == v.Key[8..]
                 && v.Album.FetchedAtUtc <= v.CachedAtUtc.AddMinutes(5) && v.Search is null && v.Binding is null
             || v.Key.StartsWith("binding:", StringComparison.Ordinal) && v.Binding is { } b && Hash(b.SourceFingerprint)
                 && v.Key[8..] == b.SourceFingerprint && MusicBrainzReference.ValidId(b.ReleaseId) && v.Search is null && v.Album is null);
+    }
     private static bool Hash(string value) => Regex.IsMatch(value, "^[A-F0-9]{64}$");
 }

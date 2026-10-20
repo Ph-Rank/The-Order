@@ -42,11 +42,14 @@ public static class AniListPlayback
         const report=(kind,value)=>window.chrome.webview.postMessage({kind,value});
         window.onYouTubeIframeAPIReady=()=>{player=new YT.Player('player',{
           host:'https://www.youtube-nocookie.com',videoId:'{{trailer.Id}}',
-          playerVars:{autoplay:0,playsinline:1,origin:'{{AppOrigin}}',widget_referrer:'{{AppOrigin}}'},
+          playerVars:{autoplay:0,controls:1,fs:1,hl:'zh-CN',playsinline:1,origin:'{{AppOrigin}}',widget_referrer:'{{AppOrigin}}'},
           events:{onReady:()=>report('ready',0),onStateChange:e=>report('state',e.data),onError:e=>report('error',e.data)}
         });};
         window.pausePv=()=>{if(player&&player.pauseVideo)player.pauseVideo();};
         """;
+        // HTML parsing normalizes CRLF/CR to LF before checking inline CSP hashes.
+        // Git checkout/build newline policy must not disable the player.
+        script = script.ReplaceLineEndings("\n");
         var hash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(script)));
         return $$"""
         <!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="strict-origin-when-cross-origin">

@@ -5,7 +5,7 @@ namespace TheOrder.Application;
 
 // User decisions, not an entity graph. Provider/resource namespaces are part of
 // identity; titles and remote-cache revisions are deliberately absent from Key.
-public enum MediaIdentityPurpose { AniListMedia, MusicRelease, CatalogWork }
+public enum MediaIdentityPurpose { AniListMedia, MusicRelease, CatalogWork, MusicListening, GameVideo, GameVideoSelection }
 public enum MediaIdentityDecisionKind { Confirmed, Rejected, Withdrawn }
 public enum MediaIdentityDecisionOrigin { User, LegacyConfirmation }
 public sealed record MediaIdentityReference(string Provider, string Resource, string Id)
@@ -18,7 +18,10 @@ public sealed record MediaIdentityReference(string Provider, string Resource, st
         ("MusicBrainz", "ReleaseGroup") => MusicBrainzReference.ValidId(Id),
         ("MyAnimeList", "Anime" or "Manga") => int.TryParse(Id, out var m) && m > 0 && Id == m.ToString(System.Globalization.CultureInfo.InvariantCulture),
         ("NextMoe", "Work") => Id is { Length: >= 1 and <= 20 } && Id[0] is >= '1' and <= '9' && Id.All(char.IsAsciiDigit),
+        ("IGDB", "Game") => GameVideos.ValidId(Id),
+        ("YouTube", "Video") => AniListPlayback.ValidTrailer(new("youtube", Id)),
         ("Native", "LibraryEntry") => Id is { Length: >= 1 and <= 256 } && !string.IsNullOrWhiteSpace(Id) && !Id.Any(char.IsControl),
+        ("iTunes", "Album:JP" or "Album:CN" or "Album:US") => MusicOutlets.Digits(Id),
         _ => false
     };
 }
@@ -26,6 +29,10 @@ public sealed record MediaIdentityAnchor(MediaIdentityReference Source, MediaIde
 {
     public string Key => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { Source, Purpose, Medium })));
     public bool IsValid => Source is { IsValid: true, Provider: "Native", Resource: "LibraryEntry" } && Purpose == MediaIdentityPurpose.CatalogWork && Medium == "Game"
+        || Source is { IsValid: true, Provider: "Native", Resource: "LibraryEntry" }
+            && (Purpose == MediaIdentityPurpose.GameVideo && Medium == "Game"
+                || Purpose == MediaIdentityPurpose.GameVideoSelection && (Medium == "Manual" || Medium is { Length: > 5 } && Medium.StartsWith("IGDB:", StringComparison.Ordinal) && GameVideos.ValidId(Medium[5..])))
+        || Source is { IsValid: true, Provider: "MusicBrainz", Resource: "Release" } && Purpose == MediaIdentityPurpose.MusicListening && Medium == "Music"
         || Source is { IsValid: true, Provider: "Bangumi", Resource: "Subject" }
         && (Purpose == MediaIdentityPurpose.AniListMedia && Medium is "Anime" or "Book"
             || Purpose == MediaIdentityPurpose.MusicRelease && Medium == "Music");
@@ -41,6 +48,12 @@ public sealed record MediaIdentityContext(MediaIdentityAnchor Anchor, string Fin
         new(new("Bangumi", "Subject", source.BangumiId), MediaIdentityPurpose.MusicRelease, "Music"), source.Fingerprint, "Release", "");
     public static MediaIdentityContext ForLibraryEntry(string id) => new(new(new("Native", "LibraryEntry", id), MediaIdentityPurpose.CatalogWork, "Game"),
         Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("library-entry:" + id))), "Work", "GAME");
+    public static MediaIdentityContext ForMusicOutlet(MusicBrainzReference release)
+    {
+        if (release is not { Kind: MusicBrainzEntityKind.Release } || !MusicBrainzReference.ValidId(release.Id)) throw new InvalidDataException("商店关联的来源必须是具体发行版。");
+        return new(new(new("MusicBrainz", "Release", release.Id), MediaIdentityPurpose.MusicListening, "Music"),
+            Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("music-outlets:" + release.Id))), "Release", "Release");
+    }
 }
 public sealed record MediaIdentityDecision(MediaIdentityReference Target, MediaIdentityDecisionKind Kind,
     MediaIdentityContext Context, string TargetFormat, string? TargetParentId, DateTimeOffset DecidedAtUtc,
@@ -78,10 +91,14 @@ public static class MediaIdentityDecisionRules
     public static bool Compatible(MediaIdentityAnchor anchor, MediaIdentityReference target) => anchor.IsValid && target.IsValid
         && (anchor.Purpose == MediaIdentityPurpose.AniListMedia && target.Provider == "AniList"
             && target.Resource == (anchor.Medium == "Anime" ? "Anime" : "Manga")
-            || anchor.Purpose == MediaIdentityPurpose.MusicRelease && target is { Provider: "MusicBrainz", Resource: "Release" });
+            || anchor.Purpose == MediaIdentityPurpose.MusicRelease && target is { Provider: "MusicBrainz", Resource: "Release" }
+            || anchor.Purpose == MediaIdentityPurpose.GameVideo && target is { Provider: "IGDB", Resource: "Game" }
+            || anchor.Purpose == MediaIdentityPurpose.GameVideoSelection && target is { Provider: "YouTube", Resource: "Video" });
     public static bool Valid(MediaIdentityDecision? decision) => decision is { Context.IsValid: true, Target.IsValid: true }
         && Compatible(decision.Context.Anchor, decision.Target) && Enum.IsDefined(decision.Kind) && Enum.IsDefined(decision.Origin)
-        && AniListValidation.Text(decision.TargetFormat, 100) && (decision.TargetParentId is null || decision.Context.Anchor.Purpose == MediaIdentityPurpose.MusicRelease && MusicBrainzReference.ValidId(decision.TargetParentId))
+        && AniListValidation.Text(decision.TargetFormat, 100) && (decision.TargetParentId is null
+            || decision.Context.Anchor.Purpose == MediaIdentityPurpose.MusicRelease && MusicBrainzReference.ValidId(decision.TargetParentId)
+            || decision.Context.Anchor.Purpose == MediaIdentityPurpose.GameVideo && GameVideos.ValidId(decision.TargetParentId))
         && decision.DecidedAtUtc != default && AniListValidation.Text(decision.Evidence, 1000, false);
     public static bool Valid(MediaIdentityDecisionDocument? document) => document is { Anchor.IsValid: true, Revision: >= 0, Decisions.Length: <= MaximumDecisions }
         && document.Decisions.All(d => Valid(d) && d.Context.Anchor == document.Anchor)
@@ -100,6 +117,7 @@ public static class MediaIdentityDecisionRules
         return new(current.Anchor, current.Revision + 1, rows);
     }
     public static bool NeedsReview(MediaIdentityContext current, MediaIdentityDecision decision) => current.Anchor != decision.Context.Anchor
+        || current.Anchor.Purpose is MediaIdentityPurpose.GameVideo or MediaIdentityPurpose.GameVideoSelection && current.Fingerprint != decision.Context.Fingerprint
         || current.Granularity != decision.Context.Granularity
         || current.Format.Length > 0 && decision.Context.Format.Length > 0 && current.Format != decision.Context.Format;
 }

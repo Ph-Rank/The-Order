@@ -122,12 +122,20 @@ internal static class Composition
         services.AddSingleton<IBangumiEpisodesProvider>(p => p.GetRequiredService<BangumiSubjectDetailsProvider>());
         services.AddSingleton<IBangumiEpisodesReader>(p => new BangumiEpisodesService(p.GetRequiredService<IBangumiEpisodesProvider>(), access: p.GetRequiredService<BangumiAccessContext>()));
         services.AddSingleton<IMusicBrainzProvider>(p => new MusicBrainzProvider(p.GetRequiredService<PublicArtworkNetwork>().Client));
+        // MusicBrainz is the sole remote outlet source. Historical personal
+        // iTunes links remain local user data; no catalog lookup is registered.
         services.AddSingleton<IMusicBrainzEntityReader>(p => (IMusicBrainzEntityReader)p.GetRequiredService<IMusicBrainzProvider>());
         services.AddSingleton<IMusicBrainzCache, IsolatedMusicBrainzCache>();
         services.AddSingleton<IMediaIdentityDecisions, IsolatedMediaIdentityDecisions>();
+        services.AddSingleton<IGameVideoProvider>(p => new IgdbGameVideoProvider(p.GetRequiredService<PublicArtworkNetwork>().Client,
+            IgdbServiceEndpoint.Resolve(Program.Profile?.Manifest.ProfileKind, configuration["IGDB_SERVICE_URL"]),
+            Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test));
+        services.AddSingleton<IGameVideoCache, IsolatedGameVideoCache>();
+        services.AddSingleton<GameVideoReader>();
         services.AddSingleton<IMusicBrainzReader, MusicBrainzService>();
         services.AddSingleton<IAniListProvider>(p => new AniListProvider(p.GetRequiredService<PublicArtworkNetwork>().Client));
         services.AddSingleton<IAniListCache, IsolatedAniListCache>();
+        services.AddSingleton<IBookOutletSupplementProvider>(p => new MangaDexBookLinksProvider(p.GetRequiredService<PublicArtworkNetwork>().Client));
         services.AddSingleton<IAniListReader, AniListService>();
         services.AddSingleton<IsolatedBookBibliographyStore>();
         services.AddSingleton<IBookBibliographyCache>(p => p.GetRequiredService<IsolatedBookBibliographyStore>());

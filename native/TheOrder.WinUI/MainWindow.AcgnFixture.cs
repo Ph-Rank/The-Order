@@ -38,6 +38,11 @@ public sealed partial class MainWindow
         allowed |= id is "AniListAddRelated" or "AniListSavePending" or "AniListUserSelections" or "AniListRestoreAutomatic" or "AniListRetryCover"
             or "MusicAlbumAddRelated" or "MusicAlbumSavePending" or "MusicAlbumRestoreAutomatic" or "MusicAlbumRetryCover";
         allowed |= id.StartsWith("AniListUserLink-", StringComparison.Ordinal);
+        allowed |= id is "MusicListeningExpand" or "MusicListeningLoad" or "MusicListeningCancel" or "MusicListeningDetails" or "MusicAlbumSources";
+        allowed |= id is "BookReadingExpand" or "BookReadingRefresh" or "BookReadingCancel" or "BookReadingSources";
+        allowed |= id is "GameVideosExpand" or "GameVideosRefresh" or "GameVideosCancel" or "GameVideosWithdraw" or "GameVideosReset" or "GamePV";
+        allowed |= new[] { "GameVideosConfirm-", "GameVideosReject-", "GameVideoPlay-", "GameVideoDefault-", "GameVideoReject-" }.Any(prefix => id.StartsWith(prefix, StringComparison.Ordinal));
+        allowed |= id.StartsWith("BookPlatform-", StringComparison.Ordinal);
         allowed |= launchSettings || gameSettings;
         if (!allowed || id.Length > 200 || mode is not ("inspect" or "focus" or "invoke" or "expand" or "collapse" or "toggle" or "select0" or "select1" or "select2")) throw new InvalidDataException("Unsupported bounded control.");
         if ((mode == "toggle" || mode.StartsWith("select", StringComparison.Ordinal)) && !(launchSettings || gameSettings)) throw new InvalidDataException("Only launch settings accept Test value changes.");
@@ -73,7 +78,7 @@ public sealed partial class MainWindow
         { if (target is not Control control || !control.Focus(FocusState.Keyboard)) throw new InvalidOperationException("Control cannot receive keyboard focus."); }
         else if (mode == "invoke")
         {
-            if (id.StartsWith("WatchPlatform-", StringComparison.Ordinal)) throw new InvalidOperationException("External destinations are inspected, not launched by this fixture.");
+            if (id.StartsWith("WatchPlatform-", StringComparison.Ordinal) || id.StartsWith("BookPlatform-", StringComparison.Ordinal)) throw new InvalidOperationException("External destinations are inspected, not launched by this fixture.");
             if (!hit || peer.GetPattern(PatternInterface.Invoke) is not IInvokeProvider invoke) throw new InvalidOperationException("Active hit target and native Invoke pattern required.");
             invoke.Invoke();
         }
@@ -93,6 +98,7 @@ public sealed partial class MainWindow
             // A bounded control selection, distinguished from physical keyboard input.
             choice.SelectedIndex = mode[^1] - '0';
         }
+        if (id == "GamePV" && mode == "inspect") await detailsPage.ProbeGameVideoForFixtureAsync();
         await Task.Delay(150);
         await File.WriteAllTextAsync(Path.Combine(fixtureDirectory, "acgn-control-evidence.json"), JsonSerializer.Serialize(new
         { before, focused = target is Control focusable ? focusable.FocusState.ToString() : null, details = detailsPage.BangumiEvidence, page = ViewModel.Page.ToString(),

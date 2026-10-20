@@ -17,6 +17,7 @@ public sealed class MusicBrainzEntityDetailView : Grid, IDisposable
     private readonly List<Frame> history = [];
     private readonly TextBlock type = Text(13), title = Text(28), subtitle = Text(14), message = Text(14), original = Text(13);
     private readonly TagFlowPanel facts = MusicDetailFormatting.Facts();
+    private readonly MusicListeningView listening = new();
     private readonly CreditColumnsPanel links = new();
     private readonly Expander aliases = Section("其他名称"), relations = Section("专业关系"), evidence = Section("资料来源与关系依据");
     private readonly StackPanel evidenceBody = new() { Spacing = 8 };
@@ -44,7 +45,7 @@ public sealed class MusicBrainzEntityDetailView : Grid, IDisposable
         aliases.Content = original; relations.Content = links; relations.IsExpanded = true;
         evidence.Content = evidenceBody;
         var body = new StackPanel { Spacing = 24, MaxWidth = 1160, HorizontalAlignment = HorizontalAlignment.Stretch, Children = { back,
-            new StackPanel { Spacing = 8, Children = { type, title, subtitle } }, message, actions, facts, aliases, relations, external, evidence } };
+            new StackPanel { Spacing = 8, Children = { type, title, subtitle } }, message, actions, listening, facts, aliases, relations, external, evidence } };
         scroll = new() { Content = body, HorizontalContentAlignment = HorizontalAlignment.Stretch,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Children.Add(scroll);
@@ -65,10 +66,11 @@ public sealed class MusicBrainzEntityDetailView : Grid, IDisposable
         SizeChanged += (_, _) => title.FontSize = ActualWidth < 520 ? 24 : 28;
         Unloaded += (_, _) => { if (!IsLoaded) Deactivate(); };
     }
-    public void Configure(IMusicBrainzEntityReader reader, Func<string, Task> open)
+    public void Configure(IMusicBrainzEntityReader reader, Func<string, Task> open, IMusicListeningReader? outlets = null)
     {
         if (disposed) return;
         Deactivate();
+        listening.Configure(outlets);
         if (model is not null) { model.PropertyChanged -= Changed; model.Dispose(); }
         openExternal = open; model = new(reader); model.PropertyChanged += Changed;
     }
@@ -105,6 +107,7 @@ public sealed class MusicBrainzEntityDetailView : Grid, IDisposable
     private void Render()
     {
         var detail = model?.Detail;
+        listening.SetContext(detail?.Reference.Kind == MusicBrainzEntityKind.Recording ? detail.Reference : null);
         type.Text = Kind(model?.Reference?.Kind) + " · MusicBrainz";
         title.Text = detail?.Title ?? (model?.IsBusy == true ? "正在读取资料…" : "音乐资料");
         subtitle.Text = string.Join(" · ", new[] { MusicDetailFormatting.EntityType(detail?.EntityType), detail?.Disambiguation }.Where(x => !string.IsNullOrWhiteSpace(x)));
@@ -173,11 +176,11 @@ public sealed class MusicBrainzEntityDetailView : Grid, IDisposable
     internal Task RefreshAsync() => model?.RefreshAsync() ?? Task.CompletedTask;
     internal object Evidence => new { active, state = model?.State.ToString(), reference = model?.Reference, title = title.Text, historyDepth = history.Count,
         fromCache = model?.Result?.FromCache, stale = model?.Result?.IsStale, facts = model?.Detail?.Facts, relations = model?.Detail?.Relations,
-        artistCredits = model?.Detail?.ArtistCredits,
+        artistCredits = model?.Detail?.ArtistCredits, listening = listening.Evidence,
         artistLinks = facts.Children.OfType<StackPanel>().SelectMany(x => x.Children.OfType<TagFlowPanel>())
             .SelectMany(x => x.Children.OfType<HyperlinkButton>()).Select(InteractiveCardEvidence.Hit).ToArray(),
         visualFactCount = facts.Children.Count, visualRelationCount = links.Children.OfType<Button>().Count(),
         message = message.Text, scrollOffset = scroll.VerticalOffset, width = ActualWidth, links = links.Children.OfType<Button>().Select(InteractiveCardEvidence.Hit).ToArray() };
-    public void Deactivate() { active = false; navigation++; model?.Deactivate(); progress.IsActive = false; history.Clear(); shown = null; }
-    public void Dispose() { if (disposed) return; Deactivate(); disposed = true; if (model is not null) { model.PropertyChanged -= Changed; model.Dispose(); } openExternal = null; }
+    public void Deactivate() { active = false; navigation++; model?.Deactivate(); listening.Deactivate(); progress.IsActive = false; history.Clear(); shown = null; }
+    public void Dispose() { if (disposed) return; Deactivate(); disposed = true; if (model is not null) { model.PropertyChanged -= Changed; model.Dispose(); } listening.Dispose(); openExternal = null; }
 }

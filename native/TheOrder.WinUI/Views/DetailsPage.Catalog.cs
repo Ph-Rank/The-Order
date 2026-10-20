@@ -83,7 +83,7 @@ public sealed partial class DetailsPage
         catch (Exception e) { if (Accept()) App.TraceVisualFailure(e); }
         finally { if (Accept()) heroPresentation.SetPending(false); }
     }
-    public void CancelCatalog() { catalogGeneration++; catalogStop?.Cancel(); CloseRelatedMedia(false); CloseCatalogBrowser(); BangumiRelated.CancelPending(); }
+    public void CancelCatalog() { gameVideos?.Suspend(); catalogGeneration++; catalogStop?.Cancel(); CloseRelatedMedia(false); CloseCatalogBrowser(); BangumiRelated.CancelPending(); }
     internal void ResetBrowsing() { CloseRelatedMedia(false); CloseCatalogBrowser(); }
     private void CloseCatalogBrowser()
     {
@@ -168,7 +168,7 @@ public sealed partial class DetailsPage
         // Catalog and media are replacement bodies, never transparent overlays.
         CloseRelatedMedia(false);
         BangumiRelated.SuspendNavigation();
-        HeroStage.ReleaseBeforeLeave(); DetailsRoot.Visibility = Visibility.Collapsed;
+        gameVideos?.Suspend(); HeroStage.ReleaseBeforeLeave(); DetailsRoot.Visibility = Visibility.Collapsed;
         CatalogHost.Visibility = Visibility.Visible;
         await browser.OpenAsync(entity, false, incoming: incoming);
     }
@@ -206,7 +206,7 @@ public sealed partial class DetailsPage
         relatedReturnFocus = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) as Control;
         if (CatalogHost.Visibility == Visibility.Visible) CloseCatalogBrowser();
         BangumiRelated.SuspendNavigation(); HeroStage.ReleaseBeforeLeave();
-        DetailsRoot.Visibility = Visibility.Collapsed; RelatedMediaHost.Visibility = Visibility.Visible;
+        gameVideos?.Suspend(); DetailsRoot.Visibility = Visibility.Collapsed; RelatedMediaHost.Visibility = Visibility.Visible;
         relatedMedia.RelationLabel = card.Label; relatedMedia.RelationEvidence = card.Evidence;
         await relatedMedia.OpenAsync(item, ViewModel.Draft?.Source.Personal.Name ?? "原作");
     }
@@ -246,7 +246,7 @@ public sealed partial class DetailsPage
         var identity = ReadBangumiIdentity(out var reason);
         BangumiRelated.SetContext(identity, reason);
     }
-    public void DisposeBangumi() { BangumiRelated.Dispose(); relatedMedia?.Dispose(); browser?.DisposeRelated(); }
+    public void DisposeBangumi() { gameVideos?.Dispose(); BangumiRelated.Dispose(); relatedMedia?.Dispose(); browser?.DisposeRelated(); }
     public void InvalidateBangumiAccess()
     {
         CloseRelatedMedia(false); browser?.InvalidateBangumiAccess();
@@ -292,7 +292,7 @@ public sealed partial class DetailsPage
                 if (Program.Profile?.Manifest.ProfileKind != NativeProfileKind.Test
                     || !BangumiRelationIdentityResolver.ValidSubjectId(subjectId) || relatedMedia is null
                     || kind is not (null or BangumiRelationKind.Anime or BangumiRelationKind.Book or BangumiRelationKind.Music)) throw new InvalidDataException("Isolated public subject fixture required.");
-                relatedMedia.Deactivate(); BangumiRelated.SuspendNavigation(); HeroStage.ReleaseBeforeLeave();
+                gameVideos?.Suspend(); relatedMedia.Deactivate(); BangumiRelated.SuspendNavigation(); HeroStage.ReleaseBeforeLeave();
                 if (CatalogHost.Visibility == Visibility.Visible) CloseCatalogBrowser();
                 DetailsRoot.Visibility = Visibility.Collapsed; RelatedMediaHost.Visibility = Visibility.Visible;
                 relatedMedia.RelationLabel = "隔离只读验证"; relatedMedia.RelationEvidence = "Test fixture directly opens a public Bangumi identity; no synthetic relation is asserted as real.";

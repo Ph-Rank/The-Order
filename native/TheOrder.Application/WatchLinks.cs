@@ -27,6 +27,10 @@ public interface IWatchLinkPreferencesStore
 }
 public static class WatchLinks
 {
+    // Shared display ordering; preferences never remove valid links.
+    public static IEnumerable<T> OrderPlatforms<T>(IEnumerable<T> input, Func<T,string> platform, string[] preferred, bool alphabetic)
+        => alphabetic ? input.OrderBy(platform, StringComparer.CurrentCulture)
+            : preferred.Length > 0 ? input.OrderBy(x => { var n = Array.IndexOf(preferred, platform(x)); return n < 0 ? preferred.Length : n; }) : input;
     public static bool SafeUrl(string? value)
     {
         if (value is not { Length: > 0 and <= 2048 } || value.Any(char.IsControl) || !Uri.TryCreate(value, UriKind.Absolute, out var uri)
@@ -68,11 +72,17 @@ public static class WatchLinks
                 && long.TryParse(token[2..], NumberStyles.None, CultureInfo.InvariantCulture, out var number) && number > 0 && token[2..] == number.ToString(CultureInfo.InvariantCulture))
                 return kind + ":bilibili:" + token;
         }
+        return kind + ":" + ExternalResourceKey(link.Url, preserveFragment: false);
+    }
+    // Shared by watch and book links. Opening always uses the original URL.
+    public static string ExternalResourceKey(string url, bool preserveFragment = true, bool preserveTag = false)
+    {
+        var uri = new Uri(url);
         // Only tracking fields are ignored; unknown query parameters, paths and
         // episode IDs remain distinct. Never deduplicate by title or site name.
         var query = string.Join('&', uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries).Where(x =>
-        { var key = x.Split('=')[0]; return !key.StartsWith("utm_", StringComparison.OrdinalIgnoreCase) && key is not ("spm_id_from" or "spm_from" or "tag"); }));
-        return kind + ":" + uri.GetLeftPart(UriPartial.Path).TrimEnd('/') + (query.Length > 0 ? "?" + query : "");
+        { var key = x.Split('=')[0]; return !key.StartsWith("utm_", StringComparison.OrdinalIgnoreCase) && key is not ("spm_id_from" or "spm_from") && (preserveTag || key != "tag"); }));
+        return uri.GetLeftPart(UriPartial.Path).TrimEnd('/') + (query.Length > 0 ? "?" + query : "") + (preserveFragment ? uri.Fragment : "");
     }
     public static WatchLink[] Merge(AnimeWatchIdentity identity, IEnumerable<WatchLink> input, WatchLinkSort sort = WatchLinkSort.BilibiliFirst)
     {
@@ -89,7 +99,7 @@ public static class WatchLinks
             output[key] = stronger with { Sources = old.Sources.Concat(link.Sources).DistinctBy(x => (x.Source, x.Url, x.Note, x.DataVersion)).Take(8).ToArray(), Regions = old.Regions.Concat(link.Regions).Distinct().Take(64).ToArray() };
         }
         var items = output.Values.AsEnumerable();
-        return sort switch { WatchLinkSort.BilibiliFirst => items.OrderBy(x => PlatformKey(x) == "bilibili" ? 0 : 1).ToArray(),
-            WatchLinkSort.PlatformName => items.OrderBy(x => x.Platform, StringComparer.CurrentCulture).ToArray(), _ => items.ToArray() };
+        return sort switch { WatchLinkSort.BilibiliFirst => OrderPlatforms(items, PlatformKey, ["bilibili"], false).ToArray(),
+            WatchLinkSort.PlatformName => OrderPlatforms(items, x => x.Platform, [], true).ToArray(), _ => items.ToArray() };
     }
 }

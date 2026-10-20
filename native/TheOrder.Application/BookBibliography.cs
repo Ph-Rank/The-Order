@@ -15,6 +15,7 @@ public sealed record BookIdentity(string Provider, string Id, BookEntityLevel Le
     {
         "Bangumi" => BangumiRelationIdentityResolver.ValidSubjectId(Id),
         "AniList" => int.TryParse(Id, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 && Id == id.ToString(CultureInfo.InvariantCulture),
+        "MangaDex" => Level == BookEntityLevel.Series && Guid.TryParseExact(Id, "D", out var uuid) && uuid != Guid.Empty && Id == uuid.ToString("D"),
         "NDL" => BookValidation.NdlId(Id) && Level is BookEntityLevel.Publication or BookEntityLevel.Aggregate,
         _ => false
     });
@@ -24,19 +25,22 @@ public sealed record BangumiBookFacts(bool? IsSeries, int? Volumes, int? Chapter
     string[] Magazines, string[] Imprints, string? Volume)
 {
     public BookFactValue[] RawFacts { get; init; } = [];
+    public BookExternalLink[] ExternalLinks { get; init; } = [];
+    public bool HasExternalLinkMetadata { get; init; }
     public BookEntityLevel Level => IsSeries == true ? BookEntityLevel.Series
         : Volume is { Length: > 0 } ? BookEntityLevel.Volume
         : IsSeries == false && Isbns.Length > 0 ? BookEntityLevel.Publication : BookEntityLevel.Unknown;
     public bool IsValid => Volumes is null or >= 0 and <= 1000000 && Chapters is null or >= 0 and <= 1000000
         && BookValidation.Isbns(Isbns) && new[] { Authors, Illustrators, Publishers, Magazines, Imprints }.All(BookValidation.Texts)
         && AniListValidation.OptionalText(Volume, 200) && RawFacts is { Length: <= 64 }
-        && RawFacts.All(x => x is not null && AniListValidation.Text(x.Name, 100, false) && BookValidation.Texts(x.Values));
+        && RawFacts.All(x => x is not null && AniListValidation.Text(x.Name, 100, false) && BookValidation.Texts(x.Values))
+        && ExternalLinks is { Length: <= 96 } && ExternalLinks.All(BookOutlets.ValidRaw);
 }
 public sealed record BookSource(BookIdentity Identity, string Title, string OriginalTitle,
     string Format, string[] Creators, string[] Isbns, string? Volume)
 {
     public string Fingerprint => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { Identity, Title, OriginalTitle, Format, Creators, Isbns, Volume })));
-    public bool IsValid => Identity is not null && Identity.IsValid && Identity.Provider != "NDL" && AniListValidation.Text(Title, 2000, false)
+    public bool IsValid => Identity is not null && Identity.IsValid && Identity.Provider is "Bangumi" or "AniList" && AniListValidation.Text(Title, 2000, false)
         && AniListValidation.Text(OriginalTitle, 2000) && AniListValidation.Text(Format, 200) && BookValidation.Texts(Creators)
         && BookValidation.Isbns(Isbns) && AniListValidation.OptionalText(Volume, 200);
     public static BookSource From(BangumiSubjectDetails book)

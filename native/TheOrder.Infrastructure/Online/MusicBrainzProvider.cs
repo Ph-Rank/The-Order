@@ -9,7 +9,7 @@ namespace TheOrder.Infrastructure.Online;
 public sealed partial class MusicBrainzProvider(HttpClient http, MusicBrainzRateCoordinator? coordinator = null,
     TimeSpan? operationTimeout = null, Func<DateTimeOffset>? clock = null) : IMusicBrainzProvider, IMusicBrainzEntityReader
 {
-    public const string UserAgent = "TheOrder/1.1.0 (https://github.com/Ph-Rank/The-Order)";
+    public static readonly string UserAgent = $"TheOrder/{AppReleaseIdentity.Version} (https://github.com/Ph-Rank/The-Order)";
     public const int MaximumResponseBytes = 8 * 1024 * 1024;
     private MusicBrainzRateCoordinator Rate => coordinator ?? MusicBrainzRateCoordinator.Shared;
     private DateTimeOffset Now => (clock ?? (() => DateTimeOffset.UtcNow))();
@@ -73,7 +73,7 @@ public sealed partial class MusicBrainzProvider(HttpClient http, MusicBrainzRate
     }
     private async Task<MusicBrainzSearchResult> BrowseEditions(string releaseGroupId, CancellationToken token)
     {
-        using var data = await GetJsonAsync("release?fmt=json&limit=25&release-group=" + releaseGroupId + "&inc=labels%2Bartist-credits%2Brelease-groups", token).ConfigureAwait(false);
+        using var data = await GetJsonAsync("release?fmt=json&limit=25&release-group=" + releaseGroupId + "&inc=labels%2Bartist-credits%2Brelease-groups%2Bmedia", token).ConfigureAwait(false);
         var result = MapSearch(data.RootElement, browse: true);
         if (result.Candidates.Any(x => x.ReleaseGroupId != releaseGroupId)) throw Invalid();
         return result with { Notice = "请选择此专辑的具体发行版。" };

@@ -120,6 +120,7 @@ public sealed partial class MainWindow
     internal void SetVisualWindowVisible(bool visible)
     {
         visualWindowVisible = visible;
+        if (!visible) detailsPage.SuspendGameVideos();
         ApplyMaterialPolicy();
     }
 
@@ -209,6 +210,7 @@ public sealed partial class MainWindow
         contentLanguage = ContentLanguage.Current, direction, isolatedTest = visualFixtureTimer is not null, galleryVisible, visualScreen = galleryVisible ? visualScreen : ViewModel.Page.ToString(),
         material = materialPolicy?.Evidence(), gallery = gallery?.ResourceCounts, materialMode = materialMode.ToString(), effectiveMaterialMode = EffectiveMaterialMode.ToString(), controlledAdvanced,
         diagnosticsPolling = diagnosticsTimer is not null, backdrop = SystemBackdrop?.GetType().Name ?? "Solid",
+        gameVideos = detailsPage.GameVideoEvidence,
         catalogPreparation = presentations.Metrics, stages = new { library = libraryPage.StageEvidence, details = detailsPage.StageEvidence, online = onlinePage.StageEvidence }, shell = ShellEvidence(),
         round3 = Round3Evidence(), managed = MaterialManagedEvidence(), displayBitmaps = Views.DisplayBitmaps.Evidence(images), bitmapSurfaces = SkipCaptureTreeProbe ? (int?)null : bitmapTreeProbe.Read(() => CountMaterialBitmaps(Root)), pendingNavigation = navigating, pendingDetails = ViewModel.IsDetailsLoading, staleCovers = SkipCaptureTreeProbe ? (int?)null : staleTreeProbe.Read(() => CountStaleCoverSources(Root)), captureTreeProbeSkipped = SkipCaptureTreeProbe,
         updates = new { updates.SelectedChannel, updates.SupportsChannelSwitch, updates.InstallText, updates.IsChannelChange, updates.CurrentVersion, latest = updates.Latest?.Version, updates.Message, updates.Highlights, updates.CanCheck, updates.CanInstall, updates.CanCancel, updates.IsBusy, updates.Progress, badgeVisible = UpdateBadge.Visibility == Visibility.Visible },

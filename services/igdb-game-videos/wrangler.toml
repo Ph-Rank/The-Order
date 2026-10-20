@@ -1,0 +1,14 @@
+name = "the-order-igdb-game-videos"
+main = "src/index.mjs"
+compatibility_date = "2026-08-01"
+workers_dev = false
+[vars]
+IGDB_ENABLED = "false"
+IGDB_DIAGNOSTICS = "false"
+[[durable_objects.bindings]]
+name = "IGDB_COORDINATOR"
+class_name = "IgdbCoordinator"
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["IgdbCoordinator"]
+# No production route configured. Developer secrets: IGDB_CLIENT_ID, IGDB_CLIENT_SECRET.
