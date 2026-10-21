@@ -1,5 +1,13 @@
 # 开发与维护
 
+## 1.2.2 正式版候选（2026-10-21）
+
+本轮获授权将最新 `1.2.2 beta 2` 制作为 `1.2.2` 正式版。维护入口仍为 `D:/Projects/The-Order-worktrees/beta-1.2.2-20261020`，当前分支 `codex/release-1.2.2-20261021`。Native 功能代码与 `v1.2.2-beta.2` 完全相同，仅修改版本属性（程序 1.2.2、文件 1.2.2.0）；资料格式沿用 NativeExtras v7。
+
+重新构建正式安装包并验证完整回归、入口、独立安装、实际 Test WinUI、升级通道与附件哈希；源码冻结、报告和发布回执使用 `.artifacts/release-1.2.2/`。此提交时仍处候选阶段，不代表已经公开发布。旧 Beta、旧正式版及其附件保留。
+
+本轮不替换日用安装，不读取真实 Production、账号凭据或游戏目录，不启动真实游戏，不修改生产服务。后续完成状态在本文件顶部追加。
+
 ## 1.2.2 beta 2 已发布并替换本机（2026-10-20）
 
 最新维护入口为 `D:/Projects/The-Order-worktrees/beta-1.2.2-20261020`，分支 `codex/settings-beta2-20261020`。构建源码提交 `506e2f09951e7a5c571797e41e41d680093adec5`，不可变 Tag `v1.2.2-beta.2`；GitHub 名称为 **The Order 1.2.2 beta 2**：[发布页](https://github.com/Ph-Rank/The-Order/releases/tag/v1.2.2-beta.2)。后续文档提交不改变构建源码。下方候选及“未发布”描述保留为相应历史阶段。
