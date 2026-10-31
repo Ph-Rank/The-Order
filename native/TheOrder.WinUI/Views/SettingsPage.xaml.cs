@@ -8,6 +8,19 @@ namespace TheOrder.WinUI.Views;
 public sealed partial class SettingsPage : Page
 {
     public Func<Task>? OpenLibrarySources { get; set; }
+    public Func<bool, Task>? ChangePlaygroundVisibility { get; set; }
+    internal void ShowPlaygroundVisibility(bool visible, string? notice = null)
+    {
+        PlaygroundEntryChoice.IsChecked = visible;
+        PlaygroundEntryNotice.Text = notice ?? "对话为可选功能；连接、授权和关闭功能均在对话页内设置。";
+    }
+    private async void OnPlaygroundEntry(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (ChangePlaygroundVisibility is not { } change) return;
+        PlaygroundEntryChoice.IsEnabled = false;
+        try { await change(PlaygroundEntryChoice.IsChecked == true); }
+        finally { PlaygroundEntryChoice.IsEnabled = true; }
+    }
     private async void OnLibrarySources(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) { try { if (OpenLibrarySources is not null) await OpenLibrarySources(); } catch { ViewModel.ReportUnexpected(); } }
     public WorkspaceViewModel ViewModel { get; }
     public OnlineViewModel Online { get; }

@@ -1,5 +1,19 @@
 # Attribution
 
+## Local read-only documents
+
+The internal reader uses unmodified ExcelDataReader 3.8.0 (MIT, copyright ExcelDataReader contributors) for XLS/XLSX saved cell values, and unmodified OpenMcdf 3.3.0 (MPL-2.0, copyright Federico Blaseotto and Jeremy Powell) for legacy Word compound streams. License texts are included as `licenses/EXCELDATAREADER-MIT.txt` and `licenses/OPENMCDF-MPL-2.0.txt`; corresponding OpenMcdf source is available at https://github.com/openmcdf/openmcdf/tree/v3.3.0 and ExcelDataReader at https://github.com/ExcelDataReader/ExcelDataReader/tree/v3.8.0. Those libraries are unmodified. Package identities and hashes are recorded in the locked dependency graph and packaged dependency metadata.
+
+Word text/table projection and Open XML input handling are The Order code. PDF rendering and image decoding use Windows APIs. Office programs, LibreOffice, macros and external document relationships are not invoked. User-selected documents and images retain their authors' rights and are not covered by The Order's source license.
+
+## In-game walkthrough companion
+
+The native companion uses a source-built [ReShade 6.8.0](https://github.com/crosire/reshade/tree/18deaa52de0c425a78b329e9cb3c497281cd00ec), copyright crosire and contributors, under BSD-3-Clause, and [Microsoft Detours 4.0.1](https://github.com/microsoft/Detours/tree/e4bfd6b03e50de46b47abfbd1e46b384f0c5f833), copyright Microsoft, under MIT. The Order builds its own runtime and add-on; no official ReShade installer or NVIDIA/Steam binary is redistributed. The build recipe preserves pinned revisions and the small runtime changes that restore the owned launch import table and suppress the ReShade splash screen.
+
+The package includes upstream notices for Dear ImGui, MinHook, glad, UTF8-CPP, stb, SPIR-V, Vulkan Memory Allocator, OpenVR/OpenXR, DirectX headers, fpng, libjxl, and the engine's embedded notices in `guide-overlay/licenses/`. Dear ImGui's embedded ProggyClean fallback is copyright 2004–2005 Tristan Grimmer, MIT. Fork Awesome's embedded icon subset is copyright 2018 Fork Awesome and uses SIL OFL 1.1. Microsoft YaHei is read from the user's Windows font installation; the font is not redistributed.
+
+Walkthroughs are read from NextMoe's catalog API on demand. Original author/source links, release applicability and supplied machine-translation flags remain attached to the content. Original walkthroughs and their images retain their authors' rights; they are not licensed as The Order source. The application keeps walkthrough documents in memory for the reading/game session and does not build a persistent walkthrough mirror. Its flow diagrams are reading projections of the supplied chart data.
+
 ## Cross-manager interchange
 
 The independent migration adapters use the documented backup layouts of PotatoVN,
@@ -98,6 +112,12 @@ Native Markdown parsing uses Markdig by Alexandre Mutel and contributors, under 
 The native client uses the [NDL Search API](https://ndlsearch.ndl.go.jp/help/api) for on-demand, read-only book metadata. Only independently verified National Diet Library records, with NDL provenance, completed cataloging status and an explicit [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) metadata license, are consumed. Attribution: National Diet Library, Japan. The Order transforms DC-NDL XML into display fields, normalizes validated ISBN-10 to ISBN-13, and preserves original publication dates, volume statements and responsibility descriptions. Imprint labels are not treated as work-series identities. Neither book text, book-cover APIs nor third-party supplier Item metadata are used or redistributed. See [NDL provider permissions](https://ndlsearch.ndl.go.jp/help/api/provider) and [DC-NDL3](https://ndlsearch.ndl.go.jp/renkei/dcndl/version3).
 
 Bangumi Book fields and original relations retain [Bangumi's attribution and applicable CC BY-SA data terms](https://bgm.tv/about/copyright); artwork and separately copyrighted material retain their original rights. Data-source licenses do not become The Order's source-code license. AniList retains its [API use restrictions](https://docs.anilist.co/guide/terms-of-use); this module adds no tracker, reader, database mirror or AniList backup service. The current bounded AniList cache has no confirmed general permission exemption; further public expansion requires clarification. MangaDex public metadata may supplement book outlets with bounded, cross-ID-checked, supplied external URLs; no uploaded chapters, images, reader, or full index are imported. Minimal factual regression excerpts retain their API URLs, timestamps and response hashes in `native/fixtures/book-outlets/provenance.json`; they do not transfer any third-party content rights to this project's source license. MangaUpdates is not a runtime provider. See [book outlets v1](docs/book-reading-outlets-v1.md) for limits and evidence.
+
+## Local walkthrough flowchart layout
+
+The native walkthrough graph bundles the unmodified `@dagrejs/dagre` 3.1.3 browser build, including `@dagrejs/graphlib` 4.0.6, under their MIT licenses (Chris Pettitt and contributors). The original license texts and bundled legal notices are in `native/TheOrder.WinUI/Assets/GuideGraph/`; `VENDOR.json` records versions, registry integrity and the browser build SHA-256. See [Dagre](https://github.com/dagrejs/dagre) and [Graphlib](https://github.com/dagrejs/graphlib). Graph assets run locally in the application's isolated WebView2, without a CDN or remote renderer. The Order's graph projection, renderer and interaction code are application source; no KUN website implementation is bundled.
+
+For the native game companion, the same embedded Dagre bundle runs in the manager through Jint 4.17.0 (BSD-2-Clause) and Acornima 1.7.0 (BSD-3-Clause). Only the resulting bounded geometry is sent to the game renderer. Unmodified license texts are shipped at `licenses/JINT-LICENSE.txt` and `licenses/ACORNIMA-LICENSE.txt`; NuGet package identities and hashes appear in `dependencies.json`. No JavaScript interpreter or browser is loaded into the game by this feature.
 
 ## Bangumi broadcast-site mapping data
 

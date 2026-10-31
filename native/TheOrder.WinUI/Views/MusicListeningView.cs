@@ -11,7 +11,7 @@ namespace TheOrder.WinUI.Views;
 
 public sealed class MusicListeningView : Grid, IDisposable
 {
-    private readonly Expander section = new() { Header = "正版收听与购买", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander section = new SmoothExpander() { Header = "正版收听与购买", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel entries = new() { Spacing = 14 }, saved = new() { Spacing = 6 }, evidence = new() { Spacing = 8 };
     private readonly StackPanel options = new() { Spacing = 12, Visibility = Visibility.Collapsed };
     private readonly TextBlock status = Text(13);

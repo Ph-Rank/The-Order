@@ -47,6 +47,10 @@ $dependencies = @(foreach ($dependency in $licenseIndex) {
     # Markdig's own BSD notice is copied by the application's publish target.
     if ($license -and $license.type -eq 'expression' -and $license.InnerText -eq 'MIT') { $texts += 'licenses/' + $mitName }
     if ($dependency.package -like 'Markdig/*') { $texts += 'LICENSE-Markdig.txt' }
+    if ($dependency.package -like 'Jint/*') { $texts += 'licenses/JINT-LICENSE.txt' }
+    if ($dependency.package -like 'Acornima/*') { $texts += 'licenses/ACORNIMA-LICENSE.txt' }
+    if ($dependency.package -like 'OpenMcdf/*') { $texts += 'licenses/OPENMCDF-MPL-2.0.txt' }
+    if ($dependency.package -like 'ExcelDataReader/*') { $texts += 'licenses/EXCELDATAREADER-MIT.txt' }
     if ($dependency.package -eq 'LiteDB/4.1.4') { $texts += 'licenses/LITEDB-LICENSE.txt' }
     if ($dependency.package -like 'LevelDB.Standard/*') { $texts += 'licenses/LEVELDB-LICENSE.txt', 'licenses/SNAPPY-LICENSE.txt' }
     foreach ($text in $texts) { if (!(Test-Path -LiteralPath (Join-Path $output $text))) { throw 'Dependency license text is missing.' } }

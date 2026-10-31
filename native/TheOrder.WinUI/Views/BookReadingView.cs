@@ -12,7 +12,7 @@ namespace TheOrder.WinUI.Views;
 
 internal sealed class BookReadingView : StackPanel, IDisposable
 {
-    private readonly Expander section = new() { Header = "阅读与购买", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander section = new SmoothExpander() { Header = "阅读与购买", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel entries = new() { Spacing = 12 }, options = new() { Spacing = 10, Visibility = Visibility.Collapsed }, evidence = new() { Spacing = 8 };
     private readonly TextBlock status = Text(13);
     private readonly Button details = new() { Content = "资料与来源 ⌄" }, refresh = new() { Content = "刷新入口" }, cancel = new() { Content = "取消读取" };

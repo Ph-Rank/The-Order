@@ -1,0 +1,18 @@
+{
+  "dagre": {
+    "version": "3.1.3",
+    "license": "MIT",
+    "source": "https://github.com/dagrejs/dagre",
+    "registryIntegrity": "sha512-X4aUTwOReZvthaZWOVHqlJ52/ZdhZFEM4+Lh/uR4XooUSLE6p71bcy7MPGzYnNUcNh+nj+i/qJQpCMIdQnSmrg==",
+    "sha256": "54A503E346F93CA0BB10ABE7999587E037262935687ACA45EB4E4B0F64BBB578"
+  },
+  "modified": false,
+  "graphlib": {
+    "version": "4.0.6",
+    "source": "https://github.com/dagrejs/graphlib",
+    "registryIntegrity": "sha512-Hjv7hbfmSBMP4nVXMFt4gusqWWHghQF0qNT4V5KHo4Jatvd+2L5VHKFnnIjXVuDnaHIRz7ZuHSnlf0RuZkOwWA==",
+    "license": "MIT",
+    "bundledIn": "dagre.min.js"
+  },
+  "runtimeNetworkRequired": false
+}

@@ -293,14 +293,63 @@ public sealed partial class MainWindow
     {
         if (p1Stopping || p1Dialog is not null) return;
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(p1Lifetime.Token);
-        var details = await extras.LoadAsync(id, cancel.Token); var notice = Label(""); var pivot = new Pivot();
+        var details = await extras.LoadAsync(id, cancel.Token); var notice = Label(""); var workspace = new Views.GameToolsView();
+        Task<string?> PickReadingFile()
+        {
+            var current = Sessions.Session?.Session?.Native;
+            var installation = current?.GameId == id && current.Lifecycle == SessionLifecycle.Open ? current.InstallationId : null;
+            var folder = LocalReadingPickerFolder.Select(details.Entry, installation, Directory.Exists);
+            return PickFileInFolder(folder, LocalDocuments.Extensions.ToArray());
+        }
+        notice.Visibility = Visibility.Collapsed;
+        AutomationProperties.SetLiveSetting(notice, AutomationLiveSetting.Polite);
+        notice.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => notice.Visibility = string.IsNullOrWhiteSpace(notice.Text) ? Visibility.Collapsed : Visibility.Visible);
+        var walkthroughWork = details.Entry.Metadata?.Id;
+        using var networkGuide = walkthroughReader is null ? null : new Views.WalkthroughReaderView(walkthroughReader,
+            walkthroughWork, () => online.AuthGeneration,
+            () => extras.Snapshot?.Entries.FirstOrDefault(entry => entry.Id == id)?.Metadata?.Id == walkthroughWork);
         int visibleRecords = 20;
         var time = Panel(); var guides = Panel(); var metadata = Panel(); var layers = Panel(); var records = Panel(); var chart = Panel();
-        pivot.Items.Add(new PivotItem { Header = "游玩记录", Content = time }); pivot.Items.Add(new PivotItem { Header = "本地攻略", Content = guides }); pivot.Items.Add(new PivotItem { Header = "补充资料", Content = metadata });
+        var readingService = walkthroughSessions;
+        Views.LocalDocumentReaderView? LocalPreview(int channel) => readingService is null ? null : new(readingService.OpenLocalFileAsync,
+            file => readingService.ReadingPosition(id, channel, file.Path),
+            (file, page, progress, zoom, touch) => readingService.RememberReadingPosition(id, channel, file.Path, page, progress, zoom, touch),
+            files => readingService.LastReadingFile(id, channel, files));
+        using var localPreview = LocalPreview(1);
+        using var notePreview = LocalPreview(2);
+        if (localPreview is not null) AutomationProperties.SetAutomationId(localPreview, "LocalGuideReader");
+        if (notePreview is not null) AutomationProperties.SetAutomationId(notePreview, "LocalNotesReader");
+        var notes = Panel();
+        workspace.PageSelected += async key => { if (key != "local") localPreview?.Remember(); if (key != "notes") notePreview?.Remember(); if (key == "local" && localPreview is not null) await localPreview.EnsureReadingAsync(); else if (key == "notes" && notePreview is not null) await notePreview.EnsureReadingAsync(); };
+        workspace.AddPage("time", "游玩记录", time);
+        if (networkGuide is not null) workspace.AddPage("network", "网络攻略", networkGuide, scroll: false);
+        if (walkthroughSessions is { } companion)
+        {
+            var enableCompanion = new CheckBox { Content = "开始游戏时准备攻略与说明", IsChecked = companion.Enabled, IsEnabled = companion.CanConfigure };
+            var source = new ComboBox { Header = "本作品的攻略来源", SelectedIndex = companion.SourceFor(id), IsEnabled = companion.CanConfigure };
+            source.Items.Add("网络攻略（默认）"); source.Items.Add("本地攻略");
+            var shortcut = new Views.GuideShortcutInput(companion.VirtualKey) { IsEnabled = companion.CanConfigure };
+            var companionStatus = Label(companion.Notice?.GameId == id ? companion.Notice.Message : companion.Message);
+            guideStatusLabel = companionStatus; guideStatusGameId = id;
+            var checkShortcut = ActionButton("检查快捷键占用", () => {
+                companionStatus.Text = WindowsGuideHotkeys.Check(shortcut.Value).Message;
+                return Task.CompletedTask;
+            }, "CheckGuideOverlayShortcut", () => companion.CanConfigure);
+            var saveCompanion = ActionButton("保存攻略显示设置", async () => {
+                try { await companion.ConfigureAsync(enableCompanion.IsChecked == true, shortcut.Value); await companion.ConfigureSourceAsync(id, Math.Max(0, source.SelectedIndex)); companionStatus.Text = companion.Message; }
+                catch (GuideHotkeyUnavailableException error) { companionStatus.Text = error.Message; }
+                catch { companionStatus.Text = "攻略显示设置未能保存，原设置保持不变。"; }
+            }, "SaveGuideOverlaySettings", () => companion.CanConfigure);
+            var companionActions = new Views.TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 8 };
+            companionActions.Children.Add(checkShortcut); companionActions.Children.Add(saveCompanion);
+            workspace.AddPage("overlay", "游戏内攻略", Panel(Label("游戏内攻略", 20),
+                Label("默认按 J 显示或收起。首次打开攻略页，之后恢复上次退出时的页面和阅读位置；攻略与说明在同一窗口切换。"),
+                enableCompanion, source, Label("网络攻略优先；没有网络攻略时使用你添加的本地攻略。本地攻略与说明文件均由你手动选择。"), shortcut, companionActions, companionStatus));
+        }
         async Task Commit(Func<LibraryExtrasDetails, CancellationToken, Task<ClientResult>> action)
         {
             var result = await ViewModel.ExecuteFileMutationAsync(async token => { using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, cancel.Token); return await action(details, linked.Token); }, id, preserveSelection: true); notice.Text = result.Message;
-            if (result.IsCommitted) { details = await extras.LoadAsync(id, CancellationToken.None); RefreshTime(); RefreshGuides(); RefreshLayers(); }
+            if (result.IsCommitted) { details = await extras.LoadAsync(id, CancellationToken.None); RefreshTime(); RefreshGuides(); RefreshLayers(); if (walkthroughSessions is { } companion) await companion.RefreshLocalFilesAsync(id, cancel.Token); }
         }
         var date = new CalendarDatePicker { Header = "日期", Date = DateTimeOffset.Now, MaxDate = DateTimeOffset.Now, MinDate = new DateTimeOffset(1900, 1, 1, 0, 0, 0, TimeSpan.Zero) };
         var hours = new NumberBox { Header = "小时", Minimum = 0, Maximum = 8784, Value = 1, SmallChange = .5, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact };
@@ -308,30 +357,53 @@ public sealed partial class MainWindow
         void RefreshTime()
         {
             chart.Children.Clear(); DrawStatistics(chart, [details.Entry], false); records.Children.Clear();
+            var sessions = details.Entry.Sessions.Reverse().Take(visibleRecords).ToArray();
+            if (sessions.Length > 0)
+            {
+                records.Children.Add(Label("最近游玩", 16));
+                foreach (var session in sessions)
+                {
+                    var started = DateTimeOffset.TryParse(session.StartedAt, out var stamp) ? stamp.ToLocalTime().ToString("yyyy-MM-dd  HH:mm") : "日期未记录";
+                    var row = new Grid { ColumnSpacing = 12, Padding = new Thickness(0, 7, 0, 7) };
+                    row.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+                    row.Children.Add(Label(started)); var duration = Label(Views.StatisticsPage.Hours(session.Seconds)); Grid.SetColumn(duration, 1); row.Children.Add(duration); records.Children.Add(row);
+                }
+            }
+            if (!details.Entry.ManualPlaytime.IsEmpty) records.Children.Add(Label("时长修正", 16));
             foreach (var row in details.Entry.ManualPlaytime.Reverse().Take(visibleRecords))
             {
                 var line = Label($"{row.Date} · {row.Seconds / 3600d:+0.##;-0.##;0} 小时 · {row.Note}" + (row.Undone ? "（已撤回）" : ""));
                 var panel = Panel(line); if (!row.Undone) panel.Children.Add(ActionButton("撤回这条修正", () => RunP1Async(notice, () => Commit((d, token) => extras.UndoAsync(d, row.Id, token)), cancel.Token), "UndoManual:" + row.Id)); records.Children.Add(panel);
             }
-            if (visibleRecords < details.Entry.ManualPlaytime.Length)
+            if (visibleRecords < Math.Max(details.Entry.ManualPlaytime.Length, details.Entry.Sessions.Length))
                 records.Children.Add(ActionButton("显示更多记录", () => { visibleRecords += 20; RefreshTime(); return Task.CompletedTask; }));
+            if (records.Children.Count == 0) records.Children.Add(Label("还没有游玩记录。开始游戏后会自动记录，也可以补记时长。"));
         }
-        time.Children.Add(chart); time.Children.Add(date); time.Children.Add(mode); time.Children.Add(hours); time.Children.Add(note);
-        time.Children.Add(ActionButton("保存时长", () => RunP1Async(notice, async () =>
+        var correction = Panel(date, mode, hours, note);
+        correction.Children.Add(ActionButton("保存时长", () => RunP1Async(notice, async () =>
         { if (date.Date is not { } selected || !double.IsFinite(hours.Value)) throw new InvalidDataException("请选择日期和有效时长。"); await Commit((d, token) => extras.TimeAsync(d, DateOnly.FromDateTime(selected.DateTime), checked((long)Math.Round(hours.Value * 3600)), note.Text, mode.SelectedIndex == 1, token)); }, cancel.Token), "SaveManualPlaytime"));
-        time.Children.Add(records); RefreshTime();
+        time.Children.Add(chart); time.Children.Add(records);
+        var correctionSection = new Views.SmoothExpander { Header = "补记或修正时长", Content = correction, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+        AutomationProperties.SetAutomationId(correctionSection, "ManualPlaytimeEditor"); time.Children.Add(correctionSection);
+        RefreshTime();
         void RefreshGuides()
         {
-            guides.Children.Clear(); guides.Children.Add(Label("添加已有攻略文件，方便随时打开。这里只保存文件位置，不复制或删除原文件。")); guides.Children.Add(ActionButton("添加攻略文件", () => RunP1Async(notice, async () =>
-            { if (await PickFile(LocalDocuments.Extensions.ToArray()) is { } path) { await resources.ValidateGuideAsync(path, cancel.Token); await Commit((d, token) => extras.GuideAsync(d, path, token)); } else notice.Text = "已取消选择。"; }, cancel.Token), "AddLocalGuide"));
+            guides.Children.Clear(); guides.Children.Add(Label("手动选择本作品的攻略文件，在程序和游戏内只读阅读。这里只保存文件位置，不复制或删除原文件。")); guides.Children.Add(ActionButton("添加攻略文件", () => RunP1Async(notice, async () =>
+            { if (await PickReadingFile() is { } path) { await resources.ValidateGuideAsync(path, cancel.Token); await Commit((d, token) => extras.GuideAsync(d, path, token)); } else notice.Text = "已取消选择。"; }, cancel.Token), "AddLocalGuide"));
+            var fileManagement = Panel();
             foreach (var path in details.Entry.GuidePaths)
             {
                 var actions = new Views.TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 8 };
-                actions.Children.Add(ActionButton("打开攻略", () => RunP1Async(notice, async () => { await resources.OpenGuideAsync(path); notice.Text = "已交给系统默认程序打开。"; }, cancel.Token)));
-                actions.Children.Add(ActionButton("更换攻略文件", () => RunP1Async(notice, async () => { if (await PickFile(LocalDocuments.Extensions.ToArray()) is { } replacement) { await resources.ValidateGuideAsync(replacement, cancel.Token); await Commit((d, token) => extras.ReplaceGuideAsync(d, path, replacement, token)); } else notice.Text = "已取消，攻略文件未更换。"; }, cancel.Token)));
+                if (localPreview is not null) actions.Children.Add(ActionButton("在程序内阅读", () => RunP1Async(notice, () => localPreview.SetFilesAsync(details.Entry.GuidePaths.Select(p => new LocalReadingFile(p, Path.GetFileName(p), "guide")).ToImmutableArray(), path), cancel.Token)));
+                actions.Children.Add(ActionButton("用系统程序打开", () => RunP1Async(notice, async () => { await resources.OpenGuideAsync(path); notice.Text = "已交给系统默认程序打开。"; }, cancel.Token)));
+                actions.Children.Add(ActionButton("更换攻略文件", () => RunP1Async(notice, async () => { if (await PickReadingFile() is { } replacement) { await resources.ValidateGuideAsync(replacement, cancel.Token); await Commit((d, token) => extras.ReplaceGuideAsync(d, path, replacement, token)); } else notice.Text = "已取消，攻略文件未更换。"; }, cancel.Token)));
                 actions.Children.Add(ActionButton("移除攻略链接", () => RunP1Async(notice, () => Commit((d, token) => extras.GuideAsync(d, null, token, path)), cancel.Token)));
-                guides.Children.Add(Panel(Label(path), actions));
+                var file = Label(Path.GetFileName(path), 15); ToolTipService.SetToolTip(file, path);
+                var location = new Views.SmoothExpander { Header = "文件位置", Content = Label(path), HorizontalAlignment = HorizontalAlignment.Stretch };
+                fileManagement.Children.Add(Panel(file, actions, location));
             }
+            if (details.Entry.GuidePaths.Length > 0) guides.Children.Add(fileManagement);
+            if (localPreview is not null) _ = localPreview.SetFilesAsync(details.Entry.GuidePaths.Select(p => new LocalReadingFile(p, Path.GetFileName(p), "guide")).ToImmutableArray(), load: workspace.SelectedKey == "local");
         }
         RefreshGuides();
         var provider = new ComboBox { Header = "资料源", SelectedIndex = 0 }; provider.Items.Add("Bangumi"); provider.Items.Add("VNDB"); var identifier = new TextBox { Header = "作品编号或作品链接", MaxLength = 500 };
@@ -358,8 +430,60 @@ public sealed partial class MainWindow
             apply.IsEnabled = true; notice.Text = "请核对作品、章节与版本后应用。后应用的替换字段优先，可逐个撤回资料源。";
         }, cancel.Token), "PreviewMetadataSource");
         metadata.Children.Add(Label("日常识别使用 KUN 聚合资料即可。这里用于资料缺项、更新滞后或需要人工更正时的备用补充。")); metadata.Children.Add(provider); metadata.Children.Add(identifier); metadata.Children.Add(read); metadata.Children.Add(previewText); metadata.Children.Add(fields); metadata.Children.Add(fill); metadata.Children.Add(apply); metadata.Children.Add(layers); RefreshLayers();
-        var dialog = Dialog(details.Entry.Name, Panel(pivot, notice)); p1Dialog = dialog; dialog.Closing += (_, _) => cancel.Cancel();
-        try { await dialog.ShowAsync(); } finally { p1Dialog = null; }
+        localPreview?.SetFileManagement(guides);
+        workspace.AddPage("local", "本地攻略", localPreview is null ? guides : localPreview, scroll: localPreview is null);
+        if (walkthroughSessions is { } readingCompanion && notePreview is not null)
+        {
+            async Task RefreshNotes()
+            {
+                var selected = await readingCompanion.FindLocalFilesAsync(id, cancel.Token); notes.Children.Clear();
+                notes.Children.Add(Label("手动添加 README、说明或注释文件。按 J 呼出阅读窗口后，可在攻略与说明之间切换。"));
+                notes.Children.Add(ActionButton("添加说明／注释文件", () => RunP1Async(notice, async () =>
+                { if (await PickReadingFile() is { } path) { await resources.ValidateGuideAsync(path, cancel.Token); await readingCompanion.ConfigureNotesAsync(id, selected.Notes.Select(f => f.Path).Append(path)); await RefreshNotes(); } }, cancel.Token), "AddLocalNote"));
+                var manage = Panel();
+                foreach (var file in selected.Notes)
+                    manage.Children.Add(Panel(Label(file.Name), ActionButton("移除说明链接", () => RunP1Async(notice, async () => { await readingCompanion.ConfigureNotesAsync(id, selected.Notes.Where(f => f.Path != file.Path).Select(f => f.Path)); await RefreshNotes(); }, cancel.Token))));
+                if (selected.Notes.Length > 0) notes.Children.Add(manage);
+                await notePreview.SetFilesAsync(selected.Notes, load: workspace.SelectedKey == "notes");
+            }
+            notePreview.SetFileManagement(notes);
+            await RefreshNotes(); workspace.AddPage("notes", "说明文件", notePreview, scroll: false);
+        }
+        workspace.AddPage("metadata", "补充资料", metadata);
+        if (networkGuide is not null) workspace.Select("network");
+        var content = new Grid { RowSpacing = 10 };
+        content.RowDefinitions.Add(new() { Height = GridLength.Auto }); content.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) }); content.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        var heading = new Grid { ColumnSpacing = 12 };
+        heading.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); heading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        var title = new TextBlock { Text = details.Entry.Name, FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        ToolTipService.SetToolTip(title, details.Entry.Name); AutomationProperties.SetHeadingLevel(title, AutomationHeadingLevel.Level1);
+        var dismiss = new Button { Content = new FontIcon { Glyph = "\uE8BB", FontSize = 12 }, Width = 32, Height = 32, Padding = new Thickness(8),
+            Style = (Style)Microsoft.UI.Xaml.Application.Current.Resources["SubtleButtonStyle"], VerticalAlignment = VerticalAlignment.Top };
+        AutomationProperties.SetName(dismiss, "关闭游戏工具"); AutomationProperties.SetAutomationId(dismiss, "CloseGameTools"); ToolTipService.SetToolTip(dismiss, "关闭 · Esc");
+        heading.Children.Add(title); Grid.SetColumn(dismiss, 1); heading.Children.Add(dismiss);
+        content.Children.Add(heading); Grid.SetRow(workspace, 1); content.Children.Add(workspace); Grid.SetRow(notice, 2); content.Children.Add(notice);
+        var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme,
+            Title = new TextBlock { Height = 0, Visibility = Visibility.Collapsed },
+            Content = content, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+        AutomationProperties.SetName(dialog, details.Entry.Name + " · 游戏工具"); dismiss.Click += (_, _) => dialog.Hide();
+        dialog.Resources["ContentDialogMaxWidth"] = 1060d;
+        // The title is already inside our finite reading grid. The stock empty
+        // title still reserves a text line and margin above ContentScrollViewer's
+        // clipped viewport, hiding the final step even at its own scroll limit.
+        dialog.Resources["ContentDialogTitleMargin"] = new Thickness(0);
+        void Fit()
+        {
+            var viewport = Root.XamlRoot.Size;
+            content.Width = Math.Max(240, Math.Min(980, viewport.Width - 104));
+            content.Height = Math.Max(160, Math.Min(740, viewport.Height - 104));
+        }
+        Fit();
+        void OnDialogViewportChanged(XamlRoot sender, XamlRootChangedEventArgs args) => Fit();
+        Root.XamlRoot.Changed += OnDialogViewportChanged;
+        p1Dialog = dialog; dialog.Closing += (_, _) => cancel.Cancel();
+        dialog.Opened += async (_, _) => { if (networkGuide is not null) await networkGuide.PrepareAsync(); };
+        try { await dialog.ShowAsync(); } finally { Root.XamlRoot.Changed -= OnDialogViewportChanged; p1Dialog = null; guideStatusLabel = null; guideStatusGameId = null; }
     }
     private static string FieldName(string field) => field switch { "description" => "简介", "releaseDate" => "发行日期", "developers" => "制作公司", "tags" => "标签", "ratings" => "来源评分", "characters" => "角色", "cover" => "封面", _ => field };
 }

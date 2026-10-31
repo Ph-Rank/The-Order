@@ -171,7 +171,7 @@ Remove-Item Env:KGM_DATA_DIR -ErrorAction SilentlyContinue
 | GPT 核实时 HEAD | 同一提交；开始时工作区干净，暂存区为空 |
 | 评审之后的源码变化 | 无。`git diff 9ca0587 HEAD` 为空，工作区也没有业务源码变化；本轮只维护本文与 BRIEF 的入口链接 |
 | 业务与截图基线 | `9c456115b0420513d25388463b8bb14a0f17d956`；到当前 HEAD 仅三份协作文档变化，业务源码、资源、配置与锁文件一致 |
-| 原评审路径 | `C:\Users\MUSK\.claude\plans\the-order-gleaming-spark.md` |
+| 原评审路径 | `C:\Users\USER\.claude\plans\the-order-gleaming-spark.md` |
 | 原件 SHA-256 | `5885cec634a8a9c0134b3bd208308b9a9b4b97e7b2da961942f02b25786c2cdf` |
 | 原文保留 | 本文末尾收录原评审全文；保持原判断与措辞，纠正意见写在前面的核实部分 |
 | 既有页面证据 | [截图索引](../../../The-Order-Artifacts/review-current/README.md) / [manifest](../../../The-Order-Artifacts/review-current/manifest.json)。上一轮已实际打开六张图并核对全部哈希；本轮复看书架图，没有重新启动应用或采集图片 |
@@ -356,7 +356,7 @@ Claude 原始观察不应继续用旧图判断当前首屏、卡片、整理入�
 
 ### 候选复审后的 A-1 文案修复（2026-10-03）
 
-- 已直接完整读取复审原件：`C:\Users\MUSK\.claude\plans\the-order-mutable-map.md`；SHA-256：`3fa228f0acb21d182c1c67c20a6e5e5e64d09593bb05f10bb5460c489519f79e`。Claude 结论是主要目标落实、未发现可复现的数据正确性缺陷，A-1 建议试用前修复；其余为下一轮建议、偏好和未独立运行验证的事项。
+- 已直接完整读取复审原件：`C:\Users\USER\.claude\plans\the-order-mutable-map.md`；SHA-256：`3fa228f0acb21d182c1c67c20a6e5e5e64d09593bb05f10bb5460c489519f79e`。Claude 结论是主要目标落实、未发现可复现的数据正确性缺陷，A-1 建议试用前修复；其余为下一轮建议、偏好和未独立运行验证的事项。
 - 复审 HEAD 与本次修改前 HEAD 同为 `08e8f72e0f99f99eaccabdc39fc63e57b3fb7459`，起始工作区干净，无复审后源码变化。该 HEAD 相对 `40b355c` 只增加两份交付文档，旧候选程序仍对应 `40b355c`。
 - **确认并采纳 A-1：** `src/App.vue:464-465,596` 的两条导入成功提示和无密钥弹窗说明确实指向已移除的“补全资料”按钮。旧候选在独立 profile 中真实导入一个合成条目后复现，书架无该按钮，而侧栏“资料整理”及其“只补缺失”存在。
 - **最小修复：** 三处文字统一指向“资料整理”中的“只补缺失”，保留先配置密钥或等当前识别结束的前置条件。没有改识别、导入、安装、存储或界面样式逻辑。现有 workspace 测试增加实际入口/旧提示断言；无密钥夹具让刷新后的快照仍保持无密钥，避免旧夹具误走已配密钥分支。原有导入与并发保护断言保留。

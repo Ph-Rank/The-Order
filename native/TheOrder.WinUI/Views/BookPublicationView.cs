@@ -355,7 +355,7 @@ public sealed class BookPublicationView : StackPanel, IDisposable
     private static TextBlock Secondary(double size, string value) { var text = Text(size, value); text.Opacity = .75; return text; }
     private static TextBlock SectionTitle(string value) { var text = Text(16, value); text.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold; return text; }
     private static Button Button(string value) => new() { Content = value, CornerRadius = new(6), MinHeight = 32, HorizontalAlignment = HorizontalAlignment.Left };
-    private static Expander Expand(string value) => new() { Header = value, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private static SmoothExpander Expand(string value) => new() { Header = value, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private static TagFlowPanel Flow() => new() { HorizontalSpacing = 10, VerticalSpacing = 8, MaximumItemWidth = 340, CenterInlineItems = false };
     private static Button Card(string title, string subtitle)
     {

@@ -13,6 +13,7 @@ public sealed partial class MainWindow
     private Action? initializePages;
     private Task backgroundInitialization = Task.CompletedTask;
     private bool startupReady => startup.CanReveal;
+    internal bool StartupHasFailed { get; private set; }
     private void UpdateStartupTheme() => StartupLogo.Source = new BitmapImage(new Uri(Root.ActualTheme == ElementTheme.Dark
         ? "ms-appx:///Assets/Brand.Dark.png" : "ms-appx:///Assets/Brand.Light.png"));
     private Task NextStartupFrameAsync()

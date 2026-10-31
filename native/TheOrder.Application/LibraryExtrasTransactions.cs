@@ -60,7 +60,7 @@ public sealed partial class TransactionalLibrary
 }
 public static class LocalDocuments
 {
-    public static readonly ImmutableArray<string> Extensions = [".txt", ".md", ".pdf", ".doc", ".docx", ".rtf", ".png", ".jpg", ".jpeg"];
+    public static readonly ImmutableArray<string> Extensions = [".txt", ".md", ".pdf", ".doc", ".docx", ".rtf", ".png", ".jpg", ".jpeg", ".xls", ".xlsx"];
 }
 public sealed class LibraryExtrasClient(OfflineLibraryClient library)
 {

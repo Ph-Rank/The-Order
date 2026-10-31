@@ -1,0 +1,1820 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Merge only into Playground-owned elements and presenters. This file is
+         deliberately independent from App.xaml and the library's visual tokens.
+         Default is WinUI's dark fallback; Dark is explicit for local callers.
+         Native editor/combo/check/toggle templates retain IME and accessibility. -->
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Default">
+            <SolidColorBrush x:Key="PGCanvasBrush" Color="#191919" />
+            <SolidColorBrush x:Key="PGUserBubbleBrush" Color="#2B2B2B" />
+            <SolidColorBrush x:Key="PGSidebarBrush" Color="#181818" />
+            <SolidColorBrush x:Key="PGPanelBrush" Color="#1B1B1B" />
+            <SolidColorBrush x:Key="PGInputBrush" Color="#272727" />
+            <SolidColorBrush x:Key="PGComposerBorderBrush" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="PGComposerFocusBrush" Color="#777777" />
+            <SolidColorBrush x:Key="PGSurfaceBrush" Color="#242424" />
+            <SolidColorBrush x:Key="PGHoverBrush" Color="#303030" />
+            <SolidColorBrush x:Key="PGPressedBrush" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="PGBorderBrush" Color="#343434" />
+            <SolidColorBrush x:Key="PGTextBrush" Color="#E8E8E8" />
+            <SolidColorBrush x:Key="PGSecondaryBrush" Color="#999999" />
+            <SolidColorBrush x:Key="PGPrimaryBrush" Color="#EFEFEF" />
+            <SolidColorBrush x:Key="PGOnPrimaryBrush" Color="#191919" />
+            <SolidColorBrush x:Key="PGPrimaryHoverBrush" Color="#D7D7D7" />
+            <SolidColorBrush x:Key="PGPrimaryPressedBrush" Color="#BFBFBF" />
+            <SolidColorBrush x:Key="PGDisabledSurfaceBrush" Color="#242424" />
+            <SolidColorBrush x:Key="PGDisabledTextBrush" Color="#6F6F6F" />
+            <SolidColorBrush x:Key="PGFocusBrush" Color="#B8B8B8" />
+            <SolidColorBrush x:Key="PGSelectionBrush" Color="#303030" />
+            <SolidColorBrush x:Key="PGTextSelectionBrush" Color="#555555" />
+            <SolidColorBrush x:Key="PGHoverTextBrush" Color="#E8E8E8" />
+            <SolidColorBrush x:Key="PGInputBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="PGTransparentBrush" Color="Transparent" />
+            <StaticResource x:Key="ButtonBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackground" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonForeground" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrush" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="SplitButtonBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="SplitButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundChecked" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="SplitButtonForegroundChecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOff" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOff" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOff" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOn" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOn" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOn" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUnchecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUnchecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUnchecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUnchecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUnchecked" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUnchecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundChecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillChecked" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundChecked" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminate" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminate" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminate" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminate" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminate" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminate" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ComboBoxForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushPointerOver" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForegroundPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="TextControlButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="SplitButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundCheckedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="SplitButtonForegroundCheckedPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForegroundPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForegroundPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackgroundPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOffPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOffPointerOver" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOffPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnPointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOnPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnPointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUncheckedPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUncheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUncheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUncheckedPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundCheckedPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminatePointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminatePointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminatePointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminatePointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminatePointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminatePointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ComboBoxForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushPressed" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForegroundPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrushPressed" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="TextControlButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="SplitButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundCheckedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="SplitButtonForegroundCheckedPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForegroundPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForegroundPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackgroundPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOffPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOffPressed" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOffPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnPressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOnPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnPressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUncheckedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUncheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUncheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUncheckedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundCheckedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminatePressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminatePressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminatePressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminatePressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminatePressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminatePressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="ButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="AccentButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushDisabled" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrushDisabled" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackgroundDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="SplitButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundCheckedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="SplitButtonForegroundCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushCheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackgroundDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOffDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOffDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOffDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOnDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUncheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUncheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUncheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUncheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundCheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushCheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminateDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminateDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminateDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminateDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminateDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminateDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxItemForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ListViewItemForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ListViewItemForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ListViewItemForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelected" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelected" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelected" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelected" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelected" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedUnfocused" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedUnfocused" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedUnfocused" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxHeaderForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxDropDownForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxForegroundFocused" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxForegroundFocusedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlHeaderForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundFocused" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundFocusedPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForegroundFocused" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForegroundFocusedPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundFocused" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="TextControlButtonRevealGlyphForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="NumberBoxPopupIndicatorForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxHeaderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="TextControlHeaderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundUnfocused" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundFocused" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundBorderBrushFocused" ResourceKey="PGFocusBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundBorderBrushUnfocused" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlSelectionHighlightColor" ResourceKey="PGTextSelectionBrush" />
+            <StaticResource x:Key="ComboBoxItemPillFillBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxDropDownBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxDropDownBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ComboBoxLightDismissOverlayBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="FlyoutBorderThemeBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="MenuFlyoutPresenterBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="MenuFlyoutPresenterForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ContentDialogBackground" ResourceKey="PGPanelBrush" />
+            <StaticResource x:Key="ContentDialogForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ContentDialogBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ContentDialogTopOverlay" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ContentDialogSeparatorBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="NumberBoxPopupBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="NumberBoxPopupBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="NumberBoxPopupSpinButtonBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemFocusVisualPrimaryBrush" ResourceKey="PGFocusBrush" />
+            <StaticResource x:Key="ListViewItemFocusVisualSecondaryBrush" ResourceKey="PGCanvasBrush" />
+            <StaticResource x:Key="ListViewItemFocusBorderBrush" ResourceKey="PGFocusBrush" />
+            <StaticResource x:Key="ListViewItemFocusSecondaryBorderBrush" ResourceKey="PGCanvasBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorPointerOverBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorPressedBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorDisabledBrush" ResourceKey="PGTransparentBrush" />
+            <Thickness x:Key="PGControlBorderThickness">0</Thickness>
+            <Thickness x:Key="PGTextControlBorderThickness">0</Thickness>
+            <Thickness x:Key="ButtonBorderThemeThickness">0</Thickness>
+            <Thickness x:Key="SplitButtonBorderThemeThickness">0</Thickness>
+            <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+            <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+            <Thickness x:Key="ComboBoxBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="ComboBoxBackgroundBorderThicknessFocused">1</Thickness>
+            <Thickness x:Key="ComboBoxPopupBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="ComboBoxDropdownBorderThickness">1</Thickness>
+            <Thickness x:Key="ComboBoxItemThemePadding">10,6</Thickness>
+            <Thickness x:Key="ComboBoxHeaderThemeMargin">0,0,0,6</Thickness>
+            <Thickness x:Key="TextBoxTopHeaderMargin">0,0,0,6</Thickness>
+            <Thickness x:Key="PasswordBoxTopHeaderMargin">0,0,0,6</Thickness>
+            <CornerRadius x:Key="ListViewItemCornerRadius">10</CornerRadius>
+            <CornerRadius x:Key="ComboBoxItemCornerRadius">8</CornerRadius>
+            <CornerRadius x:Key="OverlayCornerRadius">12</CornerRadius>
+            <x:Boolean x:Key="ListViewItemSelectionIndicatorVisualEnabled">False</x:Boolean>
+            <x:Boolean x:Key="ListViewItemSelectionCheckMarkVisualEnabled">False</x:Boolean>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="PGCanvasBrush" Color="#191919" />
+            <SolidColorBrush x:Key="PGUserBubbleBrush" Color="#2B2B2B" />
+            <SolidColorBrush x:Key="PGSidebarBrush" Color="#181818" />
+            <SolidColorBrush x:Key="PGPanelBrush" Color="#1B1B1B" />
+            <SolidColorBrush x:Key="PGInputBrush" Color="#272727" />
+            <SolidColorBrush x:Key="PGComposerBorderBrush" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="PGComposerFocusBrush" Color="#777777" />
+            <SolidColorBrush x:Key="PGSurfaceBrush" Color="#242424" />
+            <SolidColorBrush x:Key="PGHoverBrush" Color="#303030" />
+            <SolidColorBrush x:Key="PGPressedBrush" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="PGBorderBrush" Color="#343434" />
+            <SolidColorBrush x:Key="PGTextBrush" Color="#E8E8E8" />
+            <SolidColorBrush x:Key="PGSecondaryBrush" Color="#999999" />
+            <SolidColorBrush x:Key="PGPrimaryBrush" Color="#EFEFEF" />
+            <SolidColorBrush x:Key="PGOnPrimaryBrush" Color="#191919" />
+            <SolidColorBrush x:Key="PGPrimaryHoverBrush" Color="#D7D7D7" />
+            <SolidColorBrush x:Key="PGPrimaryPressedBrush" Color="#BFBFBF" />
+            <SolidColorBrush x:Key="PGDisabledSurfaceBrush" Color="#242424" />
+            <SolidColorBrush x:Key="PGDisabledTextBrush" Color="#6F6F6F" />
+            <SolidColorBrush x:Key="PGFocusBrush" Color="#B8B8B8" />
+            <SolidColorBrush x:Key="PGSelectionBrush" Color="#303030" />
+            <SolidColorBrush x:Key="PGTextSelectionBrush" Color="#555555" />
+            <SolidColorBrush x:Key="PGHoverTextBrush" Color="#E8E8E8" />
+            <SolidColorBrush x:Key="PGInputBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="PGTransparentBrush" Color="Transparent" />
+            <StaticResource x:Key="ButtonBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackground" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonForeground" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrush" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="SplitButtonBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="SplitButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundChecked" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="SplitButtonForegroundChecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOff" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOff" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOff" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOn" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOn" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOn" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUnchecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUnchecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUnchecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUnchecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUnchecked" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUnchecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundChecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillChecked" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundChecked" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminate" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminate" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminate" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminate" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminate" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminate" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ComboBoxForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushPointerOver" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForegroundPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="TextControlButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="SplitButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundCheckedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="SplitButtonForegroundCheckedPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForegroundPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForegroundPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackgroundPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOffPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOffPointerOver" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOffPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnPointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOnPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnPointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUncheckedPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUncheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUncheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUncheckedPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundCheckedPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminatePointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminatePointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminatePointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminatePointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminatePointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminatePointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ComboBoxForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushPressed" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForegroundPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrushPressed" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="TextControlButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="SplitButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundCheckedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="SplitButtonForegroundCheckedPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForegroundPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForegroundPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackgroundPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOffPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOffPressed" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOffPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnPressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOnPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnPressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUncheckedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUncheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUncheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUncheckedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundCheckedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminatePressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminatePressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminatePressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminatePressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminatePressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminatePressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="ButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="AccentButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushDisabled" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrushDisabled" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackgroundDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="SplitButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundCheckedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="SplitButtonForegroundCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushCheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackgroundDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOffDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOffDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOffDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOnDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUncheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUncheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUncheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUncheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundCheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushCheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminateDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminateDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminateDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminateDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminateDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminateDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxItemForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ListViewItemForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ListViewItemForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ListViewItemForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelected" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelected" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelected" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelected" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelected" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedUnfocused" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedUnfocused" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedUnfocused" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxHeaderForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxDropDownForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxForegroundFocused" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxForegroundFocusedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlHeaderForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundFocused" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundFocusedPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForegroundFocused" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForegroundFocusedPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundFocused" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="TextControlButtonRevealGlyphForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="NumberBoxPopupIndicatorForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxHeaderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="TextControlHeaderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundUnfocused" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundFocused" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundBorderBrushFocused" ResourceKey="PGFocusBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundBorderBrushUnfocused" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlSelectionHighlightColor" ResourceKey="PGTextSelectionBrush" />
+            <StaticResource x:Key="ComboBoxItemPillFillBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxDropDownBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxDropDownBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ComboBoxLightDismissOverlayBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="FlyoutBorderThemeBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="MenuFlyoutPresenterBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="MenuFlyoutPresenterForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ContentDialogBackground" ResourceKey="PGPanelBrush" />
+            <StaticResource x:Key="ContentDialogForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ContentDialogBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ContentDialogTopOverlay" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ContentDialogSeparatorBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="NumberBoxPopupBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="NumberBoxPopupBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="NumberBoxPopupSpinButtonBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemFocusVisualPrimaryBrush" ResourceKey="PGFocusBrush" />
+            <StaticResource x:Key="ListViewItemFocusVisualSecondaryBrush" ResourceKey="PGCanvasBrush" />
+            <StaticResource x:Key="ListViewItemFocusBorderBrush" ResourceKey="PGFocusBrush" />
+            <StaticResource x:Key="ListViewItemFocusSecondaryBorderBrush" ResourceKey="PGCanvasBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorPointerOverBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorPressedBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorDisabledBrush" ResourceKey="PGTransparentBrush" />
+            <Thickness x:Key="PGControlBorderThickness">0</Thickness>
+            <Thickness x:Key="PGTextControlBorderThickness">0</Thickness>
+            <Thickness x:Key="ButtonBorderThemeThickness">0</Thickness>
+            <Thickness x:Key="SplitButtonBorderThemeThickness">0</Thickness>
+            <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+            <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+            <Thickness x:Key="ComboBoxBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="ComboBoxBackgroundBorderThicknessFocused">1</Thickness>
+            <Thickness x:Key="ComboBoxPopupBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="ComboBoxDropdownBorderThickness">1</Thickness>
+            <Thickness x:Key="ComboBoxItemThemePadding">10,6</Thickness>
+            <Thickness x:Key="ComboBoxHeaderThemeMargin">0,0,0,6</Thickness>
+            <Thickness x:Key="TextBoxTopHeaderMargin">0,0,0,6</Thickness>
+            <Thickness x:Key="PasswordBoxTopHeaderMargin">0,0,0,6</Thickness>
+            <CornerRadius x:Key="ListViewItemCornerRadius">10</CornerRadius>
+            <CornerRadius x:Key="ComboBoxItemCornerRadius">8</CornerRadius>
+            <CornerRadius x:Key="OverlayCornerRadius">12</CornerRadius>
+            <x:Boolean x:Key="ListViewItemSelectionIndicatorVisualEnabled">False</x:Boolean>
+            <x:Boolean x:Key="ListViewItemSelectionCheckMarkVisualEnabled">False</x:Boolean>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="PGCanvasBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="PGUserBubbleBrush" Color="#E8F3FC" />
+            <SolidColorBrush x:Key="PGComboHoverBrush" Color="#F7F7F7" />
+            <SolidColorBrush x:Key="PGSidebarBrush" Color="#FAFAFA" />
+            <SolidColorBrush x:Key="PGPanelBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="PGInputBrush" Color="#FCFCFC" />
+            <SolidColorBrush x:Key="PGComposerBorderBrush" Color="#DADCE0" />
+            <SolidColorBrush x:Key="PGComposerFocusBrush" Color="#86898E" />
+            <SolidColorBrush x:Key="PGSurfaceBrush" Color="#F2F2F2" />
+            <SolidColorBrush x:Key="PGHoverBrush" Color="#E9E9E9" />
+            <SolidColorBrush x:Key="PGPressedBrush" Color="#DDDDDD" />
+            <SolidColorBrush x:Key="PGBorderBrush" Color="#DEDEDE" />
+            <SolidColorBrush x:Key="PGTextBrush" Color="#242424" />
+            <SolidColorBrush x:Key="PGSecondaryBrush" Color="#686868" />
+            <SolidColorBrush x:Key="PGPrimaryBrush" Color="#262626" />
+            <SolidColorBrush x:Key="PGOnPrimaryBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="PGPrimaryHoverBrush" Color="#414141" />
+            <SolidColorBrush x:Key="PGPrimaryPressedBrush" Color="#555555" />
+            <SolidColorBrush x:Key="PGDisabledSurfaceBrush" Color="#F2F2F2" />
+            <SolidColorBrush x:Key="PGDisabledTextBrush" Color="#A3A3A3" />
+            <SolidColorBrush x:Key="PGFocusBrush" Color="#5F5F5F" />
+            <SolidColorBrush x:Key="PGSelectionBrush" Color="#E7E7E7" />
+            <SolidColorBrush x:Key="PGTextSelectionBrush" Color="#C9CDD1" />
+            <SolidColorBrush x:Key="PGHoverTextBrush" Color="#242424" />
+            <SolidColorBrush x:Key="PGInputBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="PGTransparentBrush" Color="Transparent" />
+            <StaticResource x:Key="ButtonBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackground" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonForeground" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackground" ResourceKey="PGCanvasBrush" />
+            <StaticResource x:Key="ComboBoxForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="TextControlBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrush" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="SplitButtonBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="SplitButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundChecked" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="SplitButtonForegroundChecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOff" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOff" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOff" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOn" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOn" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOn" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUnchecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUnchecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUnchecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUnchecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUnchecked" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUnchecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundChecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillChecked" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundChecked" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminate" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminate" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminate" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminate" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminate" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminate" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundPointerOver" ResourceKey="PGComboHoverBrush" />
+            <StaticResource x:Key="ComboBoxForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushPointerOver" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForegroundPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="TextControlButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="SplitButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundCheckedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="SplitButtonForegroundCheckedPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForegroundPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForegroundPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackgroundPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOffPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOffPointerOver" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOffPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnPointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOnPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnPointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUncheckedPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUncheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUncheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUncheckedPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundCheckedPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminatePointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminatePointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminatePointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminatePointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminatePointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminatePointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundPressed" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushPressed" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForegroundPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrushPressed" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="TextControlButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="SplitButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundCheckedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="SplitButtonForegroundCheckedPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForegroundPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForegroundPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackgroundPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOffPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOffPressed" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOffPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnPressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOnPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnPressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUncheckedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUncheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUncheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUncheckedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundCheckedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminatePressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminatePressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminatePressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminatePressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminatePressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminatePressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="ButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="AccentButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushDisabled" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrushDisabled" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackgroundDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="SplitButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundCheckedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="SplitButtonForegroundCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushCheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackgroundDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOffDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOffDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOffDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOnDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUncheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUncheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUncheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUncheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundCheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushCheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminateDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminateDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminateDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminateDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminateDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminateDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxItemForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundPointerOver" ResourceKey="PGComboHoverBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ListViewItemForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundPressed" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ListViewItemForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ListViewItemForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelected" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelected" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelected" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelected" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelected" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedUnfocused" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedUnfocused" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedUnfocused" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxHeaderForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxDropDownForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxForegroundFocused" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxForegroundFocusedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlHeaderForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundFocused" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundFocusedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForegroundFocused" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForegroundFocusedPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundFocused" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="TextControlButtonRevealGlyphForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="NumberBoxPopupIndicatorForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxHeaderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="TextControlHeaderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundUnfocused" ResourceKey="PGCanvasBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundFocused" ResourceKey="PGCanvasBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundBorderBrushFocused" ResourceKey="PGFocusBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundBorderBrushUnfocused" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlSelectionHighlightColor" ResourceKey="PGTextSelectionBrush" />
+            <StaticResource x:Key="ComboBoxItemPillFillBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxDropDownBackground" ResourceKey="PGCanvasBrush" />
+            <StaticResource x:Key="ComboBoxDropDownBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ComboBoxLightDismissOverlayBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="FlyoutBorderThemeBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="MenuFlyoutPresenterBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="MenuFlyoutPresenterForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ContentDialogBackground" ResourceKey="PGPanelBrush" />
+            <StaticResource x:Key="ContentDialogForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ContentDialogBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ContentDialogTopOverlay" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ContentDialogSeparatorBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="NumberBoxPopupBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="NumberBoxPopupBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="NumberBoxPopupSpinButtonBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemFocusVisualPrimaryBrush" ResourceKey="PGFocusBrush" />
+            <StaticResource x:Key="ListViewItemFocusVisualSecondaryBrush" ResourceKey="PGCanvasBrush" />
+            <StaticResource x:Key="ListViewItemFocusBorderBrush" ResourceKey="PGFocusBrush" />
+            <StaticResource x:Key="ListViewItemFocusSecondaryBorderBrush" ResourceKey="PGCanvasBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorPointerOverBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorPressedBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorDisabledBrush" ResourceKey="PGTransparentBrush" />
+            <Thickness x:Key="PGControlBorderThickness">0</Thickness>
+            <Thickness x:Key="PGTextControlBorderThickness">0</Thickness>
+            <Thickness x:Key="ButtonBorderThemeThickness">0</Thickness>
+            <Thickness x:Key="SplitButtonBorderThemeThickness">0</Thickness>
+            <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+            <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+            <Thickness x:Key="ComboBoxBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="ComboBoxBackgroundBorderThicknessFocused">1</Thickness>
+            <Thickness x:Key="ComboBoxPopupBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="ComboBoxDropdownBorderThickness">1</Thickness>
+            <Thickness x:Key="ComboBoxItemThemePadding">10,6</Thickness>
+            <Thickness x:Key="ComboBoxHeaderThemeMargin">0,0,0,6</Thickness>
+            <Thickness x:Key="TextBoxTopHeaderMargin">0,0,0,6</Thickness>
+            <Thickness x:Key="PasswordBoxTopHeaderMargin">0,0,0,6</Thickness>
+            <CornerRadius x:Key="ListViewItemCornerRadius">10</CornerRadius>
+            <CornerRadius x:Key="ComboBoxItemCornerRadius">8</CornerRadius>
+            <CornerRadius x:Key="OverlayCornerRadius">12</CornerRadius>
+            <x:Boolean x:Key="ListViewItemSelectionIndicatorVisualEnabled">False</x:Boolean>
+            <x:Boolean x:Key="ListViewItemSelectionCheckMarkVisualEnabled">False</x:Boolean>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="PGCanvasBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="PGUserBubbleBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="PGSidebarBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="PGPanelBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="PGInputBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="PGComposerBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="PGComposerFocusBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="PGSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="PGHoverBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="PGPressedBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="PGBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="PGTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="PGSecondaryBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="PGPrimaryBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="PGOnPrimaryBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
+            <SolidColorBrush x:Key="PGPrimaryHoverBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="PGPrimaryPressedBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="PGDisabledSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="PGDisabledTextBrush" Color="{ThemeResource SystemColorGrayTextColor}" />
+            <SolidColorBrush x:Key="PGFocusBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="PGSelectionBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="PGTextSelectionBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="PGHoverTextBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
+            <SolidColorBrush x:Key="PGInputBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="PGTransparentBrush" Color="Transparent" />
+            <StaticResource x:Key="ButtonBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackground" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonForeground" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrush" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="SplitButtonBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="SplitButtonForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundChecked" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="SplitButtonForegroundChecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOff" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOff" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOff" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOn" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOn" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOn" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUnchecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUnchecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUnchecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUnchecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUnchecked" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUnchecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundChecked" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillChecked" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeChecked" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundChecked" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminate" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminate" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminate" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminate" ResourceKey="PGPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminate" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminate" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ComboBoxForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushPointerOver" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForegroundPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="TextControlButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="SplitButtonForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundCheckedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="SplitButtonForegroundCheckedPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForegroundPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForegroundPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackgroundPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOffPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOffPointerOver" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOffPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnPointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOnPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnPointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUncheckedPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUncheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUncheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUncheckedPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundCheckedPointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminatePointerOver" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminatePointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminatePointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminatePointerOver" ResourceKey="PGPrimaryHoverBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminatePointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminatePointerOver" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ComboBoxForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushPressed" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForegroundPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrushPressed" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="TextControlButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="SplitButtonForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundCheckedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="SplitButtonForegroundCheckedPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForegroundPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForegroundPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackgroundPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOffPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOffPressed" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOffPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnPressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOnPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnPressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUncheckedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUncheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUncheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUncheckedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundCheckedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminatePressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminatePressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminatePressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminatePressed" ResourceKey="PGPrimaryPressedBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminatePressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminatePressed" ResourceKey="PGOnPrimaryBrush" />
+            <StaticResource x:Key="ButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SubtleButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SubtleButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="AccentButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushDisabled" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="TextControlBorderBrushDisabled" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlButtonBackgroundDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="TextControlButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="SplitButtonForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="SplitButtonBackgroundCheckedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="SplitButtonForegroundCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="SplitButtonBorderBrushCheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="MenuFlyoutItemBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContentForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchHeaderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchContainerBackgroundDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOffDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOffDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOffDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ToggleSwitchFillOnDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ToggleSwitchStrokeOnDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ToggleSwitchKnobFillOnDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundUncheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundUncheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushUncheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundUncheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundCheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushCheckedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxForegroundIndeterminateDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxBackgroundIndeterminateDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxBorderBrushIndeterminateDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillIndeterminateDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeIndeterminateDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundIndeterminateDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxItemForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ListViewItemForegroundPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ListViewItemForegroundPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ListViewItemForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelected" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelected" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelected" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelected" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelected" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedUnfocused" ResourceKey="PGSelectionBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedUnfocused" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedUnfocused" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedPointerOver" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedPointerOver" ResourceKey="PGHoverBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedPointerOver" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedPressed" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedPressed" ResourceKey="PGPressedBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedPressed" ResourceKey="PGHoverTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBackgroundSelectedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxItemForegroundSelectedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxItemBorderBrushSelectedDisabled" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemBackgroundSelectedDisabled" ResourceKey="PGDisabledSurfaceBrush" />
+            <StaticResource x:Key="ListViewItemForegroundSelectedDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxHeaderForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxDropDownForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxForegroundFocused" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxForegroundFocusedPressed" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="TextControlHeaderForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundPointerOver" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundFocused" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundFocusedPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForegroundFocused" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForegroundFocusedPressed" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForegroundFocused" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="TextControlButtonRevealGlyphForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="NumberBoxPopupIndicatorForeground" ResourceKey="PGSecondaryBrush" />
+            <StaticResource x:Key="ComboBoxHeaderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxPlaceHolderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxDropDownGlyphForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="TextControlHeaderForegroundDisabled" ResourceKey="PGDisabledTextBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundUnfocused" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundFocused" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundBorderBrushFocused" ResourceKey="PGFocusBrush" />
+            <StaticResource x:Key="ComboBoxBackgroundBorderBrushUnfocused" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="PGInputBorderBrush" />
+            <StaticResource x:Key="TextControlSelectionHighlightColor" ResourceKey="PGTextSelectionBrush" />
+            <StaticResource x:Key="ComboBoxItemPillFillBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ComboBoxDropDownBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="ComboBoxDropDownBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ComboBoxLightDismissOverlayBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="FlyoutBorderThemeBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="MenuFlyoutPresenterBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="MenuFlyoutPresenterForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ContentDialogBackground" ResourceKey="PGPanelBrush" />
+            <StaticResource x:Key="ContentDialogForeground" ResourceKey="PGTextBrush" />
+            <StaticResource x:Key="ContentDialogBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="ContentDialogTopOverlay" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ContentDialogSeparatorBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="NumberBoxPopupBackground" ResourceKey="PGSurfaceBrush" />
+            <StaticResource x:Key="NumberBoxPopupBorderBrush" ResourceKey="PGBorderBrush" />
+            <StaticResource x:Key="NumberBoxPopupSpinButtonBackground" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemFocusVisualPrimaryBrush" ResourceKey="PGFocusBrush" />
+            <StaticResource x:Key="ListViewItemFocusVisualSecondaryBrush" ResourceKey="PGCanvasBrush" />
+            <StaticResource x:Key="ListViewItemFocusBorderBrush" ResourceKey="PGFocusBrush" />
+            <StaticResource x:Key="ListViewItemFocusSecondaryBorderBrush" ResourceKey="PGCanvasBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorPointerOverBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorPressedBrush" ResourceKey="PGTransparentBrush" />
+            <StaticResource x:Key="ListViewItemSelectionIndicatorDisabledBrush" ResourceKey="PGTransparentBrush" />
+            <Thickness x:Key="PGControlBorderThickness">1</Thickness>
+            <Thickness x:Key="PGTextControlBorderThickness">1</Thickness>
+            <Thickness x:Key="ButtonBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="SplitButtonBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="TextControlBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="TextControlBorderThemeThicknessFocused">1</Thickness>
+            <Thickness x:Key="ComboBoxBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="ComboBoxBackgroundBorderThicknessFocused">1</Thickness>
+            <Thickness x:Key="ComboBoxPopupBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="ComboBoxDropdownBorderThickness">1</Thickness>
+            <Thickness x:Key="ComboBoxItemThemePadding">10,6</Thickness>
+            <Thickness x:Key="ComboBoxHeaderThemeMargin">0,0,0,6</Thickness>
+            <Thickness x:Key="TextBoxTopHeaderMargin">0,0,0,6</Thickness>
+            <Thickness x:Key="PasswordBoxTopHeaderMargin">0,0,0,6</Thickness>
+            <CornerRadius x:Key="ListViewItemCornerRadius">10</CornerRadius>
+            <CornerRadius x:Key="ComboBoxItemCornerRadius">8</CornerRadius>
+            <CornerRadius x:Key="OverlayCornerRadius">12</CornerRadius>
+            <x:Boolean x:Key="ListViewItemSelectionIndicatorVisualEnabled">False</x:Boolean>
+            <x:Boolean x:Key="ListViewItemSelectionCheckMarkVisualEnabled">False</x:Boolean>
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
+    <FontFamily x:Key="PGFontFamily">Segoe UI Variable, Segoe UI</FontFamily>
+    <FontFamily x:Key="PGIconFontFamily">Segoe Fluent Icons</FontFamily>
+    <FontFamily x:Key="ContentControlThemeFontFamily">Segoe UI Variable, Segoe UI</FontFamily>
+    <x:Double x:Key="ControlContentThemeFontSize">13</x:Double>
+
+    <!-- Button chrome owns its state brushes, so a neutral send button never
+         falls back to a dark hover surface with its dark OnPrimary text. -->
+    <ControlTemplate x:Key="PGButtonTemplate" TargetType="Button">
+        <ContentPresenter x:Name="Plate"
+                          Content="{TemplateBinding Content}"
+                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                          ContentTransitions="{TemplateBinding ContentTransitions}"
+                          Padding="{TemplateBinding Padding}"
+                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                          Background="{TemplateBinding Background}"
+                          BackgroundSizing="OuterBorderEdge"
+                          BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="{TemplateBinding BorderThickness}"
+                          CornerRadius="{TemplateBinding CornerRadius}"
+                          Foreground="{TemplateBinding Foreground}"
+                          FontFamily="{TemplateBinding FontFamily}"
+                          FontSize="{TemplateBinding FontSize}"
+                          FontWeight="{TemplateBinding FontWeight}"
+                          Control.IsTemplateFocusTarget="True">
+            <VisualStateManager.VisualStateGroups>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="PointerOver">
+                        <VisualState.Setters>
+                            <Setter Target="Plate.Background" Value="{ThemeResource PGHoverBrush}" />
+                            <Setter Target="Plate.Foreground" Value="{ThemeResource PGHoverTextBrush}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Pressed">
+                        <VisualState.Setters>
+                            <Setter Target="Plate.Background" Value="{ThemeResource PGPressedBrush}" />
+                            <Setter Target="Plate.Foreground" Value="{ThemeResource PGHoverTextBrush}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Target="Plate.Background" Value="{ThemeResource PGDisabledSurfaceBrush}" />
+                            <Setter Target="Plate.Foreground" Value="{ThemeResource PGDisabledTextBrush}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+        </ContentPresenter>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="PGPrimaryButtonTemplate" TargetType="Button">
+        <ContentPresenter x:Name="Plate"
+                          Content="{TemplateBinding Content}"
+                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                          ContentTransitions="{TemplateBinding ContentTransitions}"
+                          Padding="{TemplateBinding Padding}"
+                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                          Background="{TemplateBinding Background}"
+                          BackgroundSizing="OuterBorderEdge"
+                          BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="{TemplateBinding BorderThickness}"
+                          CornerRadius="{TemplateBinding CornerRadius}"
+                          Foreground="{TemplateBinding Foreground}"
+                          FontFamily="{TemplateBinding FontFamily}"
+                          FontSize="{TemplateBinding FontSize}"
+                          FontWeight="{TemplateBinding FontWeight}"
+                          Control.IsTemplateFocusTarget="True">
+            <VisualStateManager.VisualStateGroups>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="PointerOver">
+                        <VisualState.Setters>
+                            <Setter Target="Plate.Background" Value="{ThemeResource PGPrimaryHoverBrush}" />
+                            <Setter Target="Plate.Foreground" Value="{ThemeResource PGOnPrimaryBrush}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Pressed">
+                        <VisualState.Setters>
+                            <Setter Target="Plate.Background" Value="{ThemeResource PGPrimaryPressedBrush}" />
+                            <Setter Target="Plate.Foreground" Value="{ThemeResource PGOnPrimaryBrush}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Target="Plate.Background" Value="{ThemeResource PGDisabledSurfaceBrush}" />
+                            <Setter Target="Plate.Foreground" Value="{ThemeResource PGDisabledTextBrush}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+        </ContentPresenter>
+    </ControlTemplate>
+
+    <Style x:Key="PGButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+        <Setter Property="Template" Value="{StaticResource PGButtonTemplate}" />
+        <Setter Property="FontFamily" Value="{StaticResource PGFontFamily}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="Padding" Value="12,6" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Background" Value="{ThemeResource PGSurfaceBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource PGTextBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource PGBorderBrush}" />
+        <Setter Property="BorderThickness" Value="{ThemeResource PGControlBorderThickness}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualPrimaryBrush" Value="{ThemeResource PGFocusBrush}" />
+        <Setter Property="FocusVisualSecondaryBrush" Value="{ThemeResource PGCanvasBrush}" />
+        <Setter Property="FocusVisualPrimaryThickness" Value="2" />
+        <Setter Property="FocusVisualSecondaryThickness" Value="1" />
+        <Setter Property="FocusVisualMargin" Value="2" />
+    </Style>
+    <Style x:Key="PGGhostButton" TargetType="Button" BasedOn="{StaticResource PGButton}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style x:Key="PGIconButton" TargetType="Button" BasedOn="{StaticResource PGGhostButton}">
+        <Setter Property="Width" Value="34" />
+        <Setter Property="Height" Value="34" />
+        <Setter Property="MinWidth" Value="34" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="CornerRadius" Value="17" />
+        <Setter Property="FontFamily" Value="{StaticResource PGIconFontFamily}" />
+        <Setter Property="FontSize" Value="16" />
+    </Style>
+    <Style x:Key="PGPrimaryActionButton" TargetType="Button" BasedOn="{StaticResource PGButton}">
+        <Setter Property="Template" Value="{StaticResource PGPrimaryButtonTemplate}" />
+        <Setter Property="Background" Value="{ThemeResource PGPrimaryBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource PGOnPrimaryBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style x:Key="PGPrimaryButton" TargetType="Button" BasedOn="{StaticResource PGPrimaryActionButton}">
+        <Setter Property="Width" Value="40" />
+        <Setter Property="Height" Value="40" />
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="MinWidth" Value="40" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="CornerRadius" Value="20" />
+        <Setter Property="FontFamily" Value="{StaticResource PGIconFontFamily}" />
+        <Setter Property="FontSize" Value="18" />
+    </Style>
+
+    <!-- Dialog actions share geometry and states; only emphasis differs. -->
+    <Style x:Key="PGDialogAction" TargetType="Button" BasedOn="{StaticResource PGButton}">
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style x:Key="PGDialogPrimaryAction" TargetType="Button" BasedOn="{StaticResource PGDialogAction}">
+        <Setter Property="Template" Value="{StaticResource PGPrimaryButtonTemplate}" />
+        <Setter Property="Background" Value="{ThemeResource PGPrimaryBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource PGOnPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource PGPrimaryBrush}" />
+    </Style>
+
+    <!-- Keep the native editing, IME, selection, accessibility and context
+         commands. Only chrome resources and text metrics are replaced. -->
+    <Style x:Key="PGTextBox" TargetType="TextBox" BasedOn="{StaticResource DefaultTextBoxStyle}">
+        <Setter Property="FontFamily" Value="{StaticResource PGFontFamily}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{ThemeResource PGTextBrush}" />
+        <Setter Property="PlaceholderForeground" Value="{ThemeResource PGSecondaryBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{ThemeResource PGInputBorderBrush}" />
+        <Setter Property="BorderThickness" Value="{ThemeResource PGTextControlBorderThickness}" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualPrimaryBrush" Value="{ThemeResource PGFocusBrush}" />
+        <Setter Property="FocusVisualSecondaryBrush" Value="{ThemeResource PGInputBrush}" />
+        <Setter Property="FocusVisualPrimaryThickness" Value="1" />
+        <Setter Property="FocusVisualSecondaryThickness" Value="1" />
+        <Setter Property="FocusVisualMargin" Value="2" />
+    </Style>
+    <Style x:Key="PGPasswordBox" TargetType="PasswordBox" BasedOn="{StaticResource DefaultPasswordBoxStyle}">
+        <Setter Property="FontFamily" Value="{StaticResource PGFontFamily}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{ThemeResource PGTextBrush}" />
+        <Setter Property="Background" Value="{ThemeResource PGInputBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource PGInputBorderBrush}" />
+        <Setter Property="BorderThickness" Value="{ThemeResource PGTextControlBorderThickness}" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualPrimaryBrush" Value="{ThemeResource PGFocusBrush}" />
+        <Setter Property="FocusVisualSecondaryBrush" Value="{ThemeResource PGInputBrush}" />
+        <Setter Property="FocusVisualMargin" Value="2" />
+    </Style>
+    <!-- NumberBox has an implicit native default style in the installed SDK,
+         not a public DefaultNumberBoxStyle key. Retain its own default template. -->
+    <Style x:Key="PGSlider" TargetType="Slider" BasedOn="{StaticResource DefaultSliderStyle}">
+        <Setter Property="FontFamily" Value="{StaticResource PGFontFamily}" />
+        <Setter Property="Foreground" Value="{ThemeResource PGTextBrush}" />
+        <Setter Property="MinWidth" Value="0" />
+    </Style>
+    <Style x:Key="PGNumberBox" TargetType="NumberBox">
+        <Setter Property="FontFamily" Value="{StaticResource PGFontFamily}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{ThemeResource PGTextBrush}" />
+        <Setter Property="Background" Value="{ThemeResource PGInputBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource PGInputBorderBrush}" />
+        <Setter Property="BorderThickness" Value="{ThemeResource PGTextControlBorderThickness}" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Padding" Value="10,6" />
+    </Style>
+    <Style x:Key="PGComboBox" TargetType="ComboBox" BasedOn="{StaticResource DefaultComboBoxStyle}">
+        <Setter Property="FontFamily" Value="{StaticResource PGFontFamily}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{ThemeResource PGTextBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ComboBoxBackground}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ComboBoxBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="Padding" Value="12,5,30,5" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualPrimaryBrush" Value="{ThemeResource PGFocusBrush}" />
+        <Setter Property="FocusVisualSecondaryBrush" Value="{ThemeResource PGCanvasBrush}" />
+        <Setter Property="FocusVisualPrimaryThickness" Value="1" />
+        <Setter Property="FocusVisualSecondaryThickness" Value="1" />
+        <Setter Property="FocusVisualMargin" Value="2" />
+    </Style>
+    <Style x:Key="PGSplitButton" TargetType="SplitButton" BasedOn="{StaticResource SplitButtonStyle}">
+        <Setter Property="FontFamily" Value="{StaticResource PGFontFamily}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Background" Value="{ThemeResource PGSurfaceBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource PGTextBrush}" />
+        <Setter Property="BorderThickness" Value="{ThemeResource PGControlBorderThickness}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource PGBorderBrush}" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualPrimaryBrush" Value="{ThemeResource PGFocusBrush}" />
+        <Setter Property="FocusVisualSecondaryBrush" Value="{ThemeResource PGCanvasBrush}" />
+        <Setter Property="FocusVisualMargin" Value="2" />
+    </Style>
+    <Style x:Key="PGListViewItem" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+        <Setter Property="FontFamily" Value="{StaticResource PGFontFamily}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{ThemeResource PGTextBrush}" />
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="Margin" Value="0,2" />
+        <Setter Property="Padding" Value="10,7" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualPrimaryBrush" Value="{ThemeResource PGFocusBrush}" />
+        <Setter Property="FocusVisualSecondaryBrush" Value="{ThemeResource PGSidebarBrush}" />
+    </Style>
+    <Style x:Key="PGMessageListViewItem" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="UseSystemFocusVisuals" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListViewItem">
+                    <ContentPresenter Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      ContentTransitions="{TemplateBinding ContentTransitions}"
+                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      Margin="{TemplateBinding Padding}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="PGConversationListViewItem" TargetType="ListViewItem" BasedOn="{StaticResource PGListViewItem}">
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="0,1" />
+        <Setter Property="CornerRadius" Value="7" />
+    </Style>
+    <Style x:Key="PGCheckBox" TargetType="CheckBox" BasedOn="{StaticResource DefaultCheckBoxStyle}">
+        <Setter Property="FontFamily" Value="{StaticResource PGFontFamily}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{ThemeResource PGTextBrush}" />
+        <Setter Property="MinHeight" Value="30" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualPrimaryBrush" Value="{ThemeResource PGFocusBrush}" />
+        <Setter Property="FocusVisualSecondaryBrush" Value="{ThemeResource PGPanelBrush}" />
+    </Style>
+    <Style x:Key="PGToggleSwitch" TargetType="ToggleSwitch" BasedOn="{StaticResource DefaultToggleSwitchStyle}">
+        <Setter Property="FontFamily" Value="{StaticResource PGFontFamily}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{ThemeResource PGTextBrush}" />
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualPrimaryBrush" Value="{ThemeResource PGFocusBrush}" />
+        <Setter Property="FocusVisualSecondaryBrush" Value="{ThemeResource PGPanelBrush}" />
+    </Style>
+
+    <Style x:Key="PGFlyoutPresenter" TargetType="FlyoutPresenter" BasedOn="{StaticResource DefaultFlyoutPresenterStyle}">
+        <Setter Property="Background" Value="{ThemeResource PGSurfaceBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource PGTextBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource PGBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="Padding" Value="10" />
+    </Style>
+    <Style x:Key="PGMenuFlyoutPresenter" TargetType="MenuFlyoutPresenter" BasedOn="{StaticResource DefaultMenuFlyoutPresenterStyle}">
+        <Setter Property="Background" Value="{ThemeResource PGSurfaceBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource PGTextBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource PGBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="6" />
+        <Setter Property="FontFamily" Value="{StaticResource PGFontFamily}" />
+        <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style x:Key="PGDialog" TargetType="ContentDialog" BasedOn="{StaticResource DefaultContentDialogStyle}">
+        <Setter Property="Background" Value="{ThemeResource PGPanelBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource PGTextBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource PGBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="16" />
+        <Setter Property="FontFamily" Value="{StaticResource PGFontFamily}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="PrimaryButtonStyle" Value="{StaticResource PGDialogPrimaryAction}" />
+        <Setter Property="SecondaryButtonStyle" Value="{StaticResource PGDialogAction}" />
+        <Setter Property="CloseButtonStyle" Value="{StaticResource PGDialogAction}" />
+    </Style>
+
+    <Style x:Key="PGBodyTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource PGFontFamily}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="LineHeight" Value="23" />
+        <Setter Property="Foreground" Value="{ThemeResource PGTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="PGMetadataTextStyle" TargetType="TextBlock" BasedOn="{StaticResource PGBodyTextStyle}">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="LineHeight" Value="18" />
+        <Setter Property="Foreground" Value="{ThemeResource PGSecondaryBrush}" />
+    </Style>
+    <Style x:Key="PGTitleTextStyle" TargetType="TextBlock" BasedOn="{StaticResource PGBodyTextStyle}">
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="LineHeight" Value="26" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+</ResourceDictionary>

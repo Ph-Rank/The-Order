@@ -2,6 +2,11 @@
   "version": 1,
   "dependencies": {
     "net10.0-windows10.0.26100": {
+      "ExcelDataReader": {
+        "type": "Transitive",
+        "resolved": "3.8.0",
+        "contentHash": "kbUsldc5Fn9IKgzL2nr4VvN/mKqPqn8zGXUZpA7uL6svCA4psF+qMK519EhMvderpU4pAJoqk9DWpiSIkiZtXA=="
+      },
       "LevelDB.Standard": {
         "type": "Transitive",
         "resolved": "2.1.6.1",
@@ -84,6 +89,11 @@
           "Microsoft.WindowsAppSDK.Foundation": "2.3.12"
         }
       },
+      "OpenMcdf": {
+        "type": "Transitive",
+        "resolved": "3.3.0",
+        "contentHash": "a7lcs+yTDzPRRS82KMmU/eVCMKbJrDStD1Yt+6RRZIsDxU006IdxEVkmMLvxt2hB5YS3Imfcxrdwywtv29ogjw=="
+      },
       "SQLite": {
         "type": "Transitive",
         "resolved": "3.53.4",
@@ -127,7 +137,7 @@
       "theorder.application": {
         "type": "Project",
         "dependencies": {
-          "TheOrder.Domain": "[1.2.1-beta.1, )"
+          "TheOrder.Domain": "[1.2.2, )"
         }
       },
       "theorder.domain": {
@@ -136,18 +146,20 @@
       "theorder.infrastructure": {
         "type": "Project",
         "dependencies": {
+          "ExcelDataReader": "[3.8.0, )",
           "LevelDB.Standard": "[2.1.6.1, )",
           "LiteDB": "[4.1.4, )",
           "Microsoft.Data.Sqlite": "[10.0.13, )",
+          "OpenMcdf": "[3.3.0, )",
           "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.5, )",
-          "TheOrder.Application": "[1.2.1-beta.1, )"
+          "TheOrder.Application": "[1.2.2, )"
         }
       },
       "theorder.platform.windows": {
         "type": "Project",
         "dependencies": {
           "Microsoft.WindowsAppSDK.ML": "[2.1.94, )",
-          "TheOrder.Application": "[1.2.1-beta.1, )"
+          "TheOrder.Application": "[1.2.2, )"
         }
       }
     },

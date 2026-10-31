@@ -102,7 +102,7 @@ public sealed partial class SettingsPage
         panel.Children.Add(history);
         var timeNote = Text(""); panel.Children.Add(timeNote);
         var evidence = Text("");
-        panel.Children.Add(new Expander { Header = "编号、安装位置与差异", HorizontalAlignment = HorizontalAlignment.Stretch, Content = evidence });
+        panel.Children.Add(new SmoothExpander { Header = "编号、安装位置与差异", HorizontalAlignment = HorizontalAlignment.Stretch, Content = evidence });
         var confirm = new CheckBox { Content = "我已核对作品与版本，确认对应此条目", IsChecked = previous is not null };
         panel.Children.Add(confirm);
         var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "核验导入条目",

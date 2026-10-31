@@ -11,7 +11,7 @@ Round 3 仅修复原六项：移除 Shell enclosing glass；窄窗零选择隐�
 本源码 checkpoint 后重新 build/publish，再补齐实际 DPI、键盘、text scale、motion/transparency 与六项 targeted evidence；完成后更新此处结果。新候选绑定与原始证据保存在 `.artifacts/phase7-2a-round3/`。旧轮 checkpoint/MVID 的证据保留为历史，不冒称本轮 final。视觉 Gate 只重审六项，仍须用户实际体验确认，不自动 merge/push/Productionize。
 
 
-本候选用于艺术方向审阅，不代表用户已经批准方向、memory Gate 已通过或折射已适合生产。所有工作位于 `C:/Users/MUSK/.codex/worktrees/winui-phase7-visual/The-Order`，分支 `codex/winui-phase7-visual`；未合并、未推送、未替换日用程序。
+本候选用于艺术方向审阅，不代表用户已经批准方向、memory Gate 已通过或折射已适合生产。所有工作位于 `C:/Users/USER/.codex/worktrees/winui-phase7-visual/The-Order`，分支 `codex/winui-phase7-visual`；未合并、未推送、未替换日用程序。
 
 ## 基线与方向
 
@@ -132,7 +132,7 @@ Domain/Application/Infrastructure/Platform/SessionPresentation/CoverPresenter/im
 直接运行隔离启动入口（PowerShell 7），不要直接双击候选EXE：
 
 ```powershell
-& 'C:/Users/MUSK/.codex/worktrees/winui-phase7-visual/The-Order/native/scripts/run-visual-review.ps1' -Candidate review -Direction B
+& 'C:/Users/USER/.codex/worktrees/winui-phase7-visual/The-Order/native/scripts/run-visual-review.ps1' -Candidate review -Direction B
 ```
 
 也可双击 `.artifacts/phase7-2a/Launch-Visual-B.cmd`，它只调用同一隔离启动脚本。图文审阅入口是 `.artifacts/phase7-2a/visual-review.html`，直接显示原图及对应manifest链接；不是mockup或改图。

@@ -15,6 +15,7 @@ public sealed partial class MainWindow
     private MaterialPolicy? materialPolicy;
     private RefractionGallery? gallery;
     private bool requestedGlass;
+    private long pageSwapCount;
     private bool visualWindowVisible = true;
     private bool galleryVisible, visualStopped, fixtureBusy;
     private string direction = "B", fixtureNonce = "";
@@ -51,7 +52,7 @@ public sealed partial class MainWindow
                 if (Root.IsLoaded) StartVisualFixture(Root, new RoutedEventArgs());
                 else Root.Loaded += StartVisualFixture;
             }
-            if (configuration.Diagnostics)
+            if (configuration.Diagnostics && !CleanPlaygroundPreview)
             {
             var item = TestRailItem("材质", Symbol.Pictures, "visual-gallery");
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(item, "VisualGallery");
@@ -91,7 +92,9 @@ public sealed partial class MainWindow
     private void ApplyMaterialPolicy()
     {
         if (visualStopped || materialPolicy is null) return;
+        RefreshPlaygroundPolicy();
         var effectiveMode = EffectiveMaterialMode;
+        Views.InteractionMotion.Allowed = materialPolicy.MotionAllowed;
         materialPolicy.AppOpaque = effectiveMode == Views.MaterialMode.Opaque;
         materialPolicy.Apply(Microsoft.UI.Xaml.Application.Current.Resources);
         RefreshCaptionTheme();
@@ -112,6 +115,7 @@ public sealed partial class MainWindow
         {
             var visual = ElementCompositionPreview.GetElementVisual(PageContent);
             visual.StopAnimation("Opacity"); visual.Opacity = 1;
+            visual.StopAnimation("Translation"); visual.Properties.InsertVector3("Translation", System.Numerics.Vector3.Zero);
         }
     }
 
@@ -184,6 +188,10 @@ public sealed partial class MainWindow
         animation.InsertKeyFrame(0, .86f); animation.InsertKeyFrame(1, 1);
         animation.Duration = TimeSpan.FromMilliseconds((double)Microsoft.UI.Xaml.Application.Current.Resources["MotionPageMilliseconds"]);
         visual.StartAnimation("Opacity", animation);
+        ElementCompositionPreview.SetIsTranslationEnabled(PageContent, true);
+        using var position = visual.Compositor.CreateVector3KeyFrameAnimation();
+        position.InsertKeyFrame(0, new System.Numerics.Vector3(0, 6, 0)); position.InsertKeyFrame(1, System.Numerics.Vector3.Zero);
+        position.Duration = animation.Duration; visual.StartAnimation("Translation", position);
     }
 
     // Called before PageContent is replaced so the Gallery releases its native
@@ -229,7 +237,7 @@ public sealed partial class MainWindow
     // operations as the UI, never launches games or accepts arbitrary code.
     private async void OnVisualFixture(object? sender, object e)
     {
-        if (fixtureBusy || fixtureDirectory is null || visualStopped || !Sessions.Ready) return;
+        if (fixtureBusy || fixtureDirectory is null || visualStopped || !Sessions.Ready || !startupReady) return;
         var request = Path.Combine(fixtureDirectory, "request.json");
         if (!File.Exists(request) || new FileInfo(request).Length > 16384) return;
         fixtureBusy = true;
@@ -259,7 +267,10 @@ public sealed partial class MainWindow
                     if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter && presenter.State != Microsoft.UI.Windowing.OverlappedPresenterState.Restored)
                         presenter.Restore();
                     var scale = Root.XamlRoot.RasterizationScale;
-                    AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(Math.Clamp(root.GetProperty("width").GetInt32(), 480, 1600) * scale), (int)(Math.Clamp(root.GetProperty("height").GetInt32(), 480, 1000) * scale))); break;
+                    var pgWorkArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest).WorkArea;
+                    int pgWidth = Math.Min((int)(Math.Clamp(root.GetProperty("width").GetInt32(), 480, 1600) * scale), pgWorkArea.Width);
+                    int pgHeight = Math.Min((int)(Math.Clamp(root.GetProperty("height").GetInt32(), 480, 1000) * scale), pgWorkArea.Height);
+                    AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(pgWorkArea.X + (pgWorkArea.Width - pgWidth) / 2, pgWorkArea.Y + (pgWorkArea.Height - pgHeight) / 2, pgWidth, pgHeight)); break;
                 case "solid": materialPolicy!.ForceSolid = root.GetProperty("value").GetBoolean(); ApplyMaterialPolicy(); break;
                 case "motion": materialPolicy!.ReducedMotion = root.GetProperty("value").GetBoolean(); ApplyMaterialPolicy(); break;
                 case "gallery": ShowGallery(); break;
@@ -300,6 +311,11 @@ public sealed partial class MainWindow
                     break;
                 case "probe": break;
                 case "statistics": await StatisticsFixtureAsync(root); break;
+                case "interactions": await InteractionFixtureAsync(root); break;
+                case "playground": await PlaygroundFixtureAsync(root); break;
+                case "playgroundClean": DiagnosticsPanel.Visibility = Visibility.Collapsed; break;
+                case "musicScroll": await MusicScrollFixtureAsync(root); break;
+                case "walkthrough": await WalkthroughFixtureAsync(root); break;
                 case "acgnControl": await RunAcgnControlFixtureAsync(root); break;
                 case "audioGuardSmoke": await RunAudioGuardFixtureAsync(root); break;
                 case "bangumi":
@@ -344,7 +360,7 @@ public sealed partial class MainWindow
                 case "treeProbeFault":
                     _ = bitmapTreeProbe.Read(() => throw new System.Runtime.InteropServices.COMException("Test tree read failure", unchecked((int)0x80004005)));
                     break;
-                case "p1Dialog": case "p1Close": case "p1Tab": case "p1Capture": case "p1Evidence": case "p1Statistics": case "p1Fill": case "p1Invoke": case "p1Installation": case "p1CancelInstallation": case "p1ScrollInstallation":
+                case "p1Dialog": case "p1Close": case "p1Tab": case "p1Shortcut": case "p1GuideView": case "p1LocalView": case "p1Capture": case "p1Evidence": case "p1Statistics": case "p1Fill": case "p1Invoke": case "p1Installation": case "p1CancelInstallation": case "p1ScrollInstallation":
                 case "p1ContextMenu": case "p1ContextClose": case "p1ContextInvoke": case "p1LaunchSettings": case "p1DismissDiscovery": case "p1SourceToggle": case "p1ReviewDiscovery": case "p1IgnoreCandidate": case "p1Recognize": case "p1ImportSelect": case "p1ImportInvoke": case "p1DetailsInspect": case "p1PagesInspect":
                     await RunP1FixtureAsync(root); break;
                 case "exit": if (App.Instance is { } app) await app.RequestExitAsync(); return;
@@ -356,6 +372,10 @@ public sealed partial class MainWindow
         }
         catch (Exception exception)
         {
+            if (Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test && Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_WALKTHROUGH_TEST") == "1")
+                await File.WriteAllTextAsync(Path.Combine(fixtureDirectory, "walkthrough-fixture-error.txt"), exception.ToString());
+            if (Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test && Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_PLAYGROUND_FIXTURE") == "1")
+                await File.WriteAllTextAsync(Path.Combine(fixtureDirectory, "playground-fixture-error.txt"), exception.ToString());
             await File.WriteAllTextAsync(Path.Combine(fixtureDirectory, "receipt.json"), JsonSerializer.Serialize(new { nonce = fixtureNonce, success = false, error = exception.GetType().Name }));
         }
         finally { fixtureBusy = false; }

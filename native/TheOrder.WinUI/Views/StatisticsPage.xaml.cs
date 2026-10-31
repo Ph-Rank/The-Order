@@ -22,7 +22,7 @@ public sealed partial class StatisticsPage : Page, IDisposable
     {
         this.snapshot = snapshot; InitializeComponent(); initialized = true;
         ViewModel.PropertyChanged += OnState;
-        Loaded += async (_, _) => { ArrangeCards(); await RefreshAsync(); };
+        Loaded += async (_, _) => { FitViewport(); ArrangeCards(); await RefreshAsync(); };
         Unloaded += (_, _) => ViewModel.Leave();
         ActualThemeChanged += (_, _) => { if (initialized) DrawLegend(); };
     }
@@ -131,6 +131,15 @@ public sealed partial class StatisticsPage : Page, IDisposable
     internal static string Hours(long seconds) => seconds == 0 ? "0 小时" : Math.Abs((double)seconds) >= 3600 ? $"{seconds / 3600d:0.#} 小时" : Math.Abs((double)seconds) >= 60 ? $"{seconds / 60d:0.#} 分钟" : $"{seconds} 秒";
     private static TextBlock Note(string text) => new() { Text = text, Style = (Style)Microsoft.UI.Xaml.Application.Current.Resources["MetadataTextStyle"], VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
     private void OnStatisticsSizeChanged(object sender, SizeChangedEventArgs e) => ArrangeCards();
+    private void OnStatisticsViewportSizeChanged(object sender, SizeChangedEventArgs e) => FitViewport();
+    private void FitViewport()
+    {
+        if (!initialized || ActualWidth <= 0) return;
+        // Canvas charts have no intrinsic width. Give the scroll content a bounded
+        // width so its desired size and arranged size agree at every window size.
+        StatisticsBody.Width = Math.Min(StatisticsBody.MaxWidth,
+            Math.Max(0, ActualWidth - StatisticsBody.Margin.Left - StatisticsBody.Margin.Right));
+    }
     private void ArrangeCards()
     {
         if (!initialized) return;

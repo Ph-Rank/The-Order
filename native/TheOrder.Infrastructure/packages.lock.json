@@ -2,6 +2,12 @@
   "version": 1,
   "dependencies": {
     "net10.0": {
+      "ExcelDataReader": {
+        "type": "Direct",
+        "requested": "[3.8.0, )",
+        "resolved": "3.8.0",
+        "contentHash": "kbUsldc5Fn9IKgzL2nr4VvN/mKqPqn8zGXUZpA7uL6svCA4psF+qMK519EhMvderpU4pAJoqk9DWpiSIkiZtXA=="
+      },
       "LevelDB.Standard": {
         "type": "Direct",
         "requested": "[2.1.6.1, )",
@@ -24,6 +30,12 @@
           "SQLitePCLRaw.bundle_e_sqlite3": "2.1.13",
           "SQLitePCLRaw.core": "2.1.13"
         }
+      },
+      "OpenMcdf": {
+        "type": "Direct",
+        "requested": "[3.3.0, )",
+        "resolved": "3.3.0",
+        "contentHash": "a7lcs+yTDzPRRS82KMmU/eVCMKbJrDStD1Yt+6RRZIsDxU006IdxEVkmMLvxt2hB5YS3Imfcxrdwywtv29ogjw=="
       },
       "SQLitePCLRaw.bundle_e_sqlite3": {
         "type": "Direct",
@@ -72,24 +84,11 @@
       "theorder.application": {
         "type": "Project",
         "dependencies": {
-          "TheOrder.Domain": "[1.2.1-beta.1, )"
+          "TheOrder.Domain": "[1.2.2, )"
         }
       },
       "theorder.domain": {
         "type": "Project"
-      }
-    },
-    "net10.0/win-x64": {
-      "LevelDB.Standard": {
-        "type": "Direct",
-        "requested": "[2.1.6.1, )",
-        "resolved": "2.1.6.1",
-        "contentHash": "NCaKNLhGcGXdXaTaMMVOziK1OM8ggJuIMFOUo/eJZQJAlF/mA72jBBDDCm2bsQb+t5HRp2/Sbb4HOjG2NpEogw=="
-      },
-      "SQLite": {
-        "type": "Transitive",
-        "resolved": "3.53.4",
-        "contentHash": "KN7jeWqgUPeBRe1FlcpZURzxomuKKEKHmBBQfg+Nx7NkY1LjKhzHvH+3ASkNvhayESE34nMBinL9CV21JfPRJw=="
       }
     }
   }

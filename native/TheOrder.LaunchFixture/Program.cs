@@ -45,8 +45,9 @@ internal static class Program
             || !GetProcessMitigationPolicy(GetCurrentProcess(), 6, out var applied, 4) || applied != 1)
             throw new System.ComponentModel.Win32Exception(System.Runtime.InteropServices.Marshal.GetLastWin32Error(), "Synthetic fixture extension-point isolation failed.");
         var stopFile = Path.Combine(root, name + ".stop");
+        GetStartupInfo(out var startup);
         File.WriteAllText(Path.Combine(root, name + ".json"), JsonSerializer.Serialize(new
-        { pid = Environment.ProcessId, cwd = Environment.CurrentDirectory, arguments = args.Skip(3).ToArray(), commandLine = System.Runtime.InteropServices.Marshal.PtrToStringUni(GetCommandLine()), mode, started = DateTimeOffset.UtcNow, extensionPointsDisabled = applied == 1, compatibilityLayer = Environment.GetEnvironmentVariable("__COMPAT_LAYER") }));
+        { pid = Environment.ProcessId, cwd = Environment.CurrentDirectory, arguments = args.Skip(3).ToArray(), commandLine = System.Runtime.InteropServices.Marshal.PtrToStringUni(GetCommandLine()), startupFlags = startup.Flags, mode, started = DateTimeOffset.UtcNow, extensionPointsDisabled = applied == 1, compatibilityLayer = Environment.GetEnvironmentVariable("__COMPAT_LAYER") }));
         if (mode == "empty") return;
         if (mode == "gap-helper") { Spawn("child_game.exe", "game", name + "-game"); return; }
         if (mode is "launcher" or "chain" or "helper" or "multiple" or "quick-launcher")
@@ -104,6 +105,14 @@ internal static class Program
     }
     [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "GetCommandLineW")]
     private static extern IntPtr GetCommandLine();
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)] private struct Startup
+    {
+        public int Size; public IntPtr Reserved, Desktop, Title;
+        public uint X, Y, Width, Height, XChars, YChars, Fill, Flags;
+        public ushort Show, ReservedSize; public IntPtr ReservedBytes, Input, Output, Error;
+    }
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "GetStartupInfoW")]
+    private static extern void GetStartupInfo(out Startup startup);
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     private static extern IntPtr GetCurrentProcess();
     [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]

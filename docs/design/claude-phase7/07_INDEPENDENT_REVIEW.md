@@ -11,7 +11,7 @@
 | 工作区 | 分支 / 实际起始 HEAD | 状态 |
 |---|---|---|
 | `D:\Projects\The-Order` | `codex/winui-phase5` / `14a96a1fc793b7fba231ab3b8fd1da607c3e86c5` | 原有 dirty 保留 |
-| `C:\Users\MUSK\.codex\worktrees\winui-phase7-visual\The-Order` | `codex/winui-phase7-visual` / `ad59c6eeab3ea964462fbacc6b7547b48a72808b` | 原有 dirty 保留 |
+| `C:\Users\USER\.codex\worktrees\winui-phase7-visual\The-Order` | `codex/winui-phase7-visual` / `ad59c6eeab3ea964462fbacc6b7547b48a72808b` | 原有 dirty 保留 |
 | `D:\Projects\The-Order-worktrees\claude-design-phase7` | `claude/design-phase7` / `7214dbc0e4842465f67c31d3c82ce43b7fd48ddc` | clean，原始交付不改 |
 | **独立审查** `D:\Projects\The-Order-worktrees\codex-claude-ui-review` | `codex/claude-ui-review`，由完整 `7214dbc` 建立 | 修复仅在此处 |
 

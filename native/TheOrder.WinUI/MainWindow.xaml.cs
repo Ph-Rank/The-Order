@@ -74,7 +74,11 @@ public sealed partial class MainWindow : Window
             && Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_PERFORMANCE_OUTPUT") is not null;
         installationNavigation = new(files);
         ViewModel = workspace; InitializeComponent();
+        ConfigurePlayground(configuration, library);
         AppTitleBar.Title = Title = AppReleaseIdentity.IsBeta ? $"The Order {AppReleaseIdentity.Version} · Beta" : "The Order";
+#if PLAYGROUND_ISOLATED_CANDIDATE
+        AppTitleBar.Title = Title = "The Order · Playground " + (Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_PLAYGROUND_FIXTURE") == "1" ? "离线演示" : "隔离候选");
+#endif
         if (Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test && Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_READ_ONLY_OAUTH_ACCEPTANCE") == "1")
             AppTitleBar.Title = Title = $"The Order {typeof(App).Assembly.GetName().Version!.ToString(3)} Test · 只读登录验收";
         updates.PropertyChanged += OnAppUpdateState;
@@ -166,13 +170,14 @@ public sealed partial class MainWindow : Window
         importPage = new(files, workspace, recognition) { ChooseFolder = PickFolder };
         installationsPage = new(files, workspace) { ChooseFolder = PickFolder, ChooseExecutable = () => PickFile(".exe", ".cmd") };
         ConfigureP1Pages();
+        settingsPage.ChangePlaygroundVisibility = ChangePlaygroundVisibilityAsync;
         InitializeVisualSystem(configuration);
         workspace.ThemeChanged += ApplyTheme; workspace.PropertyChanged += OnState;
         ApplyTheme(); ShowPage();
         InitializeShellInput(configuration.Diagnostics);
         launchTimer.Tick += OnLaunchRefresh; launchTimer.Start();
         backupTimer.Tick += async (_, _) => { if (!commandsBlocked && Sessions.Ready && !Sessions.Closing) await backups.AutomaticAsync(); };
-        if (configuration.Diagnostics)
+        if (configuration.Diagnostics && !CleanPlaygroundPreview)
         {
             DiagnosticsPanel.Visibility = Visibility.Visible;
             if (onlineFixture?.BoundaryFixture == true) RecognitionBoundaryControls.Visibility = Visibility.Visible;
@@ -199,8 +204,14 @@ public sealed partial class MainWindow : Window
             await startup.PrepareAsync(async () =>
             {
                 initializePages?.Invoke(); initializePages = null;
+                if (Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test
+                    && Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_STARTUP_EXIT_TEST") == "1")
+                    throw new InvalidOperationException("Synthetic startup failure before library initialization");
                 await launchDefaults.InitializeAsync();
-                await Sessions.InitializeAsync(); await ViewModel.InitializeAsync();
+                await Sessions.InitializeAsync();
+                if (walkthroughSessions is not null) await walkthroughSessions.InitializeAsync();
+                await ViewModel.InitializeAsync();
+                await LoadPlaygroundNavigationAsync();
                 if (!Sessions.Ready || !ViewModel.IsLoaded || ViewModel.Notice.Outcome == ClientOutcome.LoadFailure)
                     throw new IOException("Startup library unavailable");
                 await LoadMaterialPreferencesAsync(); await LoadRecognitionPreferencesAsync(); await browsingSettings.InitializeAsync();
@@ -211,13 +222,20 @@ public sealed partial class MainWindow : Window
             Navigation.Opacity = 1; Navigation.IsHitTestVisible = true;
             if (!commandsBlocked && !Sessions.Closing) { updateTimer?.Start(); libraryPage.FocusResults(); }
             backgroundInitialization = InitializeBackgroundAsync();
+            if (Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test
+                && Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_PLAYGROUND_OPEN") == "1")
+                await Navigate(WorkspacePage.Playground);
         }
         catch (Exception exception)
         {
+            StartupHasFailed = true;
             App.TraceVisualFailure(exception); lifecycleMessage = UiText.Get("启动恢复未完成，已禁用操作；请退出后重试。"); ViewModel.ReportUnexpected();
             StartupRing.IsActive = false; StartupRing.Visibility = Visibility.Collapsed;
             StartupError.Text = "书架未能完整加载，原资料已保留。请退出后重试。";
             StartupError.Visibility = StartupExit.Visibility = Visibility.Visible;
+            if (Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test
+                && Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_STARTUP_EXIT_TEST") == "1")
+                DispatcherQueue.TryEnqueue(async () => { await Task.Delay(100); if (App.Instance is { } app) await app.RequestExitAsync(); });
         }
         RefreshSession();
         startupFinished.TrySetResult(startupReady);
@@ -225,7 +243,7 @@ public sealed partial class MainWindow : Window
     public void SetCommandsBlocked(bool value)
     { commandsBlocked = value; nextMoeSettings.PauseCommands(value); if (value) { coverDialog?.Hide(); p1Dialog?.Hide(); settingsPage?.CancelBackupDialog(); settingsPage?.CancelMigrationDialog(); } PageContent.IsEnabled = !value; RefreshSession(); }
     public void ShowLifecycleError(string message) { lifecycleMessage = message; RefreshSession(); }
-    public void CancelBackgroundRequests() { CancelOnlineRequests(); recognition.CancelAll(); files.CancelScan(); ViewModel.CancelPendingOperation(); nextMoeSettings.Cancel(); bangumiSettings.Cancel(); }
+    public void CancelBackgroundRequests() { playground?.Stop(); CancelOnlineRequests(); recognition.CancelAll(); files.CancelScan(); ViewModel.CancelPendingOperation(); nextMoeSettings.Cancel(); bangumiSettings.Cancel(); }
     public Task DrainPersonalRequestsAsync() => Task.WhenAll(nextMoeSettings.DrainAsync(), bangumiSettings.DrainAsync(), p1Operation);
     private async Task ResumeRecognitionAsync(bool retryPending)
     { try { await recognition.StartUnidentifiedAsync(retryPending); } catch (OperationCanceledException) { } catch { ViewModel.ReportUnexpected(); } }
@@ -270,16 +288,27 @@ public sealed partial class MainWindow : Window
     private void ShowPage()
     {
         synchronizing = true;
-        LeaveGallery();
-        // Swapchain owners release while still in the live tree (proven early-release order).
-        if (ViewModel.Page != WorkspacePage.Library) libraryPage.ReleaseStageBeforeLeave();
-        if (ViewModel.Page != WorkspacePage.Details) detailsPage.ReleaseStageBeforeLeave();
-        PageContent.Content = ViewModel.Page switch { WorkspacePage.Statistics => statisticsPage, WorkspacePage.Online => onlinePage, WorkspacePage.Details => detailsPage, WorkspacePage.Settings => settingsPage, WorkspacePage.Import => importPage, WorkspacePage.Installations => installationsPage, _ => libraryPage };
-        Navigation.SelectedItem = ViewModel.Page == WorkspacePage.Statistics || detailsParent == WorkspacePage.Statistics && ViewModel.Page is WorkspacePage.Details or WorkspacePage.Installations ? StatisticsNavigation : ViewModel.Page == WorkspacePage.Settings ? SettingsNavigation : ViewModel.Page == WorkspacePage.Online ? OnlineNavigation : LibraryNavigation;
-        if (ViewModel.Page == WorkspacePage.Statistics) _ = statisticsPage.RefreshAsync();
+        FrameworkElement destination = ViewModel.Page switch { WorkspacePage.Playground => EnsurePlaygroundView(), WorkspacePage.Statistics => statisticsPage, WorkspacePage.Online => onlinePage, WorkspacePage.Details => detailsPage, WorkspacePage.Settings => settingsPage, WorkspacePage.Import => importPage, WorkspacePage.Installations => installationsPage, _ => libraryPage };
+        // Playground is a peer workbench with its own header; it has no back row.
+        bool workbench = ViewModel.Page == WorkspacePage.Playground;
+        ContentLayer.RowDefinitions[0].Height = new GridLength(workbench ? 0 : 44);
+        PageNavigationToolbar.Visibility = workbench ? Visibility.Collapsed : Visibility.Visible;
+        RefreshPlaygroundPolicy();
+        RefreshPlaygroundNotices();
+        var changed = !ReferenceEquals(PageContent.Content, destination);
+        if (changed)
+        {
+            LeaveGallery();
+            // Release graphics owners while they are still in the live tree.
+            if (ViewModel.Page != WorkspacePage.Library) libraryPage.ReleaseStageBeforeLeave();
+            if (ViewModel.Page != WorkspacePage.Details) detailsPage.ReleaseStageBeforeLeave();
+            PageContent.Content = destination; pageSwapCount++;
+        }
+        Navigation.SelectedItem = ViewModel.Page == WorkspacePage.Playground || detailsParent == WorkspacePage.Playground && ViewModel.Page is WorkspacePage.Details or WorkspacePage.Installations ? PlaygroundNavigation : ViewModel.Page == WorkspacePage.Statistics || detailsParent == WorkspacePage.Statistics && ViewModel.Page is WorkspacePage.Details or WorkspacePage.Installations ? StatisticsNavigation : ViewModel.Page == WorkspacePage.Settings ? SettingsNavigation : ViewModel.Page == WorkspacePage.Online ? OnlineNavigation : LibraryNavigation;
+        if (changed && ViewModel.Page == WorkspacePage.Statistics) _ = statisticsPage.RefreshAsync();
         RefreshBackNavigation();
         synchronizing = false;
-        AnimatePage();
+        if (changed) AnimatePage();
     }
     private async Task Navigate(WorkspacePage page, string? id = null, WorkspacePage returnTo = WorkspacePage.Library)
     {
@@ -296,7 +325,7 @@ public sealed partial class MainWindow : Window
     {
         if (args.InvokedItemContainer is NavigationViewItem { Tag: "visual-gallery" }) { ShowGallery(); return; }
         if (args.InvokedItemContainer is NavigationViewItem { Tag: "visual-states" }) { ShowSessionStateFixtures(); return; }
-        if (!synchronizing && args.InvokedItemContainer is NavigationViewItem item) await Navigate((item.Tag as string) switch { "statistics" => WorkspacePage.Statistics, "settings" => WorkspacePage.Settings, "online" => WorkspacePage.Online, "recognition" => WorkspacePage.Recognition, _ => WorkspacePage.Library });
+        if (!synchronizing && args.InvokedItemContainer is NavigationViewItem item) await Navigate((item.Tag as string) switch { "playground" => WorkspacePage.Playground, "statistics" => WorkspacePage.Statistics, "settings" => WorkspacePage.Settings, "online" => WorkspacePage.Online, "recognition" => WorkspacePage.Recognition, _ => WorkspacePage.Library });
     }
     private async void OnTitleBack(TitleBar sender, object args) => await GoBackAsync();
     private async void OnRailBack(object sender, RoutedEventArgs e) => await GoBackAsync();
@@ -371,9 +400,11 @@ public sealed partial class MainWindow : Window
         return false;
     }
     private async Task<string?> PickFolder() => (await new Microsoft.Windows.Storage.Pickers.FolderPicker(AppWindow.Id) { CommitButtonText = UiText.Get("选择此文件夹") }.PickSingleFolderAsync())?.Path;
-    private async Task<string?> PickFile(params string[] extensions)
+    private Task<string?> PickFile(params string[] extensions) => PickFileInFolder(null, extensions);
+    private async Task<string?> PickFileInFolder(string? folder, params string[] extensions)
     {
         var picker = new Microsoft.Windows.Storage.Pickers.FileOpenPicker(AppWindow.Id);
+        if (folder is not null) picker.SuggestedFolder = folder;
         foreach (var extension in extensions) picker.FileTypeFilter.Add(extension);
         return (await picker.PickSingleFileAsync())?.Path;
     }
@@ -387,6 +418,9 @@ public sealed partial class MainWindow : Window
     private void OnLaunchRefresh(object? sender, object e)
     {
         Launch.Refresh(); RefreshSession();
+        walkthroughSessions?.SetAppearance(Root.ActualTheme == ElementTheme.Light, (int)Math.Round((Root.XamlRoot?.RasterizationScale ?? 1) * 96));
+        walkthroughSessions?.Tick(Launch.Runtime);
+        RefreshGuideStatus();
         RefreshBackgroundAudio();
         recognition.RefreshIfDirty();
         if (startupReady && Sessions.Ready && !Sessions.Closing && !commandsBlocked)
@@ -400,7 +434,8 @@ public sealed partial class MainWindow : Window
     private void OnBangumiAccessChanged() => DispatcherQueue.TryEnqueue(() => { bangumiSettings.RefreshState(); detailsPage?.InvalidateBangumiAccess(); onlinePage?.InvalidateBangumiAccess(); });
     public async ValueTask StopAsync()
     {
-        settingsPage.CancelMigrationDialog(); await settingsPage.Migration.DisposeAsync();
+        await StopPlaygroundAsync();
+        if (settingsPage is not null) { settingsPage.CancelMigrationDialog(); await settingsPage.Migration.DisposeAsync(); }
         nextMoeSettings.Access.Changed -= OnNextMoeAccessChanged;
         bangumiSettings.Access.Changed -= OnBangumiAccessChanged; bangumiSettings.Dispose();
         detailsPage?.DisposeBangumi();

@@ -50,6 +50,24 @@
           "Microsoft.WindowsAppSDK.WinUI": "2.3.9"
         }
       },
+      "Acornima": {
+        "type": "Transitive",
+        "resolved": "1.7.0",
+        "contentHash": "a2I4O4qkuAdB0oSaGz6/k0n/bXxMbGcLBra5dNTTVSLmTwM7uORA8ebpOrNMmDfFWOMwvuaRL6gPprRV4HTV0w=="
+      },
+      "ExcelDataReader": {
+        "type": "Transitive",
+        "resolved": "3.8.0",
+        "contentHash": "kbUsldc5Fn9IKgzL2nr4VvN/mKqPqn8zGXUZpA7uL6svCA4psF+qMK519EhMvderpU4pAJoqk9DWpiSIkiZtXA=="
+      },
+      "Jint": {
+        "type": "Transitive",
+        "resolved": "4.17.0",
+        "contentHash": "9jdpLQQYsWTjOn2THpiR8zRJ34ksV6ofW0gJvZxJW/fIGK+A+TkpWonhuuLDRwqLDjP+9WsxYt2MEge6lWjk2A==",
+        "dependencies": {
+          "Acornima": "1.7.0"
+        }
+      },
       "LevelDB.Standard": {
         "type": "Transitive",
         "resolved": "2.1.6.1",
@@ -250,6 +268,11 @@
           "Microsoft.WindowsAppSDK.InteractiveExperiences": "2.1.8"
         }
       },
+      "OpenMcdf": {
+        "type": "Transitive",
+        "resolved": "3.3.0",
+        "contentHash": "a7lcs+yTDzPRRS82KMmU/eVCMKbJrDStD1Yt+6RRZIsDxU006IdxEVkmMLvxt2hB5YS3Imfcxrdwywtv29ogjw=="
+      },
       "SQLite": {
         "type": "Transitive",
         "resolved": "3.53.4",
@@ -293,7 +316,7 @@
       "theorder.application": {
         "type": "Project",
         "dependencies": {
-          "TheOrder.Domain": "[1.2.1-beta.1, )"
+          "TheOrder.Domain": "[1.2.2, )"
         }
       },
       "theorder.domain": {
@@ -302,25 +325,28 @@
       "theorder.infrastructure": {
         "type": "Project",
         "dependencies": {
+          "ExcelDataReader": "[3.8.0, )",
           "LevelDB.Standard": "[2.1.6.1, )",
           "LiteDB": "[4.1.4, )",
           "Microsoft.Data.Sqlite": "[10.0.13, )",
+          "OpenMcdf": "[3.3.0, )",
           "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.5, )",
-          "TheOrder.Application": "[1.2.1-beta.1, )"
+          "TheOrder.Application": "[1.2.2, )"
         }
       },
       "theorder.platform.windows": {
         "type": "Project",
         "dependencies": {
           "Microsoft.WindowsAppSDK.ML": "[2.1.94, )",
-          "TheOrder.Application": "[1.2.1-beta.1, )"
+          "TheOrder.Application": "[1.2.2, )"
         }
       },
       "theorder.presentation": {
         "type": "Project",
         "dependencies": {
+          "Jint": "[4.17.0, )",
           "Markdig": "[1.4.0, )",
-          "TheOrder.Application": "[1.2.1-beta.1, )"
+          "TheOrder.Application": "[1.2.2, )"
         }
       }
     },

@@ -11,7 +11,7 @@ namespace TheOrder.WinUI.Views;
 public sealed class CatalogReleasesView : StackPanel, IDisposable
 {
     private sealed record FilterOption(string? Value, string Label) { public override string ToString() => Label; }
-    private readonly Expander section = new() { Header = "发行与版本资料 · NextMoe", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander section = new SmoothExpander() { Header = "发行与版本资料 · NextMoe", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel body = new() { Spacing = 12 }, rows = new() { Spacing = 8 };
     private readonly TextBlock message = Text("展开后按需读取发行资料。", 14), provenance = Text("", 12), count = Text("", 13);
     private readonly Button refresh = new() { Content = "刷新发行资料" }, next = new() { Content = "读取下一页" }, cancel = new() { Content = "取消读取" }, clear = new() { Content = "清除筛选" };
@@ -132,7 +132,7 @@ public sealed class CatalogReleasesView : StackPanel, IDisposable
         }
         if (refs.Children.Count > 0) card.Children.Add(refs); else card.Children.Add(Text("原始来源编号未收录", 12));
         var identity = Text($"{UiText.Get("目录发行")} {row.Id} · {UiText.Get("所属作品")} {row.WorkId}", 12); identity.Opacity = .72; card.Children.Add(identity);
-        var entry = new Expander { Header = heading, Content = card, IsExpanded = expandedRows.Contains(row.Id), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+        var entry = new SmoothExpander { Header = heading, Content = card, IsExpanded = expandedRows.Contains(row.Id), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
         entry.Expanding += (_, _) => expandedRows.Add(row.Id); entry.Collapsed += (_, _) => expandedRows.Remove(row.Id);
         AutomationProperties.SetAutomationId(entry, "CatalogRelease-" + row.Id); AutomationProperties.SetName(entry, (row.Title ?? UiText.Get("发行标题未收录")) + "，" + string.Join("，", facts));
         rowExpanders[row.Id] = entry; rows.Children.Add(entry);

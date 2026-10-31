@@ -27,8 +27,8 @@ public sealed class BangumiRelatedView : StackPanel, IDisposable
     private readonly TagFlowPanel filters = new() { HorizontalSpacing = 8, VerticalSpacing = 6 };
     private readonly StackPanel groups = new() { Spacing = 16 };
     private readonly StackPanel sourceBody = new() { Spacing = 8 };
-    private readonly Expander sources = new() { Header = "关联来源与关系说明", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
-    private readonly Expander rawSources = new() { Header = "详细证据", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander sources = new SmoothExpander() { Header = "关联来源与关系说明", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander rawSources = new SmoothExpander() { Header = "详细证据", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly Dictionary<BangumiRelationKind, Button> choices = [];
     private readonly List<(RelatedWorkCard Item, Button Button, CoverPresenter Picture)> displayed = [];
     private static readonly BangumiRelationKind[] Kinds = [BangumiRelationKind.Anime, BangumiRelationKind.Music, BangumiRelationKind.Book, BangumiRelationKind.Game];
@@ -38,6 +38,8 @@ public sealed class BangumiRelatedView : StackPanel, IDisposable
     private Func<string, Task>? openLink;
     private ImmutableArray<CatalogEntityRef> catalogRows = [];
     private ImmutableArray<RelatedWorkCard> rows = [];
+    private ImmutableArray<RelatedWorkCard> renderedRows;
+    private (bool Complete, BangumiRelationKind? Kind, int Limit, string? Work, string? Revision, DateTimeOffset? Fetched)? renderedKey;
     private WorkMetadata? catalogWork;
     private BangumiRelationsSnapshot? shown;
     private BangumiRelationIdentity? shownIdentity;
@@ -70,6 +72,7 @@ public sealed class BangumiRelatedView : StackPanel, IDisposable
     }
     public BangumiRelatedView()
     {
+        SecondaryDisclosure.Apply(sources); SecondaryDisclosure.Apply(rawSources);
         Spacing = 12;
         AutomationProperties.SetAutomationId(this, "RelatedWorks");
         AutomationProperties.SetAutomationId(heading, "BangumiRelatedExpander");
@@ -210,6 +213,10 @@ public sealed class BangumiRelatedView : StackPanel, IDisposable
     private void Render()
     {
         if (disposed) return;
+        var key = (complete, selected, limit, catalogWork?.Id, catalogWork?.FetchedAt, shown?.FetchedAtUtc);
+        if (renderedKey == key && !renderedRows.IsDefault && renderedRows.SequenceEqual(rows)
+            && (rows.IsEmpty || displayed.Count > 0)) { if (sources.IsExpanded) RenderSources(); return; }
+        renderedKey = key; renderedRows = rows;
         var focus = XamlRoot is null ? null : Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot);
         var focusedKey = displayed.FirstOrDefault(x => ReferenceEquals(x.Button, focus)).Item?.Key;
         groups.Children.Clear(); displayed.Clear();

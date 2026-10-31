@@ -54,7 +54,7 @@
        </StackPanel>
        <CheckBox Content="默认从此文件夹启动" IsChecked="{x:Bind ViewModel.Draft.Preferred, Mode=TwoWay}" />
        <CheckBox Content="通过 Steam 启动" IsChecked="{x:Bind ViewModel.Draft.UseSteam, Mode=TwoWay}" Visibility="{x:Bind ShowSteam(ViewModel.Draft.SteamAppId), Mode=OneWay}" />
-       <Expander x:Name="SaveFolderSection" Header="存档文件夹（可选）" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+       <views:SmoothExpander x:Name="SaveFolderSection" Header="存档文件夹（可选）" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
         <StackPanel Spacing="12">
          <TextBlock Text="记录存档位置，方便一键打开；此处不会复制或备份存档。" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
          <StackPanel Spacing="8">
@@ -69,8 +69,8 @@
          <TextBlock x:Name="SaveCandidates" TextWrapping="Wrap" Visibility="Collapsed" AutomationProperties.LiveSetting="Polite" />
          <StackPanel x:Name="SaveChoices" Spacing="8" Visibility="Collapsed" />
         </StackPanel>
-       </Expander>
-       <Expander x:Name="LaunchHelpersSection" Header="{x:Bind ViewModel.Draft.HelpersSummary, Mode=OneWay}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="GameLaunchOverrides">
+       </views:SmoothExpander>
+       <views:SmoothExpander x:Name="LaunchHelpersSection" Header="{x:Bind ViewModel.Draft.HelpersSummary, Mode=OneWay}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="GameLaunchOverrides">
         <StackPanel Spacing="12">
          <TextBlock x:Name="LaunchHelpersHeading" Text="仅在这个游戏文件夹需要不同的行为时更改；工具路径统一在全局设置中选择。" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
          <ComboBox Header="Locale Emulator · 日文转区" SelectedIndex="{x:Bind ViewModel.Draft.LocaleMode, Mode=TwoWay}" HorizontalAlignment="Stretch" AutomationProperties.AutomationId="GameLocaleMode"><ComboBoxItem Content="跟随全局" /><ComboBoxItem Content="仅此游戏开启" /><ComboBoxItem Content="仅此游戏关闭" /></ComboBox>
@@ -79,8 +79,8 @@
          <Button Content="全部恢复为跟随全局" Click="OnResetLaunchOverrides" HorizontalAlignment="Left" AutomationProperties.AutomationId="ResetGameLaunchOverrides" />
          <TextBlock Text="{x:Bind ViewModel.Draft.LegacyToolsNotice, Mode=OneWay}" Visibility="{x:Bind ShowText(ViewModel.Draft.LegacyToolsNotice), Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
         </StackPanel>
-       </Expander>
-       <Expander x:Name="AdvancedLaunchSection" Header="高级启动设置" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+       </views:SmoothExpander>
+       <views:SmoothExpander x:Name="AdvancedLaunchSection" Header="高级启动设置" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
         <StackPanel Spacing="12">
          <TextBlock Text="通常无需修改，仅在游戏或辅助工具有特殊要求时调整。" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
          <Grid x:Name="WorkingDirectoryInputGrid" ColumnSpacing="8">
@@ -96,7 +96,7 @@
          <ItemsControl ItemsSource="{x:Bind ViewModel.Draft.Arguments, Mode=OneWay}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="p:ArgumentDraft"><Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBox Text="{x:Bind Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" MaxLength="8192" AutomationProperties.Name="单项启动参数" /><Button Grid.Column="1" Tag="{x:Bind}" Click="OnRemoveArgument" Content="移除" AutomationProperties.Name="移除此启动参数" /></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
          <Button Click="OnArgument" Content="添加一项参数" />
         </StackPanel>
-       </Expander>
+       </views:SmoothExpander>
        <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8" MaximumItemWidth="10000"><Button x:Name="SaveInstallationButton" Click="OnSave" Style="{StaticResource AccentButtonStyle}" AutomationProperties.AutomationId="SaveInstallation" Content="保存设置" /><Button Click="OnCancel" Content="放弃修改" AutomationProperties.AutomationId="CancelInstallation" /></views:TagFlowPanel>
       </StackPanel>
      </Border>

@@ -43,7 +43,8 @@ internal sealed class WindowsProcessLifetimeScope(SafeFileHandle job) : IProcess
     }
     public void Dispose() => job.Dispose();
 
-    internal static (SafeProcessHandle Handle, int Pid, WindowsProcessLifetimeScope Scope) Start(string executable, IEnumerable<string> arguments, string cwd, WindowsCommandScript? script = null, bool highDpi = false)
+    internal static (SafeProcessHandle Handle, int Pid, WindowsProcessLifetimeScope Scope) Start(string executable, IEnumerable<string> arguments, string cwd, WindowsCommandScript? script = null, bool highDpi = false,
+        IReadOnlyDictionary<string, string>? companionEnvironment = null, Action<int, long>? beforeResume = null)
     {
         var job = CreateJobObject(IntPtr.Zero, null);
         if (job.IsInvalid) { job.Dispose(); throw new Win32Exception(); }
@@ -70,12 +71,29 @@ internal sealed class WindowsProcessLifetimeScope(SafeFileHandle job) : IProcess
                 var block = string.Join('\0', entries.Where(x => !x.StartsWith("__COMPAT_LAYER=", StringComparison.OrdinalIgnoreCase)).Append("__COMPAT_LAYER=HIGHDPIAWARE").Order(StringComparer.OrdinalIgnoreCase)) + "\0\0";
                 environment = Marshal.StringToHGlobalUni(block);
             }
+            if (companionEnvironment is not null)
+            {
+                var values = (script is null ? Environment.GetEnvironmentVariables().Cast<System.Collections.DictionaryEntry>().Select(x => x.Key + "=" + x.Value)
+                    : script.EnvironmentBlock.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+                    .Where(x => !companionEnvironment.Keys.Any(key => x.StartsWith(key + "=", StringComparison.OrdinalIgnoreCase))).ToList();
+                // Preserve the existing DPI intent while adding only companion-specific child variables.
+                if (highDpi) { values.RemoveAll(x => x.StartsWith("__COMPAT_LAYER=", StringComparison.OrdinalIgnoreCase)); values.Add("__COMPAT_LAYER=HIGHDPIAWARE"); }
+                values.AddRange(companionEnvironment.Select(x => x.Key + "=" + x.Value));
+                if (environment != IntPtr.Zero) Marshal.FreeHGlobal(environment);
+                environment = Marshal.StringToHGlobalUni(string.Join('\0', values.Order(StringComparer.OrdinalIgnoreCase)) + "\0\0");
+            }
             if (command.Length >= 32767) throw new LaunchValidationException(LaunchOutcome.LaunchFailed, UiText.Get("启动参数总长度超过 Windows 限制，未执行程序。"));
-            if (!CreateProcess(executable, command, IntPtr.Zero, IntPtr.Zero, false, 0x00080000 | (environment == IntPtr.Zero ? 0u : 0x400u), environment, cwd, ref startup, out var result)) throw new Win32Exception();
+            if (!CreateProcess(executable, command, IntPtr.Zero, IntPtr.Zero, false, 0x00080000 | (environment == IntPtr.Zero ? 0u : 0x400u) | (beforeResume is null ? 0u : 4u), environment, cwd, ref startup, out var result)) throw new Win32Exception();
             // All ownership transfers immediately after OS creation; no fallible image query here.
             using var thread = new SafeFileHandle(result.Thread, true);
             var handle = new SafeProcessHandle(result.Process, true);
             transferred = true;
+            if (beforeResume is not null)
+            {
+                try { if (GetProcessTimes(handle, out var creation, out _, out _, out _)) beforeResume(result.Pid, creation); }
+                catch (Exception) { /* The already-created game must resume even if the companion fails. */ }
+                finally { _ = ResumeThread(thread); }
+            }
             return (handle, result.Pid, new(job));
         }
         finally
@@ -87,6 +105,9 @@ internal sealed class WindowsProcessLifetimeScope(SafeFileHandle job) : IProcess
             if (!transferred) job.Dispose();
         }
     }
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern uint ResumeThread(SafeFileHandle thread);
+    [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetProcessTimes(SafeProcessHandle process, out long creation, out long exit, out long kernel, out long user);
 
     // Windows CRT argument encoding, never shell syntax. Tested through the real fixture argv.
     internal static string Quote(string value)

@@ -9,13 +9,13 @@ namespace TheOrder.WinUI.Views;
 // among full-episode playback links. Future sources supply the same plain model.
 internal sealed class WatchLinksView : StackPanel
 {
-    private readonly Expander section = new() { Header = "正版观看", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander section = new SmoothExpander() { Header = "正版观看", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel body = new() { Spacing = 12 };
     private readonly TextBlock caption = Text(13), warning = Text(13);
     private readonly TextBlock dataStatus = Text(13);
     private readonly TagFlowPanel cards = new() { HorizontalSpacing = 10, VerticalSpacing = 8, CenterInlineItems = false, MaximumItemWidth = 340 };
     private readonly StackPanel sourceBody = new() { Spacing = 10 };
-    private readonly Expander sources = new() { Header = "观看链接来源", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander sources = new SmoothExpander() { Header = "观看链接来源", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private AnimeWatchIdentity? identity; private WatchLink[] values = [];
     private WatchDataResult? mapping;
     private const WatchLinkSort sort = WatchLinkSort.BilibiliFirst; private bool disposed;

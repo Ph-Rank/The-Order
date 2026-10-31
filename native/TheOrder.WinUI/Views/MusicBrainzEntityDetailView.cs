@@ -169,7 +169,7 @@ public sealed class MusicBrainzEntityDetailView : Grid, IDisposable
     private void ShowMessage(string value) { message.Text = value; message.Visibility = Visible(value.Length > 0); }
     private static TextBlock Text(double size, string value = "") => new() { Text = value, FontSize = size, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
     private static HyperlinkButton Link(string value) => new() { Content = new TextBlock { Text = value, IsHitTestVisible = false }, Padding = new(0), HorizontalAlignment = HorizontalAlignment.Left };
-    private static Expander Section(string title) => new() { Header = title, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private static SmoothExpander Section(string title) => new() { Header = title, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private static Visibility Visible(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
     internal Task FollowForFixture(MusicBrainzReference reference) => FollowAsync(reference);
     internal void Cancel() => model?.Cancel();

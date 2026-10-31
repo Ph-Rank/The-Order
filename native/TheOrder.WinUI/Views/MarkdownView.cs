@@ -20,8 +20,17 @@ public sealed class MarkdownView : StackPanel, IImageHost
     public IRemoteCoverRegistry? Registry {get;set;}
     public Func<string,Task>? OpenLink {get;set;}
     private int nodes,images;
-    public MarkdownView(){Spacing=12;Loaded+=(_,_)=>Render();}
-    private void Render(){Children.Clear();nodes=images=0;try{Blocks(MarkdownContent.Parse(Text??""),this,0);}catch{Children.Clear();Children.Add(Plain(Text??""));}if((Text?.Length??0)>MarkdownContent.MaximumCharacters)Children.Add(Plain(UiText.Get("内容超过显示长度限制；原始文本已保留。")));}
+    private (string Text, IImagePipeline? Images, IRemoteCoverRegistry? Registry, Func<string,Task>? Link, ElementTheme Theme)? rendered;
+    internal int RenderCount { get; private set; }
+    public MarkdownView(){Spacing=12;Loaded+=(_,_)=>Render();ActualThemeChanged+=(_,_)=>Render();}
+    private void Render()
+    {
+        var key=(Text??"",Images,Registry,OpenLink,ActualTheme);
+        if(rendered==key)return;
+        rendered=key;RenderCount++;Children.Clear();nodes=images=0;
+        try{Blocks(MarkdownContent.Parse(Text??""),this,0);}catch{Children.Clear();Children.Add(Plain(Text??""));}
+        if((Text?.Length??0)>MarkdownContent.MaximumCharacters)Children.Add(Plain(UiText.Get("内容超过显示长度限制；原始文本已保留。")));
+    }
     private static TextBlock Plain(string text)=>new(){Text=text,TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true,FontSize=15};
     private void Blocks(ContainerBlock source,Panel target,int depth)
     {

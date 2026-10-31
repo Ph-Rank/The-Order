@@ -9,7 +9,8 @@ using TheOrder.Application;
 namespace TheOrder.Platform.Windows;
 
 public sealed partial class WindowsGameProcesses(IFilesystemIdentity filesystem, IProcessSnapshotSource? snapshots = null,
-    Func<int, IObservedProcess?>? openProcess = null, Func<PathObservation>? steamClient = null) : IGameProcessPlatform
+    Func<int, IObservedProcess?>? openProcess = null, Func<PathObservation>? steamClient = null,
+    IGameGuideLaunch? guides = null) : IGameProcessPlatform
 {
     public IObservedProcess Start(LaunchSnapshot snapshot, CancellationToken cancellation)
     {
@@ -64,9 +65,31 @@ public sealed partial class WindowsGameProcesses(IFilesystemIdentity filesystem,
                         observed = StartElevated(initialImage, arguments, cwd, script, startedAt);
                     else
                     {
-                        var created = WindowsProcessLifetimeScope.Start(LaunchExecutablePath(initialImage), script is null ? arguments : [], cwd, script, snapshot.Installation.Compatibility?.HighDpi == true);
+                        IGameGuideLaunchPlan? guide = null;
+                        try { guide = guides?.Prepare(snapshot); } catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException) { /* A companion cannot turn game launch into a failure. */ }
+                        (SafeProcessHandle Handle, int Pid, WindowsProcessLifetimeScope Scope) created;
+                        try
+                        {
+                            created = WindowsProcessLifetimeScope.Start(LaunchExecutablePath(initialImage), script is null ? arguments : [], cwd, script,
+                                snapshot.Installation.Compatibility?.HighDpi == true, guide?.Environment,
+                                guide is null ? null : guide.Attach);
+                        }
+                        catch { guide?.FailedBeforeCreation(); throw; }
                         observed = new Observed(created.Pid, created.Handle, filesystem, initialImage, startedAt, created.Scope);
                     }
+                }
+                if (snapshot.Installation.Compatibility?.UseSteam == true || snapshot.Installation.Compatibility?.Administrator == true)
+                {
+                    IGameGuideLaunchPlan? companion = null;
+                    try
+                    {
+                        companion = guides?.Prepare(snapshot);
+                        if (observed.Query().Identity is { } identity) companion?.AttachObserved(identity);
+                        // The OS process already exists. An unresolved launcher identity is not a
+                        // creation failure; the existing launch monitor may identify its game child later.
+                    }
+                    catch (Exception error) when (error is not OutOfMemoryException)
+                    { /* Creation succeeded. Keep the bounded companion session for the launch monitor's later game identity. */ }
                 }
                 // Scaling tools own no game session and never determine its lifetime.
                 if (snapshot.ScalingTool is { } scaling)

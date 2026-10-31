@@ -30,8 +30,8 @@ public sealed class RelatedMediaDetailView : Grid, IDisposable
     private readonly TagFlowPanel actions = new() { HorizontalSpacing = 8, VerticalSpacing = 6 };
     private readonly CoverPresenter picture = new() { Width = 136, Height = 182, PreserveEntireImage = true, ImageCornerRadius = 8, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
     private readonly Grid heading = new() { ColumnSpacing = 20 };
-    private readonly Expander sources = new() { Header = "资料来源", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
-    private readonly Expander sourceEvidence = new() { Header = "详细证据", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander sources = new SmoothExpander() { Header = "资料来源", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander sourceEvidence = new SmoothExpander() { Header = "详细证据", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly ScrollViewer scroll;
     private BangumiSubjectDetailsViewModel? model;
     private IRemoteCoverRegistry? registry;

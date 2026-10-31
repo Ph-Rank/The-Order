@@ -3,14 +3,14 @@
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:views="using:TheOrder.WinUI.Views"
  xmlns:l="using:TheOrder.WinUI.Localization"
- AutomationProperties.AutomationId="StatisticsPage">
+ AutomationProperties.AutomationId="StatisticsPage" SizeChanged="OnStatisticsViewportSizeChanged">
  <Page.Resources>
   <Style x:Key="StatisticsCard" TargetType="Border" BasedOn="{StaticResource SurfaceStyle}">
    <Setter Property="Padding" Value="20" /><Setter Property="CornerRadius" Value="10" />
   </Style>
  </Page.Resources>
- <ScrollViewer x:Name="StatisticsScroll" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-  <StackPanel x:Name="StatisticsBody" MaxWidth="1280" HorizontalAlignment="Stretch" Margin="24,16,24,32" Spacing="20" SizeChanged="OnStatisticsSizeChanged">
+ <ScrollViewer x:Name="StatisticsScroll" HorizontalContentAlignment="Left" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+  <StackPanel x:Name="StatisticsBody" MaxWidth="1280" HorizontalAlignment="Left" Margin="24,16,24,32" Spacing="20" SizeChanged="OnStatisticsSizeChanged">
    <StackPanel Spacing="6">
     <TextBlock Style="{StaticResource PageTitleStyle}" l:Localize.Text="游玩统计" />
     <TextBlock Style="{StaticResource SecondaryTextStyle}" l:Localize.Text="回顾投入，了解你的书架。" />
@@ -74,16 +74,16 @@
       <views:StatisticsTrendChart x:Name="WeekdayChart" Height="170" Bars="True" Accent="{ThemeResource AccentFillColorDefaultBrush}" Gridline="{ThemeResource DividerBrush}" LabelBrush="{ThemeResource TextSecondaryBrush}" AutomationProperties.AutomationId="StatisticsWeekdayChart" />
      </StackPanel>
     </Border>
-    <Expander x:Name="DailyDetails" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnDailyExpanding" AutomationProperties.AutomationId="StatisticsDailyDetails">
+    <views:SmoothExpander x:Name="DailyDetails" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnDailyExpanding" AutomationProperties.AutomationId="StatisticsDailyDetails">
      <StackPanel Spacing="12"><StackPanel x:Name="DailyRows" Spacing="8" /><Button x:Name="MoreDays" Click="OnMoreDays" HorizontalAlignment="Left" l:Localize.Content="显示更多" /></StackPanel>
-    </Expander>
-    <Expander Header="统计说明" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+    </views:SmoothExpander>
+    <views:SmoothExpander Header="统计说明" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
      <StackPanel Spacing="10">
       <TextBlock Style="{StaticResource SecondaryTextStyle}" l:Localize.Text="按本地日期汇总已结束且可归日的记录，包含尚未撤回的时长修正。正在进行或未完整结束的会话不会被猜测分配到某一天。" />
       <TextBlock x:Name="ProvenanceText" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
       <TextBlock Style="{StaticResource SecondaryTextStyle}" l:Localize.Text="书架进度采用你设置的状态，不按时长猜测通关；同一作品的多个安装不会重复计数。统计不上传个人游玩记录。" />
      </StackPanel>
-    </Expander>
+    </views:SmoothExpander>
    </StackPanel>
   </StackPanel>
  </ScrollViewer>

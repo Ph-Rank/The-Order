@@ -36,9 +36,18 @@ internal static class Program
         try
         {
             var directory = Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_DATA_DIR");
+#if PLAYGROUND_ISOLATED_CANDIDATE
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                MessageBox(IntPtr.Zero, "这是 Playground 的隔离候选。请通过同目录的启动试用或离线演示入口打开；不会打开正式书架。", "The Order · Playground", 0x40);
+                return 2;
+            }
+#endif
             // Existing Phase 1–5 raw synthetic fixtures remain an explicit tooling-only entry.
             var fixture = Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_FIXTURE_PROFILE") == "1";
-#if NATIVE_PRODUCTION_CANDIDATE
+#if PLAYGROUND_ISOLATED_CANDIDATE
+            const NativeProfileKind buildKind = NativeProfileKind.Test;
+#elif NATIVE_PRODUCTION_CANDIDATE
             const NativeProfileKind buildKind = NativeProfileKind.Production;
 #else
             const NativeProfileKind buildKind = NativeProfileKind.Development;
@@ -50,12 +59,18 @@ internal static class Program
             JumpActivation = RecentGameActivation.Parse(args);
             if (JumpActivation is { } jump)
             {
+#if PLAYGROUND_ISOLATED_CANDIDATE
+                if (jump.Kind != nameof(NativeProfileKind.Test)) throw new NativeProfileException("PlaygroundCandidateRequiresTest");
+#endif
                 if (fixture) throw new NativeProfileException("JumpActivationFixtureForbidden");
                 request = NativeProfilePaths.Select(buildKind, jump.Kind, jump.Root, jump.Kind == nameof(NativeProfileKind.Production))
                     with { ExpectedProfileId = jump.ProfileId, ExpectedStoreId = jump.StoreId };
                 var root = NativeProfilePaths.Validate(request);
                 if (!File.Exists(Path.Combine(root, NativeProfileStore.ManifestName))) throw new NativeProfileException("JumpProfileMissing");
             }
+#if PLAYGROUND_ISOLATED_CANDIDATE
+            if (request?.Kind != NativeProfileKind.Test || authorizeProduction) throw new NativeProfileException("PlaygroundCandidateRequiresTest");
+#endif
             if (request is not null && JumpActivation is null)
                 request = NativeChannelProfiles.Resolve(request, AppContext.BaseDirectory, () =>
                 {

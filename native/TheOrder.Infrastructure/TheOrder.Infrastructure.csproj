@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <PackageReference Include="LiteDB" Version="4.1.4" />
+    <PackageReference Include="ExcelDataReader" Version="3.8.0" />
+    <PackageReference Include="OpenMcdf" Version="3.3.0" />
     <!-- Managed binding only. Its packaged Windows engine cannot read Snappy SST
          blocks; ship the pinned, reproducibly built C API engine below. -->
     <PackageReference Include="LevelDB.Standard" Version="2.1.6.1" ExcludeAssets="native;build;buildTransitive" />

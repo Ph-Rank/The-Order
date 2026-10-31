@@ -9,11 +9,11 @@ namespace TheOrder.WinUI.Views;
 
 public sealed class GameVideoView : StackPanel, IDisposable
 {
-    private readonly Expander section = new() { Header = "宣传影像 / PV", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander section = new SmoothExpander() { Header = "宣传影像 / PV", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel candidates = new() { Spacing = 8 }, videos = new() { Spacing = 8 };
     private readonly TagFlowPanel identityActions = new() { HorizontalSpacing = 8, VerticalSpacing = 6 };
     private readonly StackPanel otherCandidates = new() { Spacing = 8 };
-    private readonly Expander otherVersions = new() { Header = "其他检索结果", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander otherVersions = new SmoothExpander() { Header = "其他检索结果", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly TextBlock status = Text(13);
     private readonly TextBox query = new() { PlaceholderText = "原名或别名", MaxLength = 200 };
     private readonly TextBox manual = new() { PlaceholderText = "HTTPS YouTube 视频地址", MaxLength = 500 };
@@ -32,7 +32,7 @@ public sealed class GameVideoView : StackPanel, IDisposable
         AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite);
         var searchRow = new Grid { ColumnSpacing = 8 }; searchRow.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); searchRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         searchRow.Children.Add(query); searchRow.Children.Add(search); Grid.SetColumn(search, 1);
-        var details = new Expander { Header = "影像选项", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        var details = new SmoothExpander { Header = "影像选项", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Content = new StackPanel { Spacing = 8, Children = { identityActions, searchRow, manual, add } } };
         var attribution = Text(12, "资料来源：IGDB · YouTube。数据库收录不等于官方发布；作品级影像不保证对应本地版本。"); attribution.Opacity = .7;
         section.Content = new StackPanel { Spacing = 10, Children = { status, candidates, otherVersions, videos, player,

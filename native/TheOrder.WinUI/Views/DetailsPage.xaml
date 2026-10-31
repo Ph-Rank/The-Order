@@ -60,7 +60,6 @@
          <TextBlock x:Name="HeroPlayText" Text="{x:Bind ViewModel.Draft.Source.Playtime, Mode=OneWay}" TextWrapping="Wrap" FontSize="13" Opacity=".86" AutomationProperties.AutomationId="HeroPlaySummary" />
          <TextBlock x:Name="LastPlayedText" FontSize="13" Opacity=".84" TextWrapping="Wrap" />
         </views:TagFlowPanel>
-        <TextBlock x:Name="PersonalLabelsText" FontSize="12" Opacity=".82" TextWrapping="Wrap" />
        </StackPanel>
        </Grid>
       </Border>
@@ -86,7 +85,7 @@
          <Button x:Name="RetryCatalog" HorizontalAlignment="Left" MinHeight="28" Padding="10,2" CornerRadius="6" Visibility="Collapsed" Click="OnRetryCatalog" l:Localize.Content="重试资料" />
         </views:TagFlowPanel>
         <StackPanel x:Name="CloudPersonalSection" Spacing="8" Visibility="Collapsed"><TextBlock Text="NextMoe 个人记录" Style="{StaticResource SectionTitleStyle}" /><TextBlock x:Name="CloudPersonalText" TextWrapping="Wrap" AutomationProperties.AutomationId="CloudPersonalFacts" /></StackPanel>
-        <views:CatalogContentView x:Name="RichCatalog">       <Expander x:Name="SourcesInfo" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalAlignment="Top" l:Localize.Header="资料与图片来源"><StackPanel Spacing="8"><TextBlock x:Name="ArtworkSourceText" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" /><ItemsControl x:Name="SourceLinks"><ItemsControl.ItemTemplate><DataTemplate x:DataType="views:DetailSourceLink"><HyperlinkButton Content="{x:Bind Title}" Tag="{x:Bind Url}" Click="OnSourceLink" HorizontalAlignment="Left" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></StackPanel></Expander>
+        <views:CatalogContentView x:Name="RichCatalog">       <views:SmoothExpander x:Name="SourcesInfo" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalAlignment="Top" l:Localize.Header="资料与图片来源"><StackPanel Spacing="8"><TextBlock x:Name="ArtworkSourceText" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" /><ItemsControl x:Name="SourceLinks"><ItemsControl.ItemTemplate><DataTemplate x:DataType="views:DetailSourceLink"><HyperlinkButton Content="{x:Bind Title}" Tag="{x:Bind Url}" Click="OnSourceLink" HorizontalAlignment="Left" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></StackPanel></views:SmoothExpander>
         <ContentControl x:Name="GameVideosHost" HorizontalContentAlignment="Stretch" IsTabStop="False" />
         </views:CatalogContentView>
         <views:BangumiRelatedView x:Name="BangumiRelated" />

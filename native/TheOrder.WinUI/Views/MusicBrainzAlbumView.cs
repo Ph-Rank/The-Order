@@ -34,17 +34,18 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
     private readonly Button search = Button("查找专辑");
     private readonly Button retryCover = Button("重试封面");
     private readonly Button addRelated = Button("添加相关发行版"), savePending = Button("保存为待核验"), restoreAutomatic = Button("恢复自动选择");
-    private readonly Expander userSelections = new() { Header = "我的关联与待核验选择", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander userSelections = new SmoothExpander() { Header = "我的关联与待核验选择", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly Grid searchRow = new() { ColumnSpacing = 8 };
     private readonly CreditColumnsPanel candidates = new();
     private readonly StackPanel discs = new() { Spacing = 12 }, personnel = new() { Spacing = 8 };
     private readonly StackPanel candidateSection = new() { Spacing = 12 }, tracksSection = new() { Spacing = 12 }, summarySection = new() { Spacing = 12 };
     private readonly TagFlowPanel actions = new() { HorizontalSpacing = 8, VerticalSpacing = 8 }, confirmActions = new() { HorizontalSpacing = 8, VerticalSpacing = 8 };
-    private readonly Expander credits = new() { Header = "制作人员", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
-    private readonly Expander sources = new() { Header = "资料来源", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
-    private readonly Expander raw = new() { Header = "关系说明与匹配依据", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander credits = new SmoothExpander() { Header = "制作人员", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander sources = new SmoothExpander() { Header = "资料来源", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander raw = new SmoothExpander() { Header = "关系说明与匹配依据", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel sourceBody = new() { Spacing = 8 }, rawBody = new() { Spacing = 8 };
     private readonly ScrollViewer scroll;
+    private readonly Dictionary<int, Action<int>> revealTrackBatches = [];
     private MusicAlbumViewModel? model;
     private IRemoteCoverRegistry? registry;
     private Func<string, Task>? bangumiLink;
@@ -287,7 +288,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
             { "Official" => "正式发行", "Pseudo-Release" => "曲目别名版本", "Bootleg" => "非官方发行", _ => candidate.Status }));
             if (evidence.HasConflict) { var warning = Text(13, "发行信息有差异，请核对后选择"); warning.Opacity = .8; card.Children.Add(warning); }
             if (model?.Match?.RejectedIds.Contains(candidate.Id) == true) card.Children.Add(Text(13, "已排除自动关联 · 可手动核对"));
-            card.Children.Add(new Expander { Header = "匹配依据", HorizontalAlignment = HorizontalAlignment.Stretch,
+            card.Children.Add(new SmoothExpander { Header = "匹配依据", HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Stretch, Content = Text(13, string.Join("\n", evidence.Evidence)) });
             var preview = Button("查看此发行版与曲目"); AutomationProperties.SetAutomationId(preview, "MusicEdition-" + candidate.Id);
             preview.Click += async (_, _) => { if (model is not null) await model.PreviewAsync(candidate.Id); }; card.Children.Add(preview);
@@ -296,7 +297,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
     }
     private void RenderDiscs(MusicBrainzAlbum? album)
     {
-        discs.Children.Clear(); personnel.Children.Clear(); credits.Visibility = Visibility.Collapsed;
+        discs.Children.Clear(); personnel.Children.Clear(); revealTrackBatches.Clear(); credits.Visibility = Visibility.Collapsed;
         if (album is null) return;
         if (album.Credits.Length > 0) personnel.Children.Add(MusicDetailFormatting.Credits(album.Credits, credit =>
         {
@@ -315,7 +316,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         foreach (var disc in album.Discs)
         {
             var digital = disc.Format == "Digital Media";
-            var expander = new Expander { Header = (digital ? $"曲目组 {disc.Position}" : $"碟 {disc.Position}") + (disc.Title.Length > 0 ? " · " + disc.Title : "")
+            var expander = new SmoothExpander { Header = (digital ? $"曲目组 {disc.Position}" : $"碟 {disc.Position}") + (disc.Title.Length > 0 ? " · " + disc.Title : "")
                 + $" · {(digital ? "数字发行" : disc.Format)} · {disc.Tracks.Length} 首", IsExpanded = disc.Position == 1,
                 HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
             AutomationProperties.SetAutomationId(expander, "MusicDisc-" + disc.Position);
@@ -323,11 +324,26 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
             void Populate()
             {
                 if (populated) return; populated = true;
-                // The page owns the only scrolling viewport. EffectiveViewport-based realization
-                // keeps long discs bounded without an inner list scrollbar or trapped wheel input.
-                var list = new ItemsRepeater { Layout = new StackLayout(), HorizontalAlignment = HorizontalAlignment.Stretch,
-                    ItemsSource = disc.Tracks.Select(x => new MusicTrackRow(x, entityView is not null ? OpenEntityAsync : null, disc.Position)).ToArray(), ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Application.Current.Resources["MusicTrackTemplate"] };
-                AutomationProperties.SetAutomationId(list, "MusicDiscTracks-" + disc.Position); expander.Content = list;
+                // A virtualizing StackLayout nested below a disc header revises its
+                // estimated height while scrolling, shifting both the following discs
+                // and ScrollViewer's anchor. Exact-height batches avoid that feedback.
+                var visible = new System.Collections.ObjectModel.ObservableCollection<MusicTrackRow>();
+                var list = new ItemsRepeater { Layout = new StableTrackLayout(), HorizontalAlignment = HorizontalAlignment.Stretch,
+                    ItemsSource = visible, ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Application.Current.Resources["MusicTrackTemplate"] };
+                AutomationProperties.SetAutomationId(list, "MusicDiscTracks-" + disc.Position);
+                var more = Button("继续显示曲目"); more.FontSize = 13;
+                AutomationProperties.SetAutomationId(more, "MusicTracksMore-" + disc.Position);
+                void Reveal(int minimum)
+                {
+                    int end = Math.Min(disc.Tracks.Length, Math.Max(visible.Count + 100, minimum));
+                    while (visible.Count < end) visible.Add(new(disc.Tracks[visible.Count], entityView is not null ? OpenEntityAsync : null, disc.Position));
+                    more.Content = $"继续显示曲目 · 已显示 {visible.Count} / {disc.Tracks.Length} 首";
+                    more.Visibility = Visible(visible.Count < disc.Tracks.Length);
+                }
+                revealTrackBatches[disc.Position] = Reveal;
+                more.Click += (_, _) => { var offset = scroll.VerticalOffset; Reveal(0); scroll.UpdateLayout(); scroll.ChangeView(null, offset, null, true); };
+                Reveal(0);
+                expander.Content = new StackPanel { Spacing = 8, Children = { list, more } };
             }
             expander.Expanding += (_, _) => Populate(); if (expander.IsExpanded) Populate(); discs.Children.Add(expander);
         }
@@ -471,11 +487,15 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         scroll.UpdateLayout(); scroll.ChangeView(null, target.TransformToVisual((UIElement)scroll.Content).TransformPoint(new(0, 0)).Y, null, true);
     }
     private MusicTrackRowView? fixtureTrack;
+    private static ItemsRepeater? TrackRepeater(Expander? disc) => disc?.Content as ItemsRepeater
+        ?? (disc?.Content as StackPanel)?.Children.OfType<ItemsRepeater>().SingleOrDefault();
     internal void TrackForFixture(int position)
     {
         TracksForFixture(1); scroll.UpdateLayout();
         var disc = discs.Children.OfType<Expander>().FirstOrDefault();
-        var element = (disc?.Content as ItemsRepeater)?.TryGetElement(position - 1);
+        if (TrackRepeater(disc)?.ItemsSource is System.Collections.ObjectModel.ObservableCollection<MusicTrackRow> rows && position > rows.Count)
+        { revealTrackBatches.GetValueOrDefault(1)?.Invoke(position); scroll.UpdateLayout(); }
+        var element = TrackRepeater(disc)?.TryGetElement(position - 1);
         if (element is Border { Child: MusicTrackRowView track })
         { fixtureTrack = track; track.ExpandForFixture(); track.StartBringIntoView(); }
     }
@@ -490,7 +510,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         discs = model?.Displayed?.Album.Discs.Select(x => new { x.Position, x.Title, x.Format, tracks = x.Tracks.Length,
             recordings = x.Tracks.Count(t => t.RecordingId is not null), works = x.Tracks.Sum(t => t.Works.Length), personnel = x.Tracks.Sum(t => t.Credits.Length) }).ToArray(),
         fromCache = model?.Displayed?.FromCache, stale = model?.Displayed?.IsStale, trackDetail = fixtureTrack?.Evidence,
-        trackRows = discs.Children.OfType<Expander>().Select(x => x.Content).OfType<ItemsRepeater>()
+        trackRows = discs.Children.OfType<Expander>().Select(TrackRepeater).OfType<ItemsRepeater>()
             .SelectMany(x => Enumerable.Range(0, Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(x))
                 .Select(n => (Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(x, n) as Border)?.Child).OfType<MusicTrackRowView>())
             .Select(x => x.Evidence).ToArray(),
@@ -498,7 +518,7 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
         cover.SourceStatus, cover.HasImage, coverUrl = model?.Displayed?.Album.CoverUrl, width = ActualWidth, titleWidth = title.ActualWidth,
         scrollOffset = scroll.VerticalOffset, visibleDiscs = discs.Children.OfType<Expander>().Where(x => x.IsExpanded).Select(x => AutomationProperties.GetAutomationId(x)).ToArray(),
         entityActive, entity = entityActive ? entityView?.Evidence : null,
-        coverFallback, trackScrollers = CountScrollers(tracksSection), realizedTracks = discs.Children.OfType<Expander>().Select(x => x.Content).OfType<ItemsRepeater>()
+        coverFallback, trackScrollers = CountScrollers(tracksSection), realizedTracks = discs.Children.OfType<Expander>().Select(TrackRepeater).OfType<ItemsRepeater>()
             .Select(x => new { count = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(x),
                 rowHeights = Enumerable.Range(0, Math.Min(5, Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(x)))
                     .Select(n => (Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(x, n) as FrameworkElement)?.ActualHeight).ToArray() }).ToArray()

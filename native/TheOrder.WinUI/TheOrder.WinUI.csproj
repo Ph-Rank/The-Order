@@ -8,6 +8,7 @@
     <UseWinUI>true</UseWinUI>
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <DefineConstants Condition="'$(NativeProductionCandidate)' == 'true'">$(DefineConstants);NATIVE_PRODUCTION_CANDIDATE</DefineConstants>
+    <DefineConstants Condition="'$(PlaygroundCandidate)' == 'true'">$(DefineConstants);PLAYGROUND_ISOLATED_CANDIDATE</DefineConstants>
     <DefineConstants Condition="'$(NativeMultilingualEnabled)' == 'true'">$(DefineConstants);NATIVE_MULTILINGUAL_ENABLED</DefineConstants>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
@@ -18,10 +19,12 @@
     <ApplicationIcon>Assets/Brand.Light.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="Assets/GuideGraph/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Update="Assets/Brand.Light.ico;Assets/Brand.Dark.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Update="Assets/Brand.png;Assets/Brand.Light.png;Assets/Brand.Dark.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Update="Assets/KunGal.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../../LICENSE" Link="LICENSE-TheOrder.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../TheOrder.GuideOverlay/payload/**/*" Exclude="../TheOrder.GuideOverlay/payload/**/*.lib;../TheOrder.GuideOverlay/payload/**/*.exp" Link="guide-overlay/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../scripts/update-worker.ps1" Link="update-worker.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../../THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../TheOrder.Infrastructure/WatchData/NOTICE.txt" Link="NOTICE-Bangumi-Watch-Data.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
@@ -35,6 +38,8 @@
     <Content Include="../../data/LICENSE-PotatoDBMapper.txt" Link="data/LICENSE-PotatoDBMapper.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../licenses/UNICODE-LICENSE.txt" Link="LICENSE-Unicode.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../licenses/MARKDIG-LICENSE.txt" Link="LICENSE-Markdig.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../licenses/JINT-LICENSE.txt;../licenses/ACORNIMA-LICENSE.txt" Link="licenses/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../licenses/OPENMCDF-MPL-2.0.txt;../licenses/EXCELDATAREADER-MIT.txt" Link="licenses/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../licenses/LITEDB-LICENSE.txt;../licenses/LEVELDB-LICENSE.txt;../licenses/SNAPPY-LICENSE.txt;../licenses/REINAMANAGER-LICENSE.txt;../licenses/LUNABOX-LICENSE.txt" Link="licenses/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
@@ -48,7 +53,11 @@
        this unpackaged dotnet publish pipeline. Declare publish inputs explicitly;
        never repair a shipped folder by manually copying files after publication. -->
   <Target Name="RequireNativePublishIdentity" BeforeTargets="PrepareForPublish">
-    <Error Condition="'$(NativeProductionCandidate)' != 'true'" Text="Publish requires -p:NativeProductionCandidate=true. Its real production path remains authorization-guarded." />
+    <Error Condition="'$(NativeProductionCandidate)' != 'true' And '$(PlaygroundCandidate)' != 'true'" Text="Publish requires an explicit NativeProductionCandidate or isolated PlaygroundCandidate build identity." />
+    <Error Condition="'$(NativeProductionCandidate)' == 'true' And '$(PlaygroundCandidate)' == 'true'" Text="Production and isolated Playground build identities cannot be combined." />
+  </Target>
+  <Target Name="RequireGuideOverlayPayload" BeforeTargets="PrepareForPublish">
+    <Error Condition="!Exists('../TheOrder.GuideOverlay/payload/x64/TheOrder.GuideRuntime.dll') Or !Exists('../TheOrder.GuideOverlay/payload/x86/TheOrder.GuideRuntime.dll') Or !Exists('../TheOrder.GuideOverlay/payload/TheOrder.Guide.addon64') Or !Exists('../TheOrder.GuideOverlay/payload/TheOrder.Guide.addon32') Or !Exists('../TheOrder.GuideOverlay/payload/x64/TheOrder.GuideHost.exe') Or !Exists('../TheOrder.GuideOverlay/payload/x86/TheOrder.GuideHost.exe') Or !Exists('../TheOrder.GuideOverlay/payload/payload.json')" Text="Build and validate the pinned guide overlay payload before publishing." />
   </Target>
   <Target Name="IncludeNativeXamlResources" AfterTargets="ComputeFilesToPublish">
     <Error Condition="!Exists('$(TargetDir)$(AssemblyName).pri')" Text="Missing generated application PRI; refusing an incomplete native publish." />

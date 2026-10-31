@@ -403,7 +403,7 @@ public sealed class AniListDetailView : Grid, IDisposable
             foreach (var itemEvidence in AniListMatching.Assess(source, media).Evidence) raw.Children.Add(Text(13, itemEvidence));
             if (evidence.Length > 0) raw.Children.Add(Text(13, "原始关系 · " + evidence));
             foreach (var url in source.ExternalLinks) raw.Children.Add(Text(13, "外部编号证据 · " + url));
-            sourceBody.Children.Add(new Expander { Header = "对应证据", HorizontalAlignment = HorizontalAlignment.Stretch, Content = raw });
+            sourceBody.Children.Add(new SmoothExpander { Header = "对应证据", HorizontalAlignment = HorizontalAlignment.Stretch, Content = raw });
         }
         sourceBody.Children.Add(refresh);
     }
@@ -514,7 +514,7 @@ public sealed class AniListDetailView : Grid, IDisposable
     private static TextBlock Text(double size, string text = "") => new() { FontSize = size, Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
     private static TagFlowPanel Flow(double max = 400) => new() { HorizontalSpacing = 12, VerticalSpacing = 10, MaximumItemWidth = max, CenterInlineItems = false };
     private static Button Button(string content) => new() { Content = content, CornerRadius = new(6), MinHeight = 32, HorizontalAlignment = HorizontalAlignment.Left };
-    private static Expander Expand(string heading) => new() { Header = heading, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private static SmoothExpander Expand(string heading) => new() { Header = heading, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private static string Format(string value) => value switch { "TV" => "电视动画", "TV_SHORT" => "电视短篇", "MOVIE" => "剧场版", "OVA" => "OVA", "ONA" => "网络动画", "SPECIAL" => "特别篇", "MUSIC" => "音乐影像", "MANGA" => "漫画", "NOVEL" => "小说", "ONE_SHOT" => "短篇漫画", _ => value };
     private static string Status(string value, bool anime) => value switch { "FINISHED" => "已完结", "RELEASING" => anime ? "播出中" : "连载中", "NOT_YET_RELEASED" => anime ? "尚未播出" : "尚未发行", "CANCELLED" => "已取消", "HIATUS" => "暂停", _ => value };
     private static string Role(string value) => value switch { "MAIN" => "主要角色", "SUPPORTING" => "配角", "BACKGROUND" => "背景角色", _ => value };

@@ -213,8 +213,63 @@ public sealed partial class MainWindow
         }
         if (action == "p1Tab")
         {
-            var pivot = P1Elements(p1Dialog).OfType<Pivot>().Single(); var index = request.GetProperty("value").GetInt32();
-            if (index < 0 || index >= pivot.Items.Count) throw new InvalidDataException(); pivot.SelectedIndex = index; await Task.Delay(350);
+            var index = request.GetProperty("value").GetInt32();
+            if (P1Elements(p1Dialog).OfType<Views.GameToolsView>().SingleOrDefault() is { } tools) tools.SelectIndex(index);
+            else { var pivot = P1Elements(p1Dialog).OfType<Pivot>().Single(); if (index < 0 || index >= pivot.Items.Count) throw new InvalidDataException(); pivot.SelectedIndex = index; }
+            await Task.Delay(350);
+        }
+        if (action == "p1Shortcut")
+        {
+            var input = P1Elements(p1Dialog).OfType<Views.GuideShortcutInput>().Single();
+            var value = request.GetProperty("value").GetString();
+            if (value == "record")
+            {
+                int key = request.GetProperty("key").GetInt32(), modifiers = request.GetProperty("modifiers").GetInt32();
+                if (key is not (0x4a or 0x4b or 0x77 or 0x20) || modifiers is < 0 or > 7) throw new InvalidDataException("Bounded synthetic shortcut required");
+                input.BeginRecording(); input.Record(key, modifiers);
+            }
+            else if (value == "capture") input.BeginRecording();
+            else if (value != "evidence") throw new InvalidDataException();
+            await File.AppendAllTextAsync(Path.Combine(fixtureDirectory!, "shortcut-evidence.jsonl"), JsonSerializer.Serialize(input.Evidence) + "\n");
+        }
+        if (action == "p1LocalView")
+        {
+            string channel = request.GetProperty("channel").GetString() ?? ""; if (channel is not ("guide" or "notes")) throw new InvalidDataException();
+            var local = P1Elements(p1Dialog).OfType<Views.LocalDocumentReaderView>().Single(x => AutomationProperties.GetAutomationId(x) == (channel == "guide" ? "LocalGuideReader" : "LocalNotesReader"));
+            switch (request.GetProperty("value").GetString())
+            {
+                case "page": await local.PageForTestAsync(request.GetProperty("index").GetInt32()); break;
+                case "file": await local.FileForTestAsync(request.GetProperty("index").GetInt32()); break;
+                case "scroll": local.ScrollForTest((float)request.GetProperty("progress").GetDouble()); break;
+                case "remember": local.Remember(); break;
+                default: throw new InvalidDataException();
+            }
+            await Task.Delay(150);
+        }
+        if (action == "p1GuideView")
+        {
+            var reader = P1Elements(p1Dialog).OfType<Views.WalkthroughReaderView>().Single();
+            switch (request.GetProperty("value").GetString())
+            {
+                case "graph": reader.SetGraphForFixture(true); break;
+                case "body": reader.SetGraphForFixture(false); break;
+                case "original": reader.SetOriginalForFixture(request.GetProperty("enabled").GetBoolean()); break;
+                case "end": await reader.EndForFixtureAsync(); break;
+                case "flowProbe": await reader.ProbeGraphForFixtureAsync(); break;
+                case "flowPicker": await reader.ProbeGraphForFixtureAsync("picker", request.GetProperty("id").GetString()); break;
+                case "flowInspect": case "flowRead": case "flowFilter": case "flowCollections": case "flowFit":
+                    await reader.ProbeGraphForFixtureAsync(request.GetProperty("value").GetString() switch { "flowRead"=>"read", "flowFilter"=>"filter", "flowCollections"=>"collections", "flowFit"=>"fit", _=>"inspect" },request.GetProperty("id").GetString()); break;
+                case "flowCapture":
+                    string graphCaptureName = request.GetProperty("id").GetString() ?? "";
+                    if (graphCaptureName.Length is < 1 or > 70 || graphCaptureName.Any(c=>!char.IsAsciiLetterOrDigit(c) && c!='-')) throw new InvalidDataException();
+                    await reader.CaptureGraphForFixtureAsync(Path.Combine(fixtureDirectory,graphCaptureName+".png")); break;
+                case "route":
+                    int index = request.GetProperty("index").GetInt32(); var document = reader.Model.Document ?? throw new InvalidOperationException();
+                    if (index < 0 || index >= document.Segments.Length) throw new InvalidDataException();
+                    reader.SetGraphForFixture(true); reader.InvokeRouteForFixture(document.Segments[index].Key); break;
+                default: throw new InvalidDataException();
+            }
+            await Task.Delay(200);
         }
         if (action == "p1Statistics")
         {
@@ -231,6 +286,9 @@ public sealed partial class MainWindow
         }
         if (action == "p1Fill")
         {
+            if (request.GetProperty("value").GetString() == "manual"
+                && P1Elements(p1Dialog).OfType<Expander>().SingleOrDefault(x => AutomationProperties.GetAutomationId(x) == "ManualPlaytimeEditor") is { } correction)
+            { correction.IsExpanded = true; await Task.Delay(400); }
             var controls = P1Elements(p1Dialog).ToArray();
             switch (request.GetProperty("value").GetString())
             {
@@ -253,7 +311,8 @@ public sealed partial class MainWindow
         if (action == "p1Invoke")
         {
             var id = request.GetProperty("value").GetString() ?? "";
-            if (id is not ("SaveManualPlaytime" or "PreviewMetadataSource" or "ApplyMetadataSource" or "ScanLibrarySources" or "IgnoreAllSourceCandidates")
+            if (id is not ("SaveManualPlaytime" or "PreviewMetadataSource" or "ApplyMetadataSource" or "ScanLibrarySources" or "IgnoreAllSourceCandidates" or "WalkthroughRead"
+                or "SaveGuideOverlaySettings" or "CheckGuideOverlayShortcut" or "ResetGuideShortcut")
                 && !id.StartsWith("RestoreIgnored:", StringComparison.Ordinal)
                 && !id.StartsWith("UndoManual:", StringComparison.Ordinal) && id is not ("RemoveSource:bangumi" or "RemoveSource:vndb")) throw new InvalidDataException();
             var button = P1Elements(p1Dialog).OfType<Button>().Single(b => AutomationProperties.GetAutomationId(b) == id);
@@ -276,13 +335,16 @@ public sealed partial class MainWindow
         }).ToArray();
         await File.WriteAllTextAsync(Path.Combine(fixtureDirectory, "p1-evidence.json"), JsonSerializer.Serialize(new
         {
-            dialog = p1Dialog?.Title, loaded = p1Dialog?.IsLoaded, elements,
+            dialog = p1Dialog?.Title is TextBlock title ? title.Text : p1Dialog?.Title, loaded = p1Dialog?.IsLoaded, elements,
+            tools = P1Elements(p1Dialog).OfType<Views.GameToolsView>().SingleOrDefault()?.Evidence,
+            guide = P1Elements(p1Dialog).OfType<Views.WalkthroughReaderView>().SingleOrDefault()?.LayoutForFixture(),
             entries = extras.Snapshot?.Entries.Length, candidates = sources.Candidates.Length, roots = sources.Sources.Length,
             notifications = libraryPage.NotificationEvidenceFixture(), ignored = sources.Sources.Sum(s => s.IgnoredCandidates.Length),
             sourceSettings = sources.Sources.Select(s => new { s.Id, kind = s.Kind.ToString(), s.ShowUnconfirmedSteam, ignored = s.IgnoredCandidates.Length }),
             sourceDiscovery = files.IsSourceDiscovery, importCandidates = files.Candidates.Count, importSelection = files.SelectedImportCount,
             installationDraft = files.Draft is null ? null : new { files.Draft.SaveFolder, files.Draft.MuteInBackground, files.Draft.UseSteam },
             stats = PlaytimeStatistics.Build(extras.Snapshot?.Entries ?? [], TimeZoneInfo.Local),
+            localReaders = P1Elements(p1Dialog).OfType<Views.LocalDocumentReaderView>().Select(v => new { id = AutomationProperties.GetAutomationId(v), reading = v.Evidence }).ToArray(),
             recentShellReady, recentShellFailure,
             testingOnly = true, productionAccess = false
         }));

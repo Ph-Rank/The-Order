@@ -30,8 +30,8 @@
     <TextBlock Style="{StaticResource PageTitleStyle}" l:Localize.Text="设置" />
     <TextBlock x:Name="SettingsVersion" Grid.Column="1" Style="{StaticResource MetadataTextStyle}" Text="{x:Bind AppVersion}" VerticalAlignment="Center" AutomationProperties.AutomationId="AppVersion" IsTextSelectionEnabled="True" />
    </Grid>
-   <Expander x:Name="AppearanceGroup" Style="{StaticResource SettingsGroupStyle}" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnSettingsGroupExpanding" AutomationProperties.AutomationId="SettingsAppearanceGroup" l:Localize.Name="外观与语言">
-    <Expander.Header>
+   <views:SmoothExpander x:Name="AppearanceGroup" Style="{StaticResource SettingsGroupStyle}" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnSettingsGroupExpanding" AutomationProperties.AutomationId="SettingsAppearanceGroup" l:Localize.Name="外观与语言">
+    <views:SmoothExpander.Header>
      <Grid ColumnSpacing="14" MinHeight="74" Padding="0,10">
       <Grid.ColumnDefinitions><ColumnDefinition Width="40" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
       <Border Style="{StaticResource SettingsIconStyle}" IsHitTestVisible="False"><FontIcon Glyph="&#xE790;" FontSize="20" /></Border>
@@ -40,7 +40,7 @@
        <TextBlock l:Localize.Text="主题、材质效果与资料语言" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
       </StackPanel>
      </Grid>
-    </Expander.Header>
+    </views:SmoothExpander.Header>
     <StackPanel Spacing="20" Padding="0,0,0,4">
     <StackPanel Spacing="16">
      <StackPanel x:Name="LanguageOptions" Spacing="8" Visibility="Collapsed">
@@ -55,11 +55,13 @@
      <ComboBox x:Name="ThemeChoice" MaxWidth="400" Width="400" HorizontalAlignment="Left" SelectionChanged="OnAppearance" AutomationProperties.AutomationId="ThemeChoice" l:Localize.Header="外观主题" l:Localize.Name="外观主题"><ComboBoxItem l:Localize.Content="跟随系统" /><ComboBoxItem l:Localize.Content="浅色" /><ComboBoxItem l:Localize.Content="深色" /></ComboBox>
      <ComboBox x:Name="MaterialChoice" MaxWidth="400" Width="400" HorizontalAlignment="Left" SelectionChanged="OnMaterialMode" AutomationProperties.AutomationId="MaterialChoice" l:Localize.Header="材质效果"><ComboBoxItem l:Localize.Content="自动" /><ComboBoxItem l:Localize.Content="日常玻璃" /><ComboBoxItem l:Localize.Content="标准" /></ComboBox>
      <TextBlock x:Name="MaterialError" TextWrapping="Wrap" Visibility="Collapsed" Foreground="{ThemeResource WarningTextBrush}" AutomationProperties.LiveSetting="Polite" />
+     <CheckBox x:Name="PlaygroundEntryChoice" Content="显示对话入口" IsChecked="True" Click="OnPlaygroundEntry" AutomationProperties.AutomationId="ShowPlaygroundNavigation" />
+     <TextBlock x:Name="PlaygroundEntryNotice" Text="对话为可选功能；连接、授权和关闭功能均在对话页内设置。" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
     </StackPanel>
     </StackPanel>
-   </Expander>
-   <Expander x:Name="LaunchGroup" Style="{StaticResource SettingsGroupStyle}" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnSettingsGroupExpanding" AutomationProperties.AutomationId="SettingsLaunchGroup" l:Localize.Name="游戏启动">
-    <Expander.Header>
+   </views:SmoothExpander>
+   <views:SmoothExpander x:Name="LaunchGroup" Style="{StaticResource SettingsGroupStyle}" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnSettingsGroupExpanding" AutomationProperties.AutomationId="SettingsLaunchGroup" l:Localize.Name="游戏启动">
+    <views:SmoothExpander.Header>
      <Grid ColumnSpacing="14" MinHeight="74" Padding="0,10">
       <Grid.ColumnDefinitions><ColumnDefinition Width="40" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
       <Border Style="{StaticResource SettingsIconStyle}" IsHitTestVisible="False"><FontIcon Glyph="&#xE7FC;" FontSize="20" /></Border>
@@ -68,24 +70,24 @@
        <TextBlock l:Localize.Text="默认启动行为与辅助工具" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
       </StackPanel>
      </Grid>
-    </Expander.Header>
+    </views:SmoothExpander.Header>
     <StackPanel Spacing="20" Padding="0,0,0,4">
     <StackPanel x:Name="LaunchDefaultsSection" Spacing="16" AutomationProperties.AutomationId="GlobalLaunchSettings">
      <TextBlock Text="为跟随全局设置的游戏选择默认行为；工具路径只需在这里设置一次。" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
      <StackPanel Spacing="8">
       <ToggleSwitch IsEnabled="{x:Bind LaunchDefaults.CanChange, Mode=OneWay}" Header="Locale Emulator · 日文转区" IsOn="{x:Bind LaunchDefaults.LocaleEmulatorEnabled, Mode=TwoWay}" OnContent="默认开启" OffContent="默认关闭" AutomationProperties.AutomationId="GlobalLocaleEnabled" />
-      <Expander x:Name="GlobalLocaleToolSection" Header="Locale Emulator 工具位置" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="GlobalLocaleToolSection"><StackPanel Spacing="8">
+      <views:SmoothExpander x:Name="GlobalLocaleToolSection" Header="Locale Emulator 工具位置" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="GlobalLocaleToolSection"><StackPanel Spacing="8">
       <TextBox IsEnabled="{x:Bind LaunchDefaults.CanChange, Mode=OneWay}" Header="LEProc.exe 路径" PlaceholderText="选择已安装的 Locale Emulator" Text="{x:Bind LaunchDefaults.LocaleEmulatorPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" MaxLength="32768" AutomationProperties.AutomationId="GlobalLocalePath" />
       <Button IsEnabled="{x:Bind LaunchDefaults.CanChange, Mode=OneWay}" Content="选择 LEProc.exe" Click="OnChooseGlobalLocale" HorizontalAlignment="Left" />
-      </StackPanel></Expander>
+      </StackPanel></views:SmoothExpander>
      </StackPanel>
      <Border Height="1" Background="{ThemeResource DividerBrush}" />
      <StackPanel Spacing="8">
       <ToggleSwitch IsEnabled="{x:Bind LaunchDefaults.CanChange, Mode=OneWay}" Header="Magpie · 窗口缩放" IsOn="{x:Bind LaunchDefaults.MagpieEnabled, Mode=TwoWay}" OnContent="默认开启" OffContent="默认关闭" AutomationProperties.AutomationId="GlobalMagpieEnabled" />
-      <Expander x:Name="GlobalMagpieToolSection" Header="Magpie 工具位置" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="GlobalMagpieToolSection"><StackPanel Spacing="8">
+      <views:SmoothExpander x:Name="GlobalMagpieToolSection" Header="Magpie 工具位置" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="GlobalMagpieToolSection"><StackPanel Spacing="8">
       <TextBox IsEnabled="{x:Bind LaunchDefaults.CanChange, Mode=OneWay}" Header="Magpie.exe 路径" PlaceholderText="选择已安装的 Magpie" Text="{x:Bind LaunchDefaults.MagpiePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" MaxLength="32768" AutomationProperties.AutomationId="GlobalMagpiePath" />
       <Button IsEnabled="{x:Bind LaunchDefaults.CanChange, Mode=OneWay}" Content="选择 Magpie.exe" Click="OnChooseGlobalMagpie" HorizontalAlignment="Left" />
-      </StackPanel></Expander>
+      </StackPanel></views:SmoothExpander>
       <TextBlock Text="启动游戏时打开 Magpie；缩放模式和快捷键在 Magpie 中设置。" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
      </StackPanel>
      <Border Height="1" Background="{ThemeResource DividerBrush}" />
@@ -100,9 +102,9 @@
      <TextBlock Text="{x:Bind LaunchDefaults.Message, Mode=OneWay}" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="GlobalLaunchState" />
     </StackPanel>
     </StackPanel>
-   </Expander>
-   <Expander x:Name="SourcesGroup" Style="{StaticResource SettingsGroupStyle}" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnSettingsGroupExpanding" AutomationProperties.AutomationId="SettingsSourcesGroup" l:Localize.Name="资料与账号">
-    <Expander.Header>
+   </views:SmoothExpander>
+   <views:SmoothExpander x:Name="SourcesGroup" Style="{StaticResource SettingsGroupStyle}" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnSettingsGroupExpanding" AutomationProperties.AutomationId="SettingsSourcesGroup" l:Localize.Name="资料与账号">
+    <views:SmoothExpander.Header>
      <Grid ColumnSpacing="14" MinHeight="74" Padding="0,10">
       <Grid.ColumnDefinitions><ColumnDefinition Width="40" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
       <Border Style="{StaticResource SettingsIconStyle}" IsHitTestVisible="False"><FontIcon Glyph="&#xE774;" FontSize="20" /></Border>
@@ -111,7 +113,7 @@
        <TextBlock l:Localize.Text="NextMoe、番组计划与内容显示" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
       </StackPanel>
      </Grid>
-    </Expander.Header>
+    </views:SmoothExpander.Header>
     <StackPanel Spacing="20" Padding="0,0,0,4">
     <StackPanel x:Name="NextMoeSection" Spacing="12">
      <TextBlock FontSize="16" FontWeight="SemiBold" l:Localize.Text="在线目录 · NextMoe" />
@@ -124,7 +126,7 @@
      <Border Height="1" Background="{ThemeResource DividerBrush}" Margin="0,2" />
      <ToggleSwitch x:Name="NsfwSwitch" Toggled="OnNsfw" AutomationProperties.AutomationId="CatalogNsfw" l:Localize.Header="显示 NSFW 内容" l:Localize.OnContent="显示" l:Localize.OffContent="隐藏" l:Localize.Name="显示 NSFW 内容" />
      <TextBlock Text="{x:Bind OperationalMessage(Browsing.Message), Mode=OneWay}" Visibility="{x:Bind VisibleOperationalMessage(Browsing.Message), Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.AutomationId="CatalogBrowseState" AutomationProperties.LiveSetting="Polite" />
-     <Expander x:Name="ApiKeyPanel" Header="高级 · 自定义 API Key" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnApiKeyPanelExpanding" SizeChanged="OnSettingsSectionSizeChanged"><StackPanel Spacing="12">
+     <views:SmoothExpander x:Name="ApiKeyPanel" Header="高级 · 自定义 API Key" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnApiKeyPanelExpanding" SizeChanged="OnSettingsSectionSizeChanged"><StackPanel Spacing="12">
       <HyperlinkButton Content="获取 API Key" NavigateUri="https://developer.nextmoe.dev/" HorizontalAlignment="Left" />
       <StackPanel x:Name="CredentialEditor" Spacing="12" Visibility="Collapsed" SizeChanged="OnSettingsSectionSizeChanged">
        <PasswordBox x:Name="ApiCredential" PasswordRevealMode="Hidden" MaxLength="4096" MaxWidth="480" Width="480" HorizontalAlignment="Left" Loaded="OnSettingsControlLoaded" AutomationProperties.AutomationId="OnlineCredential" l:Localize.Header="当前资料的 API 密钥" l:Localize.Name="当前资料的在线目录 API 密钥" />
@@ -132,8 +134,8 @@
       </StackPanel>
       <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8"><Button x:Name="ChangeCredentialButton" Click="OnChangeCredential" Visibility="Collapsed" l:Localize.Content="更换密钥" /><Button x:Name="RemoveCredentialButton" Click="OnClearCredential" Visibility="Collapsed" l:Localize.Content="移除密钥" /></views:TagFlowPanel>
       <TextBlock Text="{x:Bind Online.CredentialMessage, Mode=OneWay}" Visibility="{x:Bind VisibleText(Online.CredentialMessage), Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
-     </StackPanel></Expander>
-     <Expander x:Name="SyncSettingsGroup" Header="个人数据同步" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnSettingsGroupExpanding" Visibility="{x:Bind Visible(NextMoe.IsAccount), Mode=OneWay}" AutomationProperties.AutomationId="SettingsPersonalSync">
+     </StackPanel></views:SmoothExpander>
+     <views:SmoothExpander x:Name="SyncSettingsGroup" Header="个人数据同步" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnSettingsGroupExpanding" Visibility="{x:Bind Visible(NextMoe.IsAccount), Mode=OneWay}" AutomationProperties.AutomationId="SettingsPersonalSync">
      <StackPanel x:Name="PersonalSyncPanel" Spacing="12" Visibility="Collapsed" SizeChanged="OnSettingsSectionSizeChanged" AutomationProperties.AutomationId="NextMoePersonalSync">
       <ComboBox Header="游玩时长" SelectedIndex="{x:Bind NextMoe.TimeDirection, Mode=TwoWay}" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" MaxWidth="400" Width="400" HorizontalAlignment="Left" AutomationProperties.AutomationId="SyncPlaytime"><ComboBoxItem Content="关闭" /><ComboBoxItem Content="从云端导入" /><ComboBoxItem Content="上传到云端" /><ComboBoxItem Content="双向同步" /></ComboBox>
       <ComboBox Header="游玩状态" SelectedIndex="{x:Bind NextMoe.StateDirection, Mode=TwoWay}" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" MaxWidth="400" Width="400" HorizontalAlignment="Left" AutomationProperties.AutomationId="SyncState"><ComboBoxItem Content="关闭" /><ComboBoxItem Content="从云端导入" /><ComboBoxItem Content="上传到云端" /><ComboBoxItem Content="双向同步" /></ComboBox>
@@ -155,7 +157,7 @@
       <Button x:Name="SyncApplyButton" Content="确认同步所选项目" Click="OnApplySync" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" HorizontalAlignment="Left" Style="{StaticResource AccentButtonStyle}" AutomationProperties.AutomationId="SyncApply" />
       <ProgressBar Value="{x:Bind NextMoe.Progress, Mode=OneWay}" Visibility="{x:Bind Visible(NextMoe.Busy), Mode=OneWay}" Maximum="100" Minimum="0" />
      </StackPanel>
-     </Expander>
+     </views:SmoothExpander>
      <TextBlock Text="{x:Bind NextMoe.Message, Mode=OneWay}" Visibility="{x:Bind VisibleText(NextMoe.Message), Mode=OneWay}" TextWrapping="Wrap" Style="{StaticResource SecondaryTextStyle}" AutomationProperties.AutomationId="NextMoeSyncState" AutomationProperties.LiveSetting="Polite" />
     </StackPanel>
      <Border Height="1" Background="{ThemeResource DividerBrush}" Margin="0,4" />
@@ -181,9 +183,9 @@
      <TextBlock Text="{x:Bind Bangumi.Message, Mode=OneWay}" TextWrapping="Wrap" Visibility="{x:Bind VisibleText(Bangumi.Message), Mode=OneWay}" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="BangumiAuthorizationMessage" />
     </StackPanel>
     </StackPanel>
-   </Expander>
-   <Expander x:Name="LibraryGroup" Style="{StaticResource SettingsGroupStyle}" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnSettingsGroupExpanding" AutomationProperties.AutomationId="SettingsLibraryGroup" l:Localize.Name="书架与识别">
-    <Expander.Header>
+   </views:SmoothExpander>
+   <views:SmoothExpander x:Name="LibraryGroup" Style="{StaticResource SettingsGroupStyle}" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnSettingsGroupExpanding" AutomationProperties.AutomationId="SettingsLibraryGroup" l:Localize.Name="书架与识别">
+    <views:SmoothExpander.Header>
      <Grid ColumnSpacing="14" MinHeight="74" Padding="0,10">
       <Grid.ColumnDefinitions><ColumnDefinition Width="40" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
       <Border Style="{StaticResource SettingsIconStyle}" IsHitTestVisible="False"><FontIcon Glyph="&#xE8F1;" FontSize="20" /></Border>
@@ -192,7 +194,7 @@
        <TextBlock l:Localize.Text="游戏发现、在线补充与识别规则" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
       </StackPanel>
      </Grid>
-    </Expander.Header>
+    </views:SmoothExpander.Header>
     <StackPanel Spacing="20" Padding="0,0,0,4">
     <StackPanel Spacing="16">
      <Button Content="自动发现游戏（文件夹 / Steam）" Click="OnLibrarySources" HorizontalAlignment="Left" AutomationProperties.AutomationId="ManageLibrarySources" />
@@ -206,9 +208,9 @@
      <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8"><Button Click="OnMissing" AutomationProperties.AutomationId="RecognizeMissing" l:Localize.Content="补全缺失资料" /><Button Click="OnCancelRecognition" Visibility="{x:Bind Visible(Recognition.HasRecognitionWork), Mode=OneWay}" AutomationProperties.AutomationId="RecognitionCancel" l:Localize.Content="取消本轮识别" /></views:TagFlowPanel>
     </StackPanel>
     </StackPanel>
-   </Expander>
-   <Expander x:Name="BackupGroup" Style="{StaticResource SettingsGroupStyle}" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnSettingsGroupExpanding" AutomationProperties.AutomationId="SettingsBackupGroup" l:Localize.Name="备份与迁移">
-    <Expander.Header>
+   </views:SmoothExpander>
+   <views:SmoothExpander x:Name="BackupGroup" Style="{StaticResource SettingsGroupStyle}" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnSettingsGroupExpanding" AutomationProperties.AutomationId="SettingsBackupGroup" l:Localize.Name="备份与迁移">
+    <views:SmoothExpander.Header>
      <Grid ColumnSpacing="14" MinHeight="74" Padding="0,10">
       <Grid.ColumnDefinitions><ColumnDefinition Width="40" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
       <Border Style="{StaticResource SettingsIconStyle}" IsHitTestVisible="False"><FontIcon Glyph="&#xE8B7;" FontSize="20" /></Border>
@@ -217,7 +219,7 @@
        <TextBlock l:Localize.Text="书架备份、恢复与管理器互通" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
       </StackPanel>
      </Grid>
-    </Expander.Header>
+    </views:SmoothExpander.Header>
     <StackPanel Spacing="20" Padding="0,0,0,4">
     <StackPanel Spacing="16" AutomationProperties.AutomationId="LibraryBackupSection">
      <TextBlock FontSize="16" FontWeight="SemiBold" Text="书架备份" />
@@ -234,7 +236,7 @@
      <ToggleSwitch x:Name="AutomaticBackup" Header="自动备份" OnContent="开启" OffContent="关闭" Toggled="OnAutomaticBackup" IsEnabled="{x:Bind Backups.CanChangeAutomatic, Mode=OneWay}" AutomationProperties.AutomationId="AutomaticLibraryBackup" />
      <TextBlock Text="{x:Bind Backups.LastBackup, Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
      <TextBlock Text="{x:Bind Backups.Message, Mode=OneWay}" Visibility="{x:Bind VisibleText(Backups.Message), Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="LibraryBackupMessage" />
-     <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" l:Localize.Header="资料存储"><TextBlock Text="{x:Bind ViewModel.DataDirectory}" TextWrapping="Wrap" IsTextSelectionEnabled="True" AutomationProperties.AutomationId="DataDirectory" /></Expander>
+     <views:SmoothExpander HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" l:Localize.Header="资料存储"><TextBlock Text="{x:Bind ViewModel.DataDirectory}" TextWrapping="Wrap" IsTextSelectionEnabled="True" AutomationProperties.AutomationId="DataDirectory" /></views:SmoothExpander>
     </StackPanel>
      <Border Height="1" Background="{ThemeResource DividerBrush}" Margin="0,4" />
     <StackPanel Spacing="12" AutomationProperties.AutomationId="LibraryMigrationSection">
@@ -248,9 +250,9 @@
      <TextBlock Text="{x:Bind Migration.Message, Mode=OneWay}" Visibility="{x:Bind VisibleText(Migration.Message), Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="ManagerImportMessage" />
     </StackPanel>
     </StackPanel>
-   </Expander>
-   <Expander x:Name="UpdatesGroup" Style="{StaticResource SettingsGroupStyle}" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnSettingsGroupExpanding" AutomationProperties.AutomationId="SettingsUpdatesGroup" l:Localize.Name="程序更新">
-    <Expander.Header>
+   </views:SmoothExpander>
+   <views:SmoothExpander x:Name="UpdatesGroup" Style="{StaticResource SettingsGroupStyle}" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnSettingsGroupExpanding" AutomationProperties.AutomationId="SettingsUpdatesGroup" l:Localize.Name="程序更新">
+    <views:SmoothExpander.Header>
      <Grid ColumnSpacing="14" MinHeight="74" Padding="0,10">
       <Grid.ColumnDefinitions><ColumnDefinition Width="40" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
       <Border Style="{StaticResource SettingsIconStyle}" IsHitTestVisible="False"><FontIcon Glyph="&#xE895;" FontSize="20" /></Border>
@@ -259,7 +261,7 @@
        <TextBlock l:Localize.Text="更新通道、版本与发布说明" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
       </StackPanel>
      </Grid>
-    </Expander.Header>
+    </views:SmoothExpander.Header>
     <StackPanel Spacing="20" Padding="0,0,0,4">
     <StackPanel x:Name="UpdateSection" Spacing="12" AutomationProperties.AutomationId="AppUpdates">
       <ComboBox x:Name="UpdateChannelChoice" Header="更新通道" HorizontalAlignment="Left" MinWidth="220" MaxWidth="420" HorizontalContentAlignment="Left" SelectionChanged="OnUpdateChannel" IsEnabled="{x:Bind Updates.CanChangeChannel, Mode=OneWay}" AutomationProperties.AutomationId="UpdateChannelChoice">
@@ -270,7 +272,7 @@
      <TextBlock Text="{x:Bind Updates.Message, Mode=OneWay}" TextWrapping="Wrap" Style="{StaticResource SecondaryTextStyle}" AutomationProperties.AutomationId="UpdateState" AutomationProperties.LiveSetting="Polite" />
      <ProgressBar x:Name="UpdateProgress" Value="{x:Bind Updates.Progress, Mode=OneWay}" IsIndeterminate="{x:Bind Updates.Indeterminate, Mode=OneWay}" Minimum="0" Maximum="100" Visibility="Collapsed" AutomationProperties.AutomationId="UpdateProgress" />
      <TextBlock x:Name="UpdateHighlights" Text="{x:Bind Updates.Highlights, Mode=OneWay}" TextWrapping="Wrap" IsTextSelectionEnabled="True" Style="{StaticResource SecondaryTextStyle}" Visibility="Collapsed" AutomationProperties.AutomationId="UpdateHighlights" />
-     <Expander x:Name="UpdateNotes" Header="完整更新说明" HorizontalAlignment="Stretch" Visibility="Collapsed"><TextBlock Text="{x:Bind Updates.Notes, Mode=OneWay}" TextWrapping="Wrap" IsTextSelectionEnabled="True" Style="{StaticResource SecondaryTextStyle}" /></Expander>
+     <views:SmoothExpander x:Name="UpdateNotes" Header="完整更新说明" HorizontalAlignment="Stretch" Visibility="Collapsed"><TextBlock Text="{x:Bind Updates.Notes, Mode=OneWay}" TextWrapping="Wrap" IsTextSelectionEnabled="True" Style="{StaticResource SecondaryTextStyle}" /></views:SmoothExpander>
      <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8">
       <Button Click="OnCheckUpdate" Content="检查更新" IsEnabled="{x:Bind Updates.CanCheck, Mode=OneWay}" AutomationProperties.AutomationId="CheckAppUpdate" />
       <HyperlinkButton Content="GitHub 发布与反馈 ↗" NavigateUri="https://github.com/Ph-Rank/The-Order/releases" AutomationProperties.AutomationId="PublicReleasePage" />
@@ -280,7 +282,7 @@
      <TextBlock x:Name="UpdateInstallNotice" Text="{x:Bind Updates.InstallAvailability}" TextWrapping="Wrap" Style="{StaticResource MetadataTextStyle}" Visibility="Collapsed" />
     </StackPanel>
     </StackPanel>
-   </Expander>
+   </views:SmoothExpander>
   </StackPanel>
  </ScrollViewer>
  </Grid>

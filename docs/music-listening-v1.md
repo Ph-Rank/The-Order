@@ -6,7 +6,7 @@
 
 展开“正版收听与购买”后自动读取当前入口及有明确专辑组的其他数字发行版，不需要再次点击查找。两阶段共享取消与时效保护；已有成功结果重复展开不再请求，失败或取消可重新展开重试。“资料与来源”中的刷新同时更新两阶段。所有平台固定按显示名称排序，没有多种排序选项；用户之前的偏好不再影响本区展示，任何有效链接均保留。资料站也按友好名称排序，原始URL及关系来源仍可查看。
 
-新增11项自动加载状态回归，85项定向及完整4263/0/0通过；真实WinUI一次展开即显示2组数字版，7个来源按钮保留，没有额外查找/排序控件。实际窗口截图`ui-auto-click.png`与原生状态证据见`.artifacts/music-auto-digital-20261018/`，使用冻结公开资料及明确合成版本/关系，不证明实时平台覆盖或播放。用户正常退出后已替换本机原程序；654份载荷与3份入口附件核对、4份未知文件保留，安装目录空Test资料启动/退出0。旧程序和Setup回退在`C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261018-142540-music-auto/`，只回退程序，不访问Production。实际替换凭据`.artifacts/local-music-auto-daily-20261018/completion.json`。
+新增11项自动加载状态回归，85项定向及完整4263/0/0通过；真实WinUI一次展开即显示2组数字版，7个来源按钮保留，没有额外查找/排序控件。实际窗口截图`ui-auto-click.png`与原生状态证据见`.artifacts/music-auto-digital-20261018/`，使用冻结公开资料及明确合成版本/关系，不证明实时平台覆盖或播放。用户正常退出后已替换本机原程序；654份载荷与3份入口附件核对、4份未知文件保留，安装目录空Test资料启动/退出0。旧程序和Setup回退在`C:/Users/USER/AppData/Local/TheOrder-Local-Rollback/20261018-142540-music-auto/`，只回退程序，不访问Production。实际替换凭据`.artifacts/local-music-auto-daily-20261018/completion.json`。
 
 ## 精简布局基础（上一节点证据）
 
@@ -14,7 +14,7 @@
 
 新5项状态测试、74项定向及完整4252/0/0通过，Release x64和真实WinUI浅/深主题、1180/560宽窗口通过；两组数字版收听区为255逻辑像素，3个资料站与4个平台均保留。明确合成的多版本/国内链接只用于布局，不计为真实覆盖。证据`.artifacts/music-layout-20261018/`。
 
-本机替换已完成：654份载荷和3份附件核对、4份未知文件保留；原安装路径以全新Test资料启动/退出0，工具默认全关，Production未打开。之前MB外链构建的662份程序及Setup回退在`C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261018-135533-music-layout/`，安装凭据`.artifacts/local-music-layout-daily-20261018/completion.json`。
+本机替换已完成：654份载荷和3份附件核对、4份未知文件保留；原安装路径以全新Test资料启动/退出0，工具默认全关，Production未打开。之前MB外链构建的662份程序及Setup回退在`C:/Users/USER/AppData/Local/TheOrder-Local-Rollback/20261018-135533-music-layout/`，安装凭据`.artifacts/local-music-layout-daily-20261018/completion.json`。
 
 ## 已实现
 
@@ -66,4 +66,4 @@ MusicBrainz官方将`free streaming`定义为合法免费收听，将`streaming`
 
 隔离程序正常退出后重启，四个入口从缓存恢复、此前个人商店关联仍为1条；书架、Profile身份及人工映射共6份合成资料文件哈希一致，两次受控窗口均正常退出0。开发结果见上述证据根的`completion.json`，源码为本地未提交增量，未推送。
 
-用户随后授权本机替换：安装载荷复用上述已验收应用字节，另生成标准安装包并隔离安装核对。实际日用654份载荷、3份入口附件及更新基包一致，4份未知/路由文件保留；安装路径WinUI用全新空Test资料启动、默认辅助工具全关、正常退出0。旧662份程序文件及回退Setup在`C:/Users/MUSK/AppData/Local/TheOrder-Local-Rollback/20261018-132514-music-mb-links/`。此操作不测试真实私库或读取凭据，未修改Production。安装证据另见`.artifacts/local-mb-links-daily-20261018/completion.json`，不能与GitHub已发布1.2.0混淆。
+用户随后授权本机替换：安装载荷复用上述已验收应用字节，另生成标准安装包并隔离安装核对。实际日用654份载荷、3份入口附件及更新基包一致，4份未知/路由文件保留；安装路径WinUI用全新空Test资料启动、默认辅助工具全关、正常退出0。旧662份程序文件及回退Setup在`C:/Users/USER/AppData/Local/TheOrder-Local-Rollback/20261018-132514-music-mb-links/`。此操作不测试真实私库或读取凭据，未修改Production。安装证据另见`.artifacts/local-mb-links-daily-20261018/completion.json`，不能与GitHub已发布1.2.0混淆。

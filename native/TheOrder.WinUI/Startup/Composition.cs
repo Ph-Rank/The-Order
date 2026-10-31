@@ -57,6 +57,11 @@ internal static class Composition
         services.AddSingleton<ILaunchLibrary, OfflineLaunchLibrary>();
         services.AddSingleton<ILaunchPositionStore, IsolatedLaunchPositionStore>();
         services.AddSingleton<IGameProcessPlatform, WindowsGameProcesses>();
+        services.AddSingleton<IGuideFlowLayout,GuideDagreLayout>();
+        services.AddSingleton<ILocalDocumentParser, TheOrder.Infrastructure.LocalDocumentParser>();
+        services.AddSingleton<ILocalReadingLibrary, WindowsLocalReading>();
+        services.AddSingleton<WindowsWalkthroughSessions>();
+        services.AddSingleton<IGameGuideLaunch>(p => p.GetRequiredService<WindowsWalkthroughSessions>());
         services.AddSingleton<WindowsSessionPowerEvents>();
         services.AddSingleton(p => new AppSessionHost(async () =>
         {
@@ -66,7 +71,7 @@ internal static class Composition
             if (!client.Capability.CanEdit) return null;
             return client.CreateSessionEngine(p.GetRequiredService<IFilesystemIdentity>(), p.GetRequiredService<IGameProcessPlatform>(),
                 p.GetRequiredService<ILaunchPositionStore>(), new WindowsSessionClock(), new WindowsSessionRecoveryTokens(nativeConfiguration), p.GetRequiredService<WindowsSessionPowerEvents>(), p.GetRequiredService<LaunchPolicy>());
-        }, () => p.GetRequiredService<OfflineLibraryClient>().CurrentSnapshot));
+        }, () => p.GetRequiredService<OfflineLibraryClient>().CurrentSnapshot, (id, cancellation) => p.GetRequiredService<WindowsWalkthroughSessions>().PrepareForGameAsync(id, cancellation)));
         services.AddSingleton(p => new LaunchViewModel(p.GetRequiredService<ILaunchLibrary>(), p.GetRequiredService<AppSessionHost>()));
         services.AddSingleton<IScanFilesystem, WindowsScanFilesystem>();
         services.AddSingleton<BoundedScanner>();
@@ -162,6 +167,7 @@ internal static class Composition
         if (performanceImages) services.AddSingleton<PerformanceImageFixture>();
         services.AddSingleton(p => new CatalogTransport(fixtureOnline ? p.GetRequiredService<SyntheticOnline>().Client : p.GetRequiredService<CatalogNetwork>().Client, p.GetRequiredService<ICredentialProvider>(), new Uri("https://api.nextmoe.dev/v2/"), rate: fixtureOnline ? null : p.GetRequiredService<NextMoeRateCoordinator>()));
         services.AddSingleton(p => new NextMoeCatalog(p.GetRequiredService<CatalogTransport>(), clock: fixtureOnline ? () => p.GetRequiredService<SyntheticOnline>().Now : null));
+        services.AddSingleton<IWalkthroughReader>(p => new NextMoeWalkthroughs(p.GetRequiredService<CatalogTransport>()));
         services.AddSingleton<IOnlineCatalog>(p => p.GetRequiredService<NextMoeCatalog>());
         services.AddSingleton<ICatalogReleaseReader>(p => p.GetRequiredService<NextMoeCatalog>());
         services.AddSingleton<IEntityCatalog>(p => p.GetRequiredService<NextMoeCatalog>());
@@ -242,7 +248,9 @@ internal static class Composition
         services.AddSingleton<MainWindow>();
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
         // Resolution is confined to this composition root. Views and view models receive constructors.
-        return new(provider, provider.GetRequiredService<MainWindow>(), provider.GetRequiredService<AppSessionHost>(), provider.GetRequiredService<IAppUpdateInstaller>(), provider.GetRequiredService<ILogger<NativeHost>>());
+        var mainWindow = provider.GetRequiredService<MainWindow>();
+        mainWindow.ConfigureWalkthroughs(provider.GetRequiredService<IWalkthroughReader>(), provider.GetRequiredService<WindowsWalkthroughSessions>());
+        return new(provider, mainWindow, provider.GetRequiredService<AppSessionHost>(), provider.GetRequiredService<IAppUpdateInstaller>(), provider.GetRequiredService<ILogger<NativeHost>>());
     }
 }
 

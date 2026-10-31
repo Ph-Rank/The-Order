@@ -48,6 +48,10 @@
     <views:RailNavigationItem x:Name="LibraryNavigation" Tag="library" HorizontalContentAlignment="Stretch" Padding="0" Height="74" AutomationProperties.AutomationId="LibraryNavigation" l:Localize.Name="书架"><StackPanel Spacing="6" HorizontalAlignment="Center"><FontIcon Glyph="" FontSize="23" HorizontalAlignment="Center" /><TextBlock FontSize="12" HorizontalAlignment="Center" l:Localize.Text="书架" /></StackPanel></views:RailNavigationItem>
     <views:RailNavigationItem x:Name="OnlineNavigation" Tag="online" HorizontalContentAlignment="Stretch" Padding="0" Height="74" AutomationProperties.AutomationId="OnlineNavigation" l:Localize.Name="发现"><StackPanel Spacing="6" HorizontalAlignment="Center"><FontIcon Glyph="" FontSize="23" HorizontalAlignment="Center" /><TextBlock FontSize="12" HorizontalAlignment="Center" l:Localize.Text="发现" /></StackPanel></views:RailNavigationItem>
     <views:RailNavigationItem x:Name="StatisticsNavigation" Tag="statistics" HorizontalContentAlignment="Stretch" Padding="0" Height="74" AutomationProperties.AutomationId="StatisticsNavigation" l:Localize.Name="统计"><StackPanel Spacing="6" HorizontalAlignment="Center"><FontIcon Glyph="&#xE9D9;" FontSize="23" HorizontalAlignment="Center" /><TextBlock FontSize="12" HorizontalAlignment="Center" l:Localize.Text="统计" /></StackPanel></views:RailNavigationItem>
+    <views:RailNavigationItem x:Name="PlaygroundNavigation" Tag="playground" HorizontalContentAlignment="Stretch" Padding="0" Height="74" AutomationProperties.AutomationId="PlaygroundNavigation" AutomationProperties.Name="对话">
+     <StackPanel Spacing="6" HorizontalAlignment="Center"><FontIcon Glyph="&#xE8F2;" FontSize="23" HorizontalAlignment="Center" /><TextBlock FontSize="11" HorizontalAlignment="Center" Text="对话" /></StackPanel>
+     <views:RailNavigationItem.ContextFlyout><MenuFlyout><MenuFlyoutItem Text="隐藏对话入口" Click="OnHidePlayground" /></MenuFlyout></views:RailNavigationItem.ContextFlyout>
+    </views:RailNavigationItem>
    </NavigationView.MenuItems>
    <NavigationView.FooterMenuItems>
     <views:RailNavigationItem x:Name="SettingsNavigation" Tag="settings" HorizontalContentAlignment="Stretch" Padding="0" Height="74" AutomationProperties.AutomationId="SettingsNavigation" l:Localize.Name="设置"><StackPanel Spacing="6" HorizontalAlignment="Center"><Grid Width="34" Height="28"><FontIcon Glyph="" FontSize="23" HorizontalAlignment="Center" VerticalAlignment="Center" /><Ellipse x:Name="UpdateBadge" Width="6" Height="6" Fill="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Visibility="Collapsed" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" /></Grid><TextBlock FontSize="12" HorizontalAlignment="Center" l:Localize.Text="设置" /></StackPanel></views:RailNavigationItem>
@@ -65,6 +69,7 @@
      <InfoBar Severity="Warning" IsClosable="False" IsOpen="{x:Bind ViewModel.IsReadOnly, Mode=OneWay}" Message="{x:Bind ViewModel.CapabilityMessage, Mode=OneWay}" AutomationProperties.AutomationId="ReadOnlyNotice" l:Localize.Title="当前书架为只读" />
      <InfoBar x:Name="LifecycleNotice" Severity="Warning" IsClosable="False" IsOpen="False" AutomationProperties.AutomationId="LifecycleNotice" />
      <InfoBar x:Name="LaunchNotice" IsClosable="True" IsOpen="False" AutomationProperties.AutomationId="QuickLaunchNotice" AutomationProperties.LiveSetting="Polite" />
+     <InfoBar x:Name="GuideNotice" IsClosable="True" IsOpen="False" AutomationProperties.AutomationId="GuideLaunchNotice" AutomationProperties.LiveSetting="Polite" />
     </StackPanel>
     <ContentControl x:Name="PageContent" Grid.Row="2" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" IsTabStop="False" />
    </Grid>

@@ -233,7 +233,7 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
             links.Children.Add(link);
         }
         if (links.Children.Count > 0) source.Children.Add(links);
-        return new Expander { Header = UiText.Get("资料来源"), Tag = "entity-sources", Content = source, HorizontalAlignment = HorizontalAlignment.Stretch,
+        return new SmoothExpander { Header = UiText.Get("资料来源"), Tag = "entity-sources", Content = source, HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch, IsExpanded = false };
     }
     private UIElement SourceLinks(WorkMetadata work, BannerChoice? artwork)
@@ -248,7 +248,7 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
         var row = new TagFlowPanel();
         foreach (var link in CandidateDetailLinks.From(work)) { var b = new HyperlinkButton { Content = link.Title, Padding = new Thickness(0, 0, 16, 0) }; b.Click += async (_, _) => await OpenSourceAsync(link.Url); row.Children.Add(b); }
         source.Children.Add(row);
-        return new Expander { Header = UiText.Get("资料与图片来源"), Content = source, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, IsExpanded = false };
+        return new SmoothExpander { Header = UiText.Get("资料与图片来源"), Content = source, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, IsExpanded = false };
     }
     private void AddIncomingRelation()
     {
@@ -280,10 +280,9 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
             source.Click += async (_, _) => await OpenSourceAsync(url);
             evidence.Children.Add(source);
         }
-        evidence.Children.Add(new Expander { Header = UiText.Get("详细证据"), Content = raw, IsExpanded = false,
+        evidence.Children.Add(new SmoothExpander { Header = UiText.Get("详细证据"), Content = raw, IsExpanded = false,
             HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch });
-        var details = new Expander
-        {
+        var details = new SmoothExpander {
             Header = UiText.Get("关系与来源"), Content = evidence, IsExpanded = false,
             HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch
         };

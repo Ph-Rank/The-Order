@@ -14,7 +14,7 @@ Roles (user, 2026-10-08):
 
 | Item | Value |
 |---|---|
-| Authoritative tree | `C:\Users\MUSK\.codex\worktrees\winui-phase7-visual\The-Order` (`codex/winui-phase7-visual`, HEAD `ad59c6e` + 47 uncommitted files matching `design-handoff-to-claude/source-manifest.json`; re-verified unchanged) |
+| Authoritative tree | `C:\Users\USER\.codex\worktrees\winui-phase7-visual\The-Order` (`codex/winui-phase7-visual`, HEAD `ad59c6e` + 47 uncommitted files matching `design-handoff-to-claude/source-manifest.json`; re-verified unchanged) |
 | Isolated worktree | `D:\Projects\The-Order-worktrees\claude-design-phase7`, branch `claude/design-phase7`; tag `claude-design-rev1` marks revision 1 |
 | Never integrate | `7d74e24` (byte snapshot of the authoritative tree) |
 | Material code for review | `f18d609` + `09465c2` (05) |

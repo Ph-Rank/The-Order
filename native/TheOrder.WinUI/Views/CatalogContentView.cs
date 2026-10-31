@@ -15,6 +15,14 @@ public sealed class CatalogContentView : StackPanel,IImageHost
     public UIElement? BeforeTags { get; set; }
     public bool ShowRelatedWorks { get; set; } = true;
     private readonly CatalogReleasesView releases = new();
+    private readonly StackPanel supplemental = new() { Spacing = 4 };
+    private readonly SmoothExpander moreInformation = new() { Header = "更多资料", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private ContentLanguageInfo? languageInfo;
+    private WorkMetadata? renderedWork;
+    private string? renderedName;
+    private object? renderedLanguage;
+    private bool? renderedFacts, renderedRelated;
+    internal int RenderCount { get; private set; }
     private ICatalogReleaseReader? releasesReader;
     private string? releasesWorkId;
     public Func<long>? ReleasesAuthGeneration { get; set; }
@@ -30,10 +38,11 @@ public sealed class CatalogContentView : StackPanel,IImageHost
         if (reader is null) releases.Deactivate(); else { releases.Configure(reader, authGeneration); releases.SetSource(releasesWorkId); }
     }
     public void DeactivateReleases() { releasesWorkId = null; releases.Deactivate(); }
-    internal object LanguageEvidence => Children.OfType<ContentLanguageInfo>().Select(x => x.Evidence).ToArray();
+    internal object LanguageEvidence => languageInfo is null ? Array.Empty<object>() : new[] { languageInfo.Evidence };
     internal object ReleaseEvidence => releases.Evidence;
     internal async Task<object> ReleasesFixtureAsync(string action, string? value = null)
     {
+        if (action is not ("inspect" or "collapse" or "cancel")) moreInformation.IsExpanded = true;
         switch (action)
         {
             case "expand":
@@ -67,7 +76,7 @@ public sealed class CatalogContentView : StackPanel,IImageHost
             await Images.LoadAsync(key,ThumbnailSizing.Edge(width,height,scale),token);
         }
     }
-    public CatalogContentView(){Spacing=22;Unloaded+=(_,_)=>{if(!IsLoaded)releases.Deactivate();};}
+    public CatalogContentView(){Spacing=22;moreInformation.Content=supplemental;SecondaryDisclosure.Apply(moreInformation);Unloaded+=(_,_)=>{if(!IsLoaded)releases.Deactivate();};}
     private static TextBlock Text(string text,double size=15)=>new(){Text=text,FontSize=size,TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};
     private static TextBlock Caption(string text,double size=14)=>new(){Text=text,FontSize=size,TextWrapping=TextWrapping.Wrap,TextAlignment=TextAlignment.Center,HorizontalAlignment=HorizontalAlignment.Stretch};
     private static StackPanel Section(string title)=>new(){Spacing=10,Children={new TextBlock{Text=title,FontSize=22,FontWeight=Microsoft.UI.Text.FontWeights.SemiBold}}};
@@ -76,12 +85,18 @@ public sealed class CatalogContentView : StackPanel,IImageHost
     private MarkdownView Markdown(string text)=>new(){Text=text,Images=Images,Registry=Registry,OpenLink=OpenLink};
     public void SetWork(WorkMetadata? work,string? personalName=null,bool collapseFacts=false)
     {
+        if (Children.Count > 0 && ReferenceEquals(renderedWork, work) && renderedName == personalName
+            && Equals(renderedLanguage, ContentLanguage.Current) && renderedFacts == collapseFacts && renderedRelated == ShowRelatedWorks) return;
+        RenderCount++;
+        if (releasesWorkId != work?.Id) moreInformation.IsExpanded = false;
+        supplemental.Children.Clear(); languageInfo = null;
         releasesWorkId = work?.Id; releases.OpenLink = OpenLink; releases.SetSource(releasesWorkId);
         var rawWork = work;
         if (work is not null) work = CatalogLanguage.Project(work);
         // Keep the active PV host attached while metadata/language sections are
         // refreshed. Detaching it would stop playback on an unrelated late response.
-        foreach (var child in Children.Where(x => x != BeforeTags).ToArray()) Children.Remove(child);
+        for (int index = Children.Count - 1; index >= 0; index--)
+            if (!ReferenceEquals(Children[index], BeforeTags)) Children.RemoveAt(index);
         bool passedVideoSlot = false;
         void AddSection(UIElement child)
         {
@@ -93,7 +108,7 @@ public sealed class CatalogContentView : StackPanel,IImageHost
             else if (!passedVideoSlot && BeforeTags is not null && Children.Contains(BeforeTags)) Children.Insert(Children.IndexOf(BeforeTags), child);
             else Children.Add(child);
         }
-        artwork.Clear();if(work is null){AddSection(Text(UiText.Get("尚未关联作品。可在更多操作中重新识别。")));return;}
+        artwork.Clear();if(work is null){AddSection(Text(UiText.Get("尚未关联作品。可在更多操作中重新识别。")));Remember(rawWork,personalName,collapseFacts);return;}
         var p=work.Presentation;
         if (!collapseFacts)
         {
@@ -122,7 +137,7 @@ public sealed class CatalogContentView : StackPanel,IImageHost
                 foreach (var company in group) organizations.Children.Add(Link(company));
                 AddSection(organizations);
             }
-        if (releasesReader is not null) AddSection(releases);
+        if (releasesReader is not null) supplemental.Children.Add(releases);
         var intro = Section(UiText.Get("简介"));
         if (rawWork is not null && ContentLanguage.CatalogSynopsis(rawWork) is { Selected.IsMachine: true } selectedIntro)
         {
@@ -133,10 +148,10 @@ public sealed class CatalogContentView : StackPanel,IImageHost
         intro.Children.Add(description); AddSection(intro);
         if (rawWork is not null)
         {
-            var languageInfo = new ContentLanguageInfo();
+            languageInfo = new ContentLanguageInfo();
             languageInfo.Show(ContentLanguage.Catalog(new("NextMoe", "Work", rawWork.Id), "title", rawWork.Presentation?.Names, rawWork.OriginalTitle.Length > 0 ? rawWork.OriginalTitle : rawWork.Title),
                 ContentLanguage.CatalogSynopsis(rawWork), ContentLanguage.Aliases(new("NextMoe", "Work", rawWork.Id), rawWork.Aliases));
-            AddSection(languageInfo);
+            supplemental.Children.Add(languageInfo);
         }
         if (BeforeTags is not null) AddSection(BeforeTags);
         if (!work.Tags.IsEmpty)
@@ -162,8 +177,7 @@ public sealed class CatalogContentView : StackPanel,IImageHost
         }
         var characters=p?.Characters??[..work.Characters.Select(c=>new CatalogCharacter(new(CatalogEntityKind.Character,c.Id,c.Name,ImageUrl:c.ImageUrl),c.OriginalName,c.Role,"none",[..c.VoiceActors.Select(n=>new CatalogEntityRef(CatalogEntityKind.CreditName,"",n))]))];
         bool hasSpoilerExpander = false;
-        if(!characters.IsEmpty){var section=Section(UiText.Get("角色"));var safe=characters.Where(c=>c.Spoiler is "" or "none").ToArray();section.Children.Add(CharacterGrid(safe,work.FetchedAt));var hidden=characters.Where(c=>c.Spoiler is not ("" or "none")).ToArray();if(hidden.Length>0){hasSpoilerExpander = true;var expander=new Expander{Header=UiText.Format($"剧透角色（{hidden.Length}）"),HorizontalAlignment=HorizontalAlignment.Stretch,Margin=new Thickness(0,4,0,0)};expander.Expanding+=(_,_)=>{expander.Content??=CharacterGrid(hidden,work.FetchedAt);};section.Children.Add(expander);}AddSection(section);}
-        bool hasCreditsExpander = false;
+        if(!characters.IsEmpty){var section=Section(UiText.Get("角色"));var safe=characters.Where(c=>c.Spoiler is "" or "none").ToArray();section.Children.Add(CharacterGrid(safe,work.FetchedAt));var hidden=characters.Where(c=>c.Spoiler is not ("" or "none")).ToArray();if(hidden.Length>0){hasSpoilerExpander = true;var expander=new SmoothExpander {Header=UiText.Format($"剧透角色（{hidden.Length}）"),HorizontalAlignment=HorizontalAlignment.Stretch,Margin=new Thickness(0,4,0,0)};expander.Expanding+=(_,_)=>{expander.Content??=CharacterGrid(hidden,work.FetchedAt);};section.Children.Add(expander);}AddSection(section);}
         if (p is { Credits.IsEmpty: false })
         {
             var credits = new CreditColumnsPanel();
@@ -178,7 +192,7 @@ public sealed class CatalogContentView : StackPanel,IImageHost
                 row.Children.Add(flow);
                 if (group.People.Length > 80)
                 {
-                    var remaining = new Expander { Header = UiText.Format($"另外 {group.People.Length - 80} 人"), HorizontalAlignment = HorizontalAlignment.Stretch };
+                    var remaining = new SmoothExpander { Header = UiText.Format($"另外 {group.People.Length - 80} 人"), HorizontalAlignment = HorizontalAlignment.Stretch };
                     remaining.Expanding += (_, _) => { if (remaining.Content is not null) return; var more = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 4 }; foreach (var person in group.People.Skip(80)) more.Children.Add(Link(person)); remaining.Content = more; };
                     row.Children.Add(remaining);
                 }
@@ -186,9 +200,7 @@ public sealed class CatalogContentView : StackPanel,IImageHost
             }
             if (credits.Children.Count > 0)
             {
-                hasCreditsExpander = true;
-                AddSection(new Expander
-                {
+                AddSection(new SmoothExpander {
                     Header = UiText.Get("制作人员"),
                     Content = credits,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -199,12 +211,16 @@ public sealed class CatalogContentView : StackPanel,IImageHost
         }
         if (Sources is not null)
         {
-            if (Sources is FrameworkElement sourcesElement)
-                sourcesElement.Margin = (hasCreditsExpander || hasSpoilerExpander) ? new Thickness(0, -12, 0, 0) : new Thickness(0);
-            AddSection(Sources);
+            if (Sources is FrameworkElement sourcesElement) sourcesElement.Margin = new Thickness(0);
+            if (Sources is Expander disclosure) SecondaryDisclosure.Apply(disclosure);
+            supplemental.Children.Add(Sources);
         }
         if(ShowRelatedWorks && p is {RelatedWorks.IsEmpty:false}){var related=Section(UiText.Get("相关作品"));related.Children.Add(RelatedGrid(p.RelatedWorks,work.FetchedAt));AddSection(related);}
+        if (supplemental.Children.Count > 0) AddSection(moreInformation);
+        Remember(rawWork,personalName,collapseFacts);
     }
+    private void Remember(WorkMetadata? work,string? name,bool facts)
+    { renderedWork=work;renderedName=name;renderedLanguage=ContentLanguage.Current;renderedFacts=facts;renderedRelated=ShowRelatedWorks; }
     private TagFlowPanel RelatedGrid(IEnumerable<CatalogEntityRef> works,string revision)
     {
         var flow=new TagFlowPanel {HorizontalSpacing=16,VerticalSpacing=18};

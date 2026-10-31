@@ -13,7 +13,7 @@ Merge, push, release, Production data and the installed app remain out of scope 
 
 | Item | Value |
 |---|---|
-| Authoritative workspace | `C:\Users\MUSK\.codex\worktrees\winui-phase7-visual\The-Order`, `codex/winui-phase7-visual`, HEAD `ad59c6e` + 47 uncommitted files (all match `design-handoff-to-claude/source-manifest.json`, re-verified twice on 2026-10-08) |
+| Authoritative workspace | `C:\Users\USER\.codex\worktrees\winui-phase7-visual\The-Order`, `codex/winui-phase7-visual`, HEAD `ad59c6e` + 47 uncommitted files (all match `design-handoff-to-claude/source-manifest.json`, re-verified twice on 2026-10-08) |
 | Isolated workspace | `D:\Projects\The-Order-worktrees\claude-design-phase7`, branch `claude/design-phase7` |
 | Baseline snapshot commit | `7d74e24`, a byte copy of the 47 files on `ad59c6e`; status identical to the authoritative tree. **Never integrate this commit.** |
 | Claude commits | `f18d609` frost capability (05) · design-package commit (docs only) |

@@ -10,6 +10,7 @@ public sealed class StartupNavigationTests
     [InlineData(WorkspacePage.Settings)]
     [InlineData(WorkspacePage.Online)]
     [InlineData(WorkspacePage.Statistics)]
+    [InlineData(WorkspacePage.Playground)]
     public void PeerPagesDoNotInventBackHistory(WorkspacePage page)
     { Assert.False(ShellNavigationPolicy.CanGoBack(page)); Assert.Null(ShellNavigationPolicy.Parent(page)); }
     [Theory]
@@ -28,6 +29,12 @@ public sealed class StartupNavigationTests
         Assert.Equal(WorkspacePage.Statistics, ShellNavigationPolicy.Parent(WorkspacePage.Details, WorkspacePage.Statistics));
         Assert.Equal(WorkspacePage.Details, ShellNavigationPolicy.Parent(WorkspacePage.Installations, WorkspacePage.Statistics));
         Assert.Equal(WorkspacePage.Library, ShellNavigationPolicy.Parent(WorkspacePage.Details, WorkspacePage.Settings));
+    }
+    [Fact] public void PlaygroundSourceDrilldownReturnsToItsConversationWorkspace()
+    {
+        Assert.Equal(WorkspacePage.Playground, ShellNavigationPolicy.Parent(WorkspacePage.Details, WorkspacePage.Playground));
+        Assert.Equal(WorkspacePage.Details, ShellNavigationPolicy.Parent(WorkspacePage.Installations, WorkspacePage.Playground));
+        Assert.False(ShellNavigationPolicy.CanGoBack(WorkspacePage.Playground));
     }
     [Fact]
     public async Task HomeCannotRevealBeforeLocalStateVisibleArtworkAndFinalFrame()

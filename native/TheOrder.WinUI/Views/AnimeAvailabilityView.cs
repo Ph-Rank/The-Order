@@ -18,7 +18,7 @@ namespace TheOrder.WinUI.Views;
 internal sealed class AnimeAvailabilityView : StackPanel, IDisposable
 {
     private readonly TextBlock playerStatus = Text(13);
-    private readonly Expander pv = new() { Header = "预告片 · PV", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander pv = new SmoothExpander() { Header = "预告片 · PV", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel pvBody = new() { Spacing = 10 };
     private readonly Grid host = new() { MaxWidth = 960, HorizontalAlignment = HorizontalAlignment.Center, Visibility = Visibility.Collapsed };
     private readonly Button retry = new() { Content = "重新加载 PV", CornerRadius = new(6), Visibility = Visibility.Collapsed };

@@ -20,7 +20,8 @@ public sealed class DirectLaunchCommands(GameLaunchService service) : ILaunchCom
     public Task<LaunchStatus> LaunchAsync(string id, string? installation = null, CancellationToken cancellation = default) => service.LaunchAsync(id, installation, cancellation);
 }
 
-public sealed class AppSessionHost(Func<Task<SessionEngine?>> create, Func<LibrarySnapshot?> readLibrary) : ILaunchCommands, IAsyncDisposable
+public sealed class AppSessionHost(Func<Task<SessionEngine?>> create, Func<LibrarySnapshot?> readLibrary,
+    Func<string, CancellationToken, Task>? prepareCompanion = null) : ILaunchCommands, IAsyncDisposable
 {
     private readonly object gate = new();
     private Task? initialization, disposal;
@@ -70,6 +71,14 @@ public sealed class AppSessionHost(Func<Task<SessionEngine?>> create, Func<Libra
     public async Task<LaunchStatus> LaunchAsync(string id, string? installation = null, CancellationToken cancellation = default)
     {
         await InitializeAsync().ConfigureAwait(false);
+        if (CanMutate && prepareCompanion is not null)
+        {
+            // Availability is resolved before OS creation; no helper is loaded for an empty/failed query.
+            // Exit still seals admission while the optional network request is pending.
+            try { await prepareCompanion(id, cancellation).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return Status with { Outcome = LaunchOutcome.Cancelled }; }
+            catch (Exception error) when (error is not OutOfMemoryException) { }
+        }
         Task<LaunchStatus> returnTask;
         lock (gate)
         {

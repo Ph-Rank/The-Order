@@ -8,7 +8,7 @@ namespace TheOrder.WinUI.Views;
 // this section describes its provenance without repeating full original texts.
 public sealed class ContentLanguageInfo : StackPanel
 {
-    private readonly Expander section = new() { Header = "资料语言与来源", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly Expander section = new SmoothExpander() { Header = "资料语言与来源", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private ContentSelection[] selections = [];
     private string? rendered;
     public bool IsExpanded { get => section.IsExpanded; set => section.IsExpanded = value; }
@@ -16,7 +16,7 @@ public sealed class ContentLanguageInfo : StackPanel
         fields = selections.Select(x => new { selected = x.Selected, original = x.Original, variantCount = x.Variants.Length }).ToArray() };
     public ContentLanguageInfo()
     {
-        HorizontalAlignment = HorizontalAlignment.Stretch; Children.Add(section);
+        HorizontalAlignment = HorizontalAlignment.Stretch; SecondaryDisclosure.Apply(section); Children.Add(section);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(section, "ContentLanguageOriginals");
         section.Expanding += (_, _) => Render();
     }

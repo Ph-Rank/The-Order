@@ -64,6 +64,8 @@ public sealed partial class DetailsPage : Page, IImageHost
     public DetailsPage(WorkspaceViewModel viewModel, IImagePipeline images, LaunchViewModel launch, RecognitionViewModel recognition)
     {
         ViewModel = viewModel; Images = images; Launch = launch; Recognition = recognition; InitializeComponent();
+        InteractionMotion.WatchVisibility(CatalogHost); InteractionMotion.WatchVisibility(RelatedMediaHost);
+        InteractionMotion.WatchVisibility(DetailsRoot); InteractionMotion.WatchVisibility(EditorCard);
         RichCatalog.Sources = SourcesInfo; RichCatalog.BeforeTags = GameVideosHost;
         HeroTitle.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => UpdateHeroFrame(HeroFrame.ActualWidth));
         ReviewHost.Content = new RecognitionReview(recognition, images);
@@ -86,7 +88,7 @@ public sealed partial class DetailsPage : Page, IImageHost
             HeroFacts.SetTextForeground(brush);
             if (brush is null) HeroPersonalDivider.ClearValue(Border.BackgroundProperty);
             else HeroPersonalDivider.Background = brush;
-            foreach (var text in new[] { HeroTitle, HeroStatusText, HeroRatingText, HeroPlayText, LastPlayedText, PersonalLabelsText })
+            foreach (var text in new[] { HeroTitle, HeroStatusText, HeroRatingText, HeroPlayText, LastPlayedText })
                 if (brush is null) text.ClearValue(TextBlock.ForegroundProperty); else text.Foreground = brush;
         };
         Loaded += async (_, _) =>
@@ -117,8 +119,6 @@ public sealed partial class DetailsPage : Page, IImageHost
         SynchronizeCatalog(detail);
         PersonalNotesText.Text = detail?.Personal.Notes ?? "";
         NotesSection.Visibility = ActionVisible(!string.IsNullOrWhiteSpace(PersonalNotesText.Text));
-        PersonalLabelsText.Text = detail is null ? "" : string.Join(" · ", detail.Personal.Categories.Concat(detail.Personal.Tags));
-        PersonalLabelsText.Visibility = ActionVisible(PersonalLabelsText.Text.Length > 0);
         LastPlayedText.Text = UiText.Get("最近游玩 · ") + LastPlayedNames.Display(detail?.LastPlayedAt, detail?.HasPlayHistory ?? false, DateTimeOffset.Now);
         ArtworkSourceText.Text = string.Join("\n", new[] { detail?.Relationship, detail?.CoverDescription, detail?.BackdropDescription });
         SourceLinks.ItemsSource = work is null ? null : CandidateDetailLinks.From(work).Select(l => new DetailSourceLink(l.Title, l.Url)).ToArray();
@@ -183,7 +183,7 @@ public sealed partial class DetailsPage : Page, IImageHost
         Grid.SetColumn(FavoriteEditor, compactEditor ? 0 : 2); Grid.SetRow(FavoriteEditor, compactEditor ? 2 : 0);
     }
     private object HeroOverlayBounds => new { desiredHeight = HeroPlate.DesiredSize.Height,
-        elements = new FrameworkElement[] { HeroTitle, HeroFacts, HeroStatusText, HeroRatingText, HeroPlayText, LastPlayedText, PersonalLabelsText }
+        elements = new FrameworkElement[] { HeroTitle, HeroFacts, HeroStatusText, HeroRatingText, HeroPlayText, LastPlayedText }
             .Where(e => e.Visibility == Visibility.Visible && e.ActualHeight > 0).Select(e => {
                 var point = e.TransformToVisual(HeroPlate).TransformPoint(new Windows.Foundation.Point());
                 return new { name = e.Name, x = point.X, y = point.Y, width = e.ActualWidth, height = e.ActualHeight,
