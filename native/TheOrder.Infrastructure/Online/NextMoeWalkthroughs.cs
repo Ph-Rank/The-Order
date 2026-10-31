@@ -75,7 +75,7 @@ public sealed class NextMoeWalkthroughs(CatalogTransport transport) : IWalkthrou
             {
                 if (++totalSteps > 16384) Invalid();
                 var kind = Text(step, "step_type", 32)!;
-                if (kind is not ("choice" or "action" or "save" or "load" or "note")) Invalid();
+                if (kind is not ("choice" or "action" or "save" or "load" or "note" or "heading")) Invalid();
                 var save = Text(step, "save_key", 128, optional: true);
                 if (save is not null && !lookup.ContainsKey(("save", save))) Invalid();
                 var text = Label(step, "text", allowEmpty: true);

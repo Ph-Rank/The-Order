@@ -65,7 +65,7 @@ public static class GuideReadingText
     private static readonly System.Text.RegularExpressions.Regex Date = new(
         @"^(?:[0-9０-９]{2,4}年)?[0-9０-９]{1,2}月[0-9０-９]{1,2}日(?:\s*[（(][月火水木金土日一二三四五六天曜曜日\s]+[）)])?$",
         System.Text.RegularExpressions.RegexOptions.CultureInvariant | System.Text.RegularExpressions.RegexOptions.NonBacktracking);
-    public static bool IsHeading(WalkthroughStep step) => step.Kind == "action" &&
+    public static bool IsHeading(WalkthroughStep step) => step.Kind == "heading" || step.Kind == "action" &&
         (Date.IsMatch(step.Text.Display.Trim()) || Date.IsMatch(step.Text.Original.Trim()));
     public static string SourceName(string source) => source switch
     { "seiya" => "誠也の部屋", "foolmaker" => "愚者之馆", "native" => "鲲社区", _ => source };

@@ -49,7 +49,7 @@ public sealed partial class MainWindow
             case "local-close": walkthroughFixtureWindow?.Close(); localReadingFixture?.Dispose(); walkthroughFixtureWindow = null; localReadingFixture = null; break;
             case "open":
                 string work = request.GetProperty("work").GetString() ?? "";
-                if (work is not ("198" or "384" or "5882" or "2156")) throw new InvalidDataException("Bounded public samples only");
+                if (work is not ("198" or "384" or "5882" or "2156" or "53" or "86")) throw new InvalidDataException("Bounded public samples only");
                 walkthroughFixtureWindow?.Close(); walkthroughFixtureView?.Dispose();
                 browsingPolicy.Set(request.TryGetProperty("nsfw", out var nsfw) && nsfw.GetBoolean());
                 walkthroughFixtureView = new(walkthroughReader ?? throw new InvalidOperationException(), work, () => online.AuthGeneration)

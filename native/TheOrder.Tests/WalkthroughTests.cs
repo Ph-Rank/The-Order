@@ -90,6 +90,37 @@ public sealed class WalkthroughTests
         var step = new WalkthroughStep(kind, new(value, value, false), null, []);
         Assert.Equal(heading, GuideReadingText.IsHeading(step)); Assert.Equal(value, step.Text.Original);
     }
+    [Theory]
+    [InlineData("■４月１４日（月）━━━━━━━━━━", "■４月１４日（一）━━━━━━━━━━")]
+    [InlineData("■寧々AFTER━━━━━", "■宁宁AFTER━━━━━")]
+    [InlineData("第一章", "第一章")]
+    public void ExplicitRemoteHeadingsRemainHeadingsInReadingAndOverlay(string original, string display)
+    {
+        string heading = JsonSerializer.Serialize(new { step_type = "heading", text = original,
+            localized = new Dictionary<string, object> { ["zh-Hans"] = new { value = display, is_machine = true } },
+            alternatives = Array.Empty<object>(), remark = (string?)null, save_key = (string?)null });
+        using var json = JsonDocument.Parse(Synthetic.Replace("{\"step_type\":\"action\",\"text\":\"Continue\",\"alternatives\":[]}", heading));
+        var document = NextMoeWalkthroughs.Parse(json.RootElement, "198");
+        var step = Assert.Single(document.Segments[1].Steps);
+        Assert.Equal("heading", step.Kind); Assert.Equal(original, step.Text.Original); Assert.Equal(display, step.Text.Display);
+        Assert.True(GuideReadingText.IsHeading(step));
+        Assert.Empty(document.Segments[1].Steps.Where(s => !GuideReadingText.IsHeading(s)));
+        var overlay = GuideOverlayDocument.From("g", "合成作品", document);
+        Assert.True(overlay.Routes[1].Steps[0].Heading);
+        Assert.Equal(original, overlay.Routes[1].Steps[0].Original);
+        Assert.Equal(display, overlay.Routes[1].Steps[0].Display);
+        Assert.NotEmpty(GuideOverlayWire.Encode(overlay));
+        Assert.Equal(1, WalkthroughFlowGraph.Build(document).Edges.Sum(edge => edge.Choices));
+    }
+    [Theory]
+    [InlineData("script")]
+    [InlineData("choice_v99")]
+    public void UnknownRemoteStepKindsAreStillRejectedRatherThanDropped(string kind)
+    {
+        using var json = JsonDocument.Parse(Synthetic.Replace("\"step_type\":\"action\"", "\"step_type\":" + JsonSerializer.Serialize(kind)));
+        var failure = Assert.Throws<OnlineException>(() => NextMoeWalkthroughs.Parse(json.RootElement, "198"));
+        Assert.Equal(OnlineFailure.InvalidResponse, failure.Failure);
+    }
     [Fact] public void ReadingWireSeparatesSaveAlternativesAndDateLayoutWithoutFlatteningSourceText()
     {
         var guide = Document(); var first = guide.Segments[0];
