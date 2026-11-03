@@ -17,7 +17,7 @@ dotnet test native/TheOrder.Tests/TheOrder.Tests.csproj -c Release --no-restore
 
 ## 构建和发布
 
-应用、原生攻略组件及安装器步骤见 `docs/release/1.3.0-beta.1/BUILD.md`。原生组件通过 `native/scripts/build-guide-overlay.ps1` 从固定提交构建，输出在忽略的payload目录；第三方许可必须保留。UI内的Dagre资源随源码保存，不从CDN运行。
+应用、原生攻略组件及安装器步骤见 `docs/release/1.3.0-beta.2/BUILD.md`。原生组件通过 `native/scripts/build-guide-overlay.ps1` 从固定提交构建，输出在忽略的payload目录；第三方许可必须保留。UI内的Dagre资源随源码保存，不从CDN运行。
 
 发布从干净的独立分支/源码快照进行；版本以 `native/Directory.Build.props` 为准。先验证再冻结源码及哈希，随后调用 `package-native-release.ps1` 和 `package-native-installer.ps1`。安装包、源码包、更新通道文件、校验和及验证说明一起交付。GitHub Beta标记为prerelease，不提升稳定通道。
 
@@ -26,3 +26,7 @@ dotnet test native/TheOrder.Tests/TheOrder.Tests.csproj -c Release --no-restore
 ## 协作
 
 保留继承与其他协作者的工作，不reset/clean/stash。资料刷新和异步提交不得覆盖后来个人编辑；串行事务、原子持久化、目录与大小检查继续保留。任意远端内容、说明、攻略或附件不得执行命令/宏/脚本。Profile、凭据、私人路径、聊天和缓存不进入发布源归档。
+
+## 无动画页面回归
+
+`native/scripts/test-page-motion.ps1` 接受完整原生EXE和新的D盘输出目录，自动使用独立Test资料验证无动画冷启动、运行中关闭/恢复动画及故障静态回退。两个注入开关仅在Test加VISUAL_TEST入口生效，不改Windows设置或Production；正向场景要求系统允许动画，条件不足不会记为通过。

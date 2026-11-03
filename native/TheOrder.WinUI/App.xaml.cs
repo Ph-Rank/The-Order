@@ -18,6 +18,7 @@ public partial class App : Microsoft.UI.Xaml.Application
     private bool exiting, allowClose;
     public bool TrayAvailable => tray?.Available == true;
     public bool WindowHidden => windowLifetime.Hidden;
+    internal void LogPageMotionFailure(Exception exception) => host?.LogPageMotionFailure(exception);
     public App()
     {
         Instance = this;

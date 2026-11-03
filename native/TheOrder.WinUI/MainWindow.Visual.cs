@@ -23,6 +23,9 @@ public sealed partial class MainWindow
     private string? fixtureDirectory;
     private DispatcherTimer? visualFixtureTimer;
     private ResourceDictionary? visualTokens;
+    private bool pageTranslationEnabled, pageMotionFailed, failPageMotionForTest;
+    private string? pageMotionFailure;
+    private long pageAnimationCount;
 
     private void InitializeVisualSystem(NativeConfiguration configuration)
     {
@@ -30,6 +33,9 @@ public sealed partial class MainWindow
         if (Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test
             && Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_VISUAL_TEST") == "1")
         {
+            // Exercise the first no-motion policy application, before any page animation exists.
+            materialPolicy.ReducedMotion = Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_REDUCED_MOTION_TEST") == "1";
+            failPageMotionForTest = Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_PAGE_MOTION_FAILURE_TEST") == "1";
             ReadSystemAccentOnce();
             direction = Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_VISUAL_DIRECTION") == "A" ? "A" : "B";
             var directory = Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_VISUAL_CONTROL");
@@ -113,9 +119,7 @@ public sealed partial class MainWindow
         gallery?.SetMotionAllowed(materialPolicy.MotionAllowed && visible);
         if (!materialPolicy.MotionAllowed && Root.XamlRoot is not null)
         {
-            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
-            visual.StopAnimation("Opacity"); visual.Opacity = 1;
-            visual.StopAnimation("Translation"); visual.Properties.InsertVector3("Translation", System.Numerics.Vector3.Zero);
+            ResetPageMotion();
         }
     }
 
@@ -181,17 +185,93 @@ public sealed partial class MainWindow
     private void AnimatePage()
     {
         galleryVisible = false;
-        if (materialPolicy?.MotionAllowed != true || Root.XamlRoot is null) return;
-        var visual = ElementCompositionPreview.GetElementVisual(PageContent);
-        visual.StopAnimation("Opacity");
-        using var animation = visual.Compositor.CreateScalarKeyFrameAnimation();
-        animation.InsertKeyFrame(0, .86f); animation.InsertKeyFrame(1, 1);
-        animation.Duration = TimeSpan.FromMilliseconds((double)Microsoft.UI.Xaml.Application.Current.Resources["MotionPageMilliseconds"]);
-        visual.StartAnimation("Opacity", animation);
-        ElementCompositionPreview.SetIsTranslationEnabled(PageContent, true);
-        using var position = visual.Compositor.CreateVector3KeyFrameAnimation();
-        position.InsertKeyFrame(0, new System.Numerics.Vector3(0, 6, 0)); position.InsertKeyFrame(1, System.Numerics.Vector3.Zero);
-        position.Duration = animation.Duration; visual.StartAnimation("Translation", position);
+        if (pageMotionFailed || materialPolicy?.MotionAllowed != true || Root.XamlRoot is null) return;
+        try
+        {
+            // Translation is an opt-in composition property, unlike Opacity. Register it
+            // before starting either effect, and remember only a successful registration.
+            if (!pageTranslationEnabled)
+            {
+                ElementCompositionPreview.SetIsTranslationEnabled(PageContent, true);
+                pageTranslationEnabled = true;
+            }
+            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
+            visual.StopAnimation("Opacity");
+            using var animation = visual.Compositor.CreateScalarKeyFrameAnimation();
+            animation.InsertKeyFrame(0, .86f); animation.InsertKeyFrame(1, 1);
+            animation.Duration = TimeSpan.FromMilliseconds((double)Microsoft.UI.Xaml.Application.Current.Resources["MotionPageMilliseconds"]);
+            visual.StartAnimation("Opacity", animation);
+            if (failPageMotionForTest)
+            {
+                failPageMotionForTest = false;
+                throw new ArgumentException("Synthetic page-motion failure after opacity started.");
+            }
+            using var position = visual.Compositor.CreateVector3KeyFrameAnimation();
+            position.InsertKeyFrame(0, new System.Numerics.Vector3(0, 6, 0)); position.InsertKeyFrame(1, System.Numerics.Vector3.Zero);
+            position.Duration = animation.Duration; visual.StartAnimation("Translation", position);
+            pageAnimationCount++;
+        }
+        catch (Exception exception) { DisablePageMotion(exception); }
+    }
+
+    private void ResetPageMotion()
+    {
+        if (pageMotionFailed) return;
+        try
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
+            visual.StopAnimation("Opacity"); visual.Opacity = 1;
+            // Cold startup with animations off never registers Translation. Stopping
+            // an absent property throws E_INVALIDARG and must not prevent startup.
+            if (pageTranslationEnabled)
+            {
+                visual.StopAnimation("Translation");
+                visual.Properties.InsertVector3("Translation", System.Numerics.Vector3.Zero);
+            }
+        }
+        catch (Exception exception) { DisablePageMotion(exception); }
+    }
+
+    private void DisablePageMotion(Exception exception)
+    {
+        pageMotionFailed = true;
+        pageMotionFailure = $"{exception.GetType().Name}: 0x{exception.HResult:X8}";
+        App.Instance?.LogPageMotionFailure(exception);
+        // Optional effects must not fail navigation, library initialization or exit.
+        // Restore each property independently; do not retry effects for this window.
+        try
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
+            try { visual.StopAnimation("Opacity"); } catch (Exception) { }
+            visual.Opacity = 1;
+        }
+        catch (Exception) { /* The composition target may itself be unavailable. */ }
+        if (pageTranslationEnabled)
+        {
+            try
+            {
+                var visual = ElementCompositionPreview.GetElementVisual(PageContent);
+                try { visual.StopAnimation("Translation"); } catch (Exception) { }
+                visual.Properties.InsertVector3("Translation", System.Numerics.Vector3.Zero);
+            }
+            catch (Exception) { /* Keep the static XAML page usable. */ }
+        }
+    }
+
+    private object PageMotionEvidence()
+    {
+        float? opacity = null;
+        System.Numerics.Vector3? translation = null;
+        if (Root.XamlRoot is not null)
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
+            opacity = visual.Opacity;
+            if (pageTranslationEnabled && visual.Properties.TryGetVector3("Translation", out var position)
+                == Microsoft.UI.Composition.CompositionGetValueStatus.Succeeded) translation = position;
+        }
+        return new { translationEnabled = pageTranslationEnabled, failed = pageMotionFailed,
+            failure = pageMotionFailure, animationCount = pageAnimationCount, opacity,
+            translation = translation is { } value ? new { x = value.X, y = value.Y, z = value.Z } : null };
     }
 
     // Called before PageContent is replaced so the Gallery releases its native
@@ -216,6 +296,7 @@ public sealed partial class MainWindow
     private object VisualEvidence() => new
     {
         contentLanguage = ContentLanguage.Current, direction, isolatedTest = visualFixtureTimer is not null, galleryVisible, visualScreen = galleryVisible ? visualScreen : ViewModel.Page.ToString(),
+        startup = new { ready = startupReady, failed = StartupHasFailed, libraryLoaded = ViewModel.IsLoaded, sessionsReady = Sessions.Ready }, pageMotion = PageMotionEvidence(),
         material = materialPolicy?.Evidence(), gallery = gallery?.ResourceCounts, materialMode = materialMode.ToString(), effectiveMaterialMode = EffectiveMaterialMode.ToString(), controlledAdvanced,
         diagnosticsPolling = diagnosticsTimer is not null, backdrop = SystemBackdrop?.GetType().Name ?? "Solid",
         gameVideos = detailsPage.GameVideoEvidence,

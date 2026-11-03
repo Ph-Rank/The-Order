@@ -231,7 +231,7 @@ public sealed partial class MainWindow : Window
             StartupHasFailed = true;
             App.TraceVisualFailure(exception); lifecycleMessage = UiText.Get("启动恢复未完成，已禁用操作；请退出后重试。"); ViewModel.ReportUnexpected();
             StartupRing.IsActive = false; StartupRing.Visibility = Visibility.Collapsed;
-            StartupError.Text = "书架未能完整加载，原资料已保留。请退出后重试。";
+            StartupError.Text = "程序未能完成启动，原资料已保留。请退出后重试。";
             StartupError.Visibility = StartupExit.Visibility = Visibility.Visible;
             if (Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test
                 && Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_STARTUP_EXIT_TEST") == "1")

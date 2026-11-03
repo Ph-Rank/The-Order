@@ -261,5 +261,8 @@ internal sealed class NativeHost(ServiceProvider provider, MainWindow window, Ap
     public IAppUpdateInstaller Updates { get; } = updates;
     public void LogFatal(Exception exception) => logger.LogCritical(exception, "Native client terminated: {ExceptionType}", exception.GetType().Name);
     public void LogStarted() => logger.LogInformation("Native client started");
+    public void LogPageMotionFailure(Exception exception) => logger.LogWarning(
+        "Page transitions disabled; static content retained: {ExceptionType}, {HResult}",
+        exception.GetType().Name, $"0x{exception.HResult:X8}");
     public async ValueTask DisposeAsync() { await Window.StopAsync(); await Sessions.DisposeAsync(); logger.LogInformation("Native client drained"); await provider.DisposeAsync(); }
 }
