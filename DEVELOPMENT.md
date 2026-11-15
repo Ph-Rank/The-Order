@@ -1,5 +1,9 @@
 # The Order 开发与维护
 
+## 1.3.0 构建与分发
+
+本版本构建和安装包说明位于 [docs/release/1.3.0/BUILD.md](docs/release/1.3.0/BUILD.md)。发布验证使用独立 Test 资料目录。程序版本以 `native/Directory.Build.props` 和发布标签为准。
+
 当前桌面实现为 WinUI 3/.NET 10，入口 `native/TheOrder.WinUI`；根目录 Electron/Vue 文件是历史实现。源码基线见 `docs/ai/BRIEF.md`。使用锁定 SDK 10.0.401 和依赖，不随任务升级。
 
 ## 保护资料

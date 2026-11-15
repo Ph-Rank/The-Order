@@ -1,5 +1,11 @@
 # The Order：1.3.0-beta.2 源码与功能基线
 
+## 1.3.0 发布范围
+
+此稳定版沿用公开 1.3.0-beta.2 的应用功能，包含游戏内攻略、本地阅读和可选 AI 对话。
+
+[版本说明](../release/1.3.0/CHANGELOG.md)随源码提供。
+
 本发布分支使用 WinUI 3、.NET 10、C# 和原生 Windows 组件。根目录旧 Electron/Vue 内容作为历史参考保留；当前应用入口是 `native/TheOrder.WinUI`，构建以 DEVELOPMENT.md 和锁文件为准。
 
 ## 当前功能
