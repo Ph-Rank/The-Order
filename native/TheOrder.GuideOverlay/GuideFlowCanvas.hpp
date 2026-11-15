@@ -31,11 +31,16 @@ template<class Painter> void shape(Painter& painter,Rect r,Color fill,Color stro
 }
 struct State {
     LONG revision=-1;float panX=0,panY=0,zoom=1,scale=1,minX=0,minY=0,graphWidth=1,graphHeight=1;
-    Rect outer{},canvas{};bool currentOnly=false,hideCollections=false,initialized=false,autoFit=true,dragging=false,moved=false;
-    Point downAt{},panAt{};int selectedNode=-1,selectedEdge=-1,readRoute=-1,readStep=0,route=-1;
+    Rect outer{},canvas{},routeMenu{};bool hideCollections=false,routesOpen=false,fitWhole=true,autoFit=true,dragging=false,moved=false;
+    Point downAt{},panAt{};int selectedNode=-1,selectedEdge=-1,readRoute=-1,readStep=0,section=-1,routeFirst=0;
     std::vector<Hit> hits;std::vector<int> activeEdges,activeNodes;std::vector<std::vector<Point>> lines;std::vector<Point> centers;
     std::vector<FlowNode> positions;std::vector<int> layoutEdges;bool filteredLayout=false;
-    void reset(LONG value,const Flow&){if(revision==value)return;revision=value;initialized=false;autoFit=true;selectedNode=selectedEdge=-1;lines.clear();centers.clear();positions.clear();layoutEdges.clear();}
+    void reset(LONG value){
+        if(revision==value)return;
+        revision=value;section=-1;hideCollections=false;routesOpen=false;routeFirst=0;routeMenu={};
+        fitWhole=autoFit=true;selectedNode=selectedEdge=-1;
+        lines.clear();centers.clear();positions.clear();layoutEdges.clear();
+    }
     void reflow(const Flow& flow,bool filtered){
         if(positions.size()==flow.nodes.size()&&layoutEdges==activeEdges&&filteredLayout==filtered)return;
         positions=flow.nodes;layoutEdges=activeEdges;filteredLayout=filtered;lines.clear();centers.clear();for(const auto& e:flow.edges){lines.push_back(curve(e.points));centers.push_back(e.label);}if(!filtered||activeNodes.empty())return;
@@ -71,19 +76,33 @@ struct State {
     void fit(bool all=false){zoom=std::clamp(std::min((canvas.w-40*scale)/(graphWidth*scale),all?(canvas.h-40*scale)/(graphHeight*scale):1.25f),.005f,1.25f);panX=(canvas.w-graphWidth*zoom*scale)/2;panY=all?(canvas.h-graphHeight*zoom*scale)/2:20*scale;}
     Point screen(Point p)const{return {canvas.x+panX+(p.x-minX)*zoom*scale,canvas.y+panY+(p.y-minY)*zoom*scale};}
     void zoomAt(float factor,Point p){float old=zoom;zoom=std::clamp(old*factor,.005f,2.5f);panX=(p.x-canvas.x)-(p.x-canvas.x-panX)*zoom/old;panY=(p.y-canvas.y)-(p.y-canvas.y-panY)*zoom/old;autoFit=false;}
-    bool wheel(Point p,float delta){if(!canvas.has(p))return false;zoomAt(std::pow(1.15f,std::clamp(delta,-4.f,4.f)),p);return true;}
-    bool down(Point p){if(!outer.has(p))return false;dragging=canvas.has(p);moved=false;downAt=p;panAt={panX,panY};for(const auto& hit:hits)if(hit.box.has(p)){dragging=false;break;}return true;}
+    bool wheel(Point p,float delta){
+        if(routesOpen&&routeMenu.has(p)){routeFirst=std::max(0,routeFirst-int(delta*3));return true;}
+        if(!canvas.has(p))return false;
+        zoomAt(std::pow(1.15f,std::clamp(delta,-4.f,4.f)),p);return true;
+    }
+    bool down(Point p){if(!outer.has(p))return false;dragging=!routesOpen&&canvas.has(p);moved=false;downAt=p;panAt={panX,panY};for(const auto& hit:hits)if(hit.box.has(p)){dragging=false;break;}return true;}
     bool move(Point p){if(!dragging)return false;panX=panAt.x+p.x-downAt.x;panY=panAt.y+p.y-downAt.y;moved|=std::hypot(p.x-downAt.x,p.y-downAt.y)>4*scale;autoFit=false;return true;}
     void cancel(){dragging=false;moved=false;}
     bool up(Point p,const Document& d){bool changed=dragging;dragging=false;if(moved){moved=false;return true;}
         for(auto it=hits.rbegin();it!=hits.rend();++it)if(it->box.has(p)){
             const auto hit=*it;changed=true;
+            if(routesOpen&&hit.action!=5&&hit.action!=9&&hit.action!=10){
+                routesOpen=false;return true;
+            }
             switch(hit.action){case 1:selectedNode=hit.index;selectedEdge=-1;break;case 2:selectedEdge=hit.index;selectedNode=-1;break;
             case 3:if(selectedEdge>=0&&selectedEdge<int(d.flow.edges.size())){const auto& e=d.flow.edges[selectedEdge];readRoute=e.route;readStep=e.start;}break;
-            case 4:selectedNode=selectedEdge=-1;break;case 5:currentOnly=!currentOnly;selectedNode=selectedEdge=-1;autoFit=true;break;
+            case 4:selectedNode=selectedEdge=-1;break;
+            case 5:routesOpen=!routesOpen;routeFirst=0;break;
             case 6:zoomAt(hit.index>0?1.25f:.8f,{canvas.x+canvas.w/2,canvas.y+canvas.h/2});break;
-            case 7:fit(hit.index!=0);autoFit=hit.index==0;break;case 8:hideCollections=!hideCollections;selectedNode=selectedEdge=-1;autoFit=true;break;}break;
-        }return changed;
+            case 7:fitWhole=hit.index!=0;autoFit=true;fit(fitWhole);break;
+            case 8:hideCollections=!hideCollections;selectedNode=selectedEdge=-1;autoFit=true;break;
+            case 9:section=hit.index;routesOpen=false;selectedNode=selectedEdge=-1;fitWhole=section<0;autoFit=true;break;
+            case 10:routeFirst=std::max(0,routeFirst+hit.index);break;
+            }return changed;
+        }
+        if(routesOpen){routesOpen=false;return true;}
+        return changed;
     }
 };
 inline std::string caption(const FlowEdge& e){return e.unlock?"通关后解锁":e.choices?std::to_string(e.choices)+" 个选项":e.count?std::to_string(e.count)+" 个步骤":"继续";}
@@ -92,44 +111,71 @@ inline bool secondary(const FlowNode& n){return n.kind=="collect"||(n.kind=="end
 inline std::string caption(const FlowNode& n){return n.label;}
 
 // Painter provides rect/line/text/clip primitives only; no window/input ownership.
-template<class Painter> void render(Painter& p,State& state,const Document& d,Rect area,float scale,bool light,int route,LONG revision){
-    const auto& f=d.flow;state.reset(revision,f);state.scale=scale;state.outer=area;state.route=route;state.hits.clear();
-    if(!state.initialized){state.currentOnly=area.w/scale<820;state.initialized=true;}
+template<class Painter> void render(Painter& p,State& state,const Document& d,Rect area,float scale,bool light,LONG revision){
+    const auto& f=d.flow;state.reset(revision);state.scale=scale;state.outer=area;state.hits.clear();
+    std::vector<std::string> names;
+    for(const auto& edge:f.edges){
+        if(edge.unlock)continue;
+        if(names.size()<=size_t(edge.section))names.resize(size_t(edge.section)+1);
+        auto& name=names[size_t(edge.section)];
+        if(name.empty()){
+            name=reading::routeName(d.routes[size_t(edge.route)]);
+            if(name.empty())name=d.routes[size_t(edge.route)].to;
+        }
+    }
+    const bool filtered=state.section>=0&&size_t(state.section)<names.size()&&!names[size_t(state.section)].empty();
+    const std::string selected=filtered?names[size_t(state.section)]:"全部路线";
     Color flowInk=light?Color{32,33,36}:Color{242,242,242},flowMuted=light?Color{89,97,108}:Color{182,186,195};
     Color background=light?Color{243,245,248,244}:Color{34,37,44,244},border=light?Color{193,199,208}:Color{70,74,83},control=light?Color{235,238,242}:Color{47,50,57};
     auto text=[&](const std::string& value,Rect box,float size,Color color,bool center=false){p.text(value,box,size*scale,color,center);};
     auto button=[&](const std::string& value,Rect box,int action,int index=0,bool primary=false){p.box(box,primary?routeColor(0,light):control,border,5*scale);text(value,box,12,primary?(light?Color{255,255,255}:Color{20,26,32}):flowInk,true);state.hits.push_back({box,action,index});};
-    const float s=scale;const bool twoRows=area.w/s<560;const float bar=(twoRows?60.f:30.f)*s;
-    button(state.currentOnly?"当前路线":"全部路线",{area.x,area.y,92*s,24*s},5);
-    const bool shortBar=area.w/s<540;float x=area.x+area.w-(shortBar?168.f:250.f)*s;
-    button("−",{x,area.y,30*s,24*s},6,-1);button("＋",{x+36*s,area.y,30*s,24*s},6,1);
-    button("适应宽度",{x+72*s,area.y,88*s,24*s},7,0);
-    if(!shortBar)button("总览",{x+168*s,area.y,82*s,24*s},7,1);
-    const float checkX=twoRows?area.x:area.x+106*s,checkY=area.y+(twoRows?30*s:0);
-    p.box({checkX+2*s,checkY+6*s,12*s,12*s},state.hideCollections?routeColor(0,light):background,border,2*s);
-    if(state.hideCollections){const auto checkInk=light?Color{255,255,255}:Color{20,26,32};p.line({checkX+4*s,checkY+14*s},{checkX+7*s,checkY+17*s},checkInk,1.5f*s);p.line({checkX+7*s,checkY+17*s},{checkX+12*s,checkY+11*s},checkInk,1.5f*s);}
-    text("隐藏回收路线",{checkX+22*s,checkY,130*s,24*s},12,flowInk);state.hits.push_back({{checkX,checkY,152*s,24*s},8,0});
-    int section=-1;for(const auto& e:f.edges)if(e.route==route&&!e.unlock){section=e.section;break;}
+    const float s=scale;
+    const bool compact=area.w<660*s||area.h<480*s;
+    const float row=(compact?23.f:26.f)*s,gap=(compact?4.f:6.f)*s;
+    const float checkWidth=103*s,minRouteWidth=76*s;
+    const float zoomWidth=(compact?24.f:30.f)*s,fitWidth=(compact?62.f:84.f)*s,overviewWidth=(compact?40.f:64.f)*s;
+    const float zoomGroup=2*zoomWidth+fitWidth+overviewWidth+3*gap;
+    const bool twoRows=area.w<minRouteWidth+checkWidth+zoomGroup+3*gap;
+    const float available=area.w-checkWidth-(twoRows?2*gap:zoomGroup+3*gap);
+    const float routeWidth=std::clamp(available,minRouteWidth,(compact?124.f:180.f)*s);
+    const float toolsY=area.y+(twoRows?row+gap:0),bar=toolsY-area.y+row+gap;
+    const Rect routeButton{area.x,area.y,routeWidth,row};
+    p.box(routeButton,control,border,5*s);
+    text(selected,{routeButton.x+2*s,routeButton.y,routeButton.w-19*s,row},12,flowInk,true);
+    text(state.routesOpen?"▴":"▾",{routeButton.x+routeButton.w-18*s,routeButton.y,17*s,row},11,flowMuted,true);
+    state.hits.push_back({routeButton,5,0});
+    float x=area.x+area.w-zoomGroup;
+    button("−",{x,toolsY,zoomWidth,row},6,-1);x+=zoomWidth+gap;
+    button("＋",{x,toolsY,zoomWidth,row},6,1);x+=zoomWidth+gap;
+    button("适应宽度",{x,toolsY,fitWidth,row},7,0);x+=fitWidth+gap;
+    button("总览",{x,toolsY,overviewWidth,row},7,1);
+    const float checkX=area.x+routeWidth+gap,checkY=area.y+(row-12*s)/2;
+    p.box({checkX+2*s,checkY,12*s,12*s},state.hideCollections?routeColor(0,light):background,border,2*s);
+    if(state.hideCollections){const auto checkInk=light?Color{255,255,255}:Color{20,26,32};p.line({checkX+4*s,checkY+5*s},{checkX+7*s,checkY+8*s},checkInk,1.5f*s);p.line({checkX+7*s,checkY+8*s},{checkX+12*s,checkY+2*s},checkInk,1.5f*s);}
+    text("隐藏回收路线",{checkX+16*s,area.y,checkWidth-16*s,row},12,flowInk);
+    state.hits.push_back({{checkX,area.y,checkWidth,row},8,0});
     std::vector<bool> eligible(f.edges.size(),true);
     if(state.hideCollections){std::vector<bool> hasOut(f.nodes.size()),keep(f.nodes.size());for(const auto& e:f.edges)hasOut[e.from]=true;
         for(size_t i=0;i<f.nodes.size();++i)keep[i]=!secondary(f.nodes[i])&&(!hasOut[i]||f.nodes[i].kind=="ending");
         for(size_t pass=0;pass<f.nodes.size();++pass){bool changed=false;for(const auto& e:f.edges)if(keep[e.to]&&!keep[e.from]){keep[e.from]=true;changed=true;}if(!changed)break;}
         for(size_t i=0;i<f.edges.size();++i)eligible[i]=keep[f.edges[i].to];}
-    state.activeEdges.clear();std::vector<bool> included(f.nodes.size(),!state.currentOnly&&!state.hideCollections);
-    for(int i=0;i<int(f.edges.size());++i)if(eligible[i]&&(!state.currentOnly||f.edges[i].section==section)){state.activeEdges.push_back(i);included[f.edges[i].from]=included[f.edges[i].to]=true;}
-    if(state.currentOnly){std::vector<bool> edgeSeen(f.edges.size());for(int i:state.activeEdges)edgeSeen[i]=true;
+    state.activeEdges.clear();std::vector<bool> included(f.nodes.size(),!filtered&&!state.hideCollections);
+    for(int i=0;i<int(f.edges.size());++i)if(eligible[i]&&(!filtered||f.edges[i].section==state.section)){state.activeEdges.push_back(i);included[f.edges[i].from]=included[f.edges[i].to]=true;}
+    if(filtered){std::vector<bool> edgeSeen(f.edges.size());for(int i:state.activeEdges)edgeSeen[i]=true;
         for(size_t pass=0;pass<f.nodes.size();++pass){bool added=false;for(int i=0;i<int(f.edges.size());++i)if(eligible[i]&&!edgeSeen[i]&&included[f.edges[i].to]){edgeSeen[i]=true;included[f.edges[i].from]=true;state.activeEdges.push_back(i);added=true;}if(!added)break;}}
     state.activeNodes.clear();for(int i=0;i<int(f.nodes.size());++i)if(included[i])state.activeNodes.push_back(i);
-    state.reflow(f,state.currentOnly||state.hideCollections);state.minX=state.minY=32768;float maxX=0,maxY=0;
+    state.reflow(f,filtered||state.hideCollections);state.minX=state.minY=32768;float maxX=0,maxY=0;
     for(int i:state.activeNodes){const auto& n=state.positions[i];state.minX=std::min(state.minX,n.x-n.width/2-20);state.minY=std::min(state.minY,n.y-n.height/2-20);maxX=std::max(maxX,n.x+n.width/2+20);maxY=std::max(maxY,n.y+n.height/2+20);}
     state.graphWidth=std::max(1.f,maxX-state.minX);state.graphHeight=std::max(1.f,maxY-state.minY);
     if(state.activeNodes.empty()){state.minX=state.minY=0;state.graphWidth=state.graphHeight=1;}
     bool inspect=state.selectedEdge>=0||state.selectedNode>=0,side=area.w/s>=720;
-    Rect chart{area.x,area.y+bar,area.w,area.h-bar},inspector{};
-    if(inspect){if(side){inspector={chart.x+chart.w-246*s,chart.y,246*s,chart.h};chart.w-=260*s;}else inspector={chart.x+8*s,chart.y+chart.h-std::min(chart.h,164*s)-8*s,chart.w-16*s,std::min(chart.h,164*s)};}
+    Rect chart{area.x,area.y+bar,area.w,std::max(1.f,area.h-bar)},inspector{};
+    if(inspect){
+        if(side){inspector={chart.x+chart.w-246*s,chart.y,246*s,chart.h};chart.w-=260*s;}
+        else {const float height=std::max(1.f,std::min(chart.h-12*s,std::clamp(chart.h*.62f,104*s,164*s)));inspector={chart.x+8*s,chart.y+chart.h-height-6*s,chart.w-16*s,height};}
+    }
     if(chart.w!=state.canvas.w||chart.h!=state.canvas.h)state.autoFit=true;state.canvas=chart;
-    if(state.autoFit)state.fit();
-    if(area.w/s>=800)text(std::to_string(state.activeNodes.size())+" 个节点",{area.x+270*s,area.y,area.w-534*s,28*s},11,flowMuted);
+    if(state.autoFit)state.fit(state.fitWhole);
     p.box(chart,background,border,7*s);p.clip(chart);
     auto chartHit=[&](Rect box,int action,int index){const float right=std::min(box.x+box.w,chart.x+chart.w),bottom=std::min(box.y+box.h,chart.y+chart.h);box.x=std::max(box.x,chart.x);box.y=std::max(box.y,chart.y);box.w=right-box.x;box.h=bottom-box.y;if(box.w>0&&box.h>0)state.hits.push_back({box,action,index});};
     const Color grid=light?Color{230,234,240}:Color{42,46,54};
@@ -165,6 +211,7 @@ template<class Painter> void render(Painter& p,State& state,const Document& d,Re
     p.unclip();
     if(state.activeNodes.empty())text("暂无主路线，取消隐藏可查看回收内容",{chart.x+12*s,chart.y+20*s,chart.w-24*s,40*s},12,flowMuted,true);
     if(inspect){
+        const auto firstHit=state.hits.size();
         p.box(inspector,light?Color{250,250,250}:Color{41,41,41},border,7*s);p.clip(inspector);
         const float px=inspector.x+12*s,w=inspector.w-24*s;float y=inspector.y+10*s;
         button("×",{inspector.x+inspector.w-36*s,y,26*s,26*s},4);
@@ -179,7 +226,49 @@ template<class Painter> void render(Painter& p,State& state,const Document& d,Re
                 std::string title=(e.from==state.selectedNode?"前往 ":"来自 ")+f.nodes[e.from==state.selectedNode?e.to:e.from].label+" · "+caption(e);
                 button(title,{px,y,w,32*s},2,edge);y+=38*s;if(y+32*s>inspector.y+inspector.h)break;}}
         p.unclip();
+        for(size_t i=firstHit;i<state.hits.size();++i){
+            auto& box=state.hits[i].box;
+            box.h=std::max(0.f,std::min(box.h,inspector.y+inspector.h-box.y));
+        }
+        state.hits.erase(std::remove_if(state.hits.begin()+firstHit,state.hits.end(),
+            [](const Hit& hit){return hit.box.h<=0;}),state.hits.end());
     }
     if(f.truncated)text("流程较大，部分节点未绘制；正文保留全部步骤。",{area.x,area.y+area.h-22*s,area.w,22*s},11,flowMuted);
+    state.routeMenu={};
+    if(state.routesOpen){
+        const int current=filtered?state.section:-1;
+        std::vector<int> choices{current};
+        if(filtered)choices.push_back(-1);
+        for(int index=0;index<int(names.size());++index)
+            if(index!=current&&!names[size_t(index)].empty())choices.push_back(index);
+        const float popupY=routeButton.y+row+gap;
+        const float width=std::min(area.w,300*s);
+        const float maxHeight=std::min(area.y+area.h-popupY,254*s);
+        const bool scrollable=float(choices.size())*row+2*gap>maxHeight;
+        const float pager=scrollable?row+gap:0;
+        const int visible=std::max(1,int((maxHeight-2*gap-pager)/row));
+        state.routeFirst=std::clamp(state.routeFirst,0,std::max(0,int(choices.size())-visible));
+        const int count=std::min(int(choices.size()),visible);
+        state.routeMenu={area.x,popupY,width,count*row+2*gap+pager};
+        const auto menu=state.routeMenu;
+        p.box(menu,light?Color{250,250,250}:Color{30,34,42},border,5*s);
+        p.clip(menu);
+        for(int offset=0;offset<count;++offset){
+            const int index=choices[size_t(state.routeFirst+offset)];
+            Rect item{menu.x+gap,menu.y+gap+offset*row,menu.w-2*gap,row};
+            const bool active=index==current;
+            if(active)p.box(item,control,control,3*s);
+            const auto label=(active?"✓  ":"")+(index<0?std::string("全部路线"):names[size_t(index)]);
+            text(label,{item.x+4*s,item.y,item.w-8*s,item.h},12,flowInk);
+            state.hits.push_back({item,9,index});
+        }
+        if(scrollable){
+            const float x0=menu.x+gap,at=menu.y+gap+count*row;
+            const float w=(menu.w-3*gap)/2;
+            button("上一页",{x0,at,w,row},10,-visible);
+            button("下一页",{x0+w+gap,at,w,row},10,visible);
+        }
+        p.unclip();
+    }
 }
 }

@@ -47,6 +47,7 @@ public sealed partial class PlaygroundService
         public bool PublicSearchAnswerReady { get; set; }
         public bool PublicSearchTruncated { get; set; }
         public Dictionary<string, string> PublicFetchPayloads { get; } = new(StringComparer.Ordinal);
+        public Dictionary<string, string> GameQuotePayloads { get; } = new(StringComparer.Ordinal);
         public string Binding { get; set; } = "";
         public long LastTextPreview { get; set; }
         public bool SavedContext => Conversation.Options.UseSavedContext;
@@ -64,6 +65,7 @@ public sealed partial class PlaygroundService
             throw new InvalidOperationException("当前没有可重试的中断或失败回复。");
         var question = messages.TakeWhile(m => m.Id != reply.Id).LastOrDefault(m => m.Role == "user")
             ?? throw new InvalidOperationException("原始问题已不存在。");
+        if (question.Attachments.Any(a => a.IsGameFrame)) throw new InvalidOperationException("游戏画面未保存；请在游戏内重新发送，以读取当前画面。");
         if (Suppressed(Snapshot, question)) throw new InvalidOperationException("原问题包含已遗忘的内容，请重新表达后再发送。");
         var bound = question.Sources.Where(x => x.WorkKey is not null).Select(x => x.WorkKey).ToArray();
         if (bound.Length != 0 && (!Snapshot.Settings.Permissions.Library || bound.Any(key => library()?.Entries.Any(e => WorkKeyFor(e) == key) != true)))
@@ -95,7 +97,8 @@ public sealed partial class PlaygroundService
             PrepareConversationTape(run, captured, retry is not null);
             await Mutate(s =>
             {
-                EnsureCurrent(run); var now = clock(); var messages = s.Messages;
+                EnsureCurrent(run); var now = clock(); var messages = s.Messages.Select(m => m with
+                    { Attachments = PlaygroundGameFrames.WithoutPixels(m.Attachments) }).ToImmutableArray();
                 if (retry is null)
                 {
                     string? work = MentionedWork(run, text);
@@ -124,7 +127,8 @@ public sealed partial class PlaygroundService
         { await Finish(run, PlaygroundMessageStatus.Failed, "本轮未完成，未自动重发；检查设置后可手动重试。", false).ConfigureAwait(false); }
         finally
         {
-            lock (gate) { if (active == run) active = null; }
+            lock (gate) { if (run.Attachments.Any(a => a.IsGameFrame)) state = state with { Messages = state.Messages.Select(m => m.Id == run.UserId
+                ? m with { Attachments = PlaygroundGameFrames.WithoutPixels(m.Attachments) } : m).ToImmutableArray() }; if (active == run) active = null; }
             run.Finished.TrySetResult(); run.Dispose(); Notify(conversationId, run.Id, "idle");
         }
     }

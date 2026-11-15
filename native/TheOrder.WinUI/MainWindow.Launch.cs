@@ -8,6 +8,51 @@ public sealed partial class MainWindow
     private readonly LaunchFileDiscovery launchFiles;
     private readonly IOfflineFilesClient launchFilesClient;
     private bool activatingLaunch;
+    private InfoBarSeverity? lastLaunchSeverity;
+    private (Guid Operation, string Message)? lastLaunchTrackingNotice;
+
+    private async Task LaunchAndReportAsync(string title)
+    {
+        var previous = Launch.LastRequestStatus;
+        await Launch.LaunchAsync();
+        if (Launch.LastRequestStatus is not { } result || ReferenceEquals(previous, result)) return;
+        lastLaunchSeverity = result.Outcome switch
+        {
+            LaunchOutcome.Started => InfoBarSeverity.Success,
+            LaunchOutcome.StartedButTrackingLimited or LaunchOutcome.AlreadyRunning or LaunchOutcome.AlreadyLaunching or LaunchOutcome.Cancelled => InfoBarSeverity.Warning,
+            _ => InfoBarSeverity.Error
+        };
+        if (result.Outcome == LaunchOutcome.StartedButTrackingLimited)
+            ReportTrackingNotice(result, title);
+        else
+            statusPage.Post(new(title, result.Message, lastLaunchSeverity.Value));
+    }
+
+    private void ReportTrackingNotice(LaunchStatus result, string title)
+    {
+        if (result.Snapshot is { } snapshot)
+        {
+            var notice = (snapshot.OperationId, result.Message);
+            if (lastLaunchTrackingNotice == notice) return;
+            lastLaunchTrackingNotice = notice;
+        }
+        statusPage.Post(new(title, result.Message, InfoBarSeverity.Warning));
+    }
+
+    private void RefreshLaunchTrackingStatus()
+    {
+        var runtime = Launch.Runtime;
+        if (runtime is { Outcome: LaunchOutcome.StartedButTrackingLimited, Snapshot: { } snapshot })
+            ReportTrackingNotice(runtime, extras.Snapshot?.Entries.FirstOrDefault(entry => entry.Id == snapshot.Game.GameId)?.Name ?? "游戏进程");
+    }
+
+    private async Task ConfirmLaunchPositionAsync()
+    {
+        await Launch.ConfirmAsync();
+        if (!Launch.CanLaunch && !string.IsNullOrWhiteSpace(Launch.DetailNotice))
+            statusPage.Post(new("启动位置", Launch.DetailNotice, InfoBarSeverity.Warning, RequiresAction: true));
+    }
+
     private async Task ActivateLaunchAsync()
     {
         if (activatingLaunch || commandsBlocked || !Launch.CanActivate || Launch.GameId is not { } game) return;
@@ -47,10 +92,11 @@ public sealed partial class MainWindow
             if (Launch.PositionChanged)
             {
                 var confirm = new ContentDialog { XamlRoot = Root.XamlRoot, Title = UiText.Get("启动位置已变化"), Content = new TextBlock { Text = Launch.Position, TextWrapping = TextWrapping.Wrap }, PrimaryButtonText = UiText.Get("确认启动位置"), CloseButtonText = UiText.Get("取消") };
-                if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+                if (await confirm.ShowInShellAsync() != ContentDialogResult.Primary) return;
             }
-            if (Launch.CanConfirm) await Launch.ConfirmAsync();
-            if (Launch.GameId == game && !commandsBlocked && Launch.CanLaunch) await Launch.LaunchAsync();
+            if (Launch.CanConfirm) await ConfirmLaunchPositionAsync();
+            if (Launch.GameId == game && !commandsBlocked && Launch.CanLaunch)
+                await LaunchAndReportAsync(extras.Snapshot?.Entries.FirstOrDefault(entry => entry.Id == game)?.Name ?? "启动游戏");
         }
         catch (Exception) { ViewModel.ReportUnexpected(); }
         finally { activatingLaunch = false; }
@@ -66,7 +112,7 @@ public sealed partial class MainWindow
         content.Children.Add(list);
         var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, Title = title, Content = content, PrimaryButtonText = UiText.Get(folder is null ? "下一步" : "选择并启动"), SecondaryButtonText = folder is null ? "" : UiText.Get("浏览本目录"), CloseButtonText = UiText.Get("取消"), IsPrimaryButtonEnabled = false };
         list.SelectionChanged += (_, _) => dialog.IsPrimaryButtonEnabled = list.SelectedItem is not null;
-        var result = await dialog.ShowAsync();
+        var result = await dialog.ShowInShellAsync();
         if (result == ContentDialogResult.Secondary && folder is not null)
         {
             var picker = new Microsoft.Windows.Storage.Pickers.FileOpenPicker(AppWindow.Id) { SuggestedFolder = folder };

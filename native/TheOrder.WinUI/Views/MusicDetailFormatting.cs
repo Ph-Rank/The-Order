@@ -79,8 +79,10 @@ internal static class MusicDetailFormatting
             {
                 var reference = new MusicBrainzReference(MusicBrainzEntityKind.Artist, id);
                 var label = Text(credit.Name, 14); label.IsHitTestVisible = false;
-                var link = new HyperlinkButton { Content = label, Padding = new(0, 3, 0, 3), MinHeight = 30,
-                    HorizontalAlignment = HorizontalAlignment.Left, HorizontalContentAlignment = HorizontalAlignment.Left };
+                var link = navigate is null
+                    ? new ExternalLinkButton()
+                    : new HyperlinkButton { Padding = new(0, 3, 0, 3), MinHeight = 30, HorizontalAlignment = HorizontalAlignment.Left };
+                link.Content = label;
                 AutomationProperties.SetAutomationId(link, "MusicArtist-" + id);
                 AutomationProperties.SetName(link, credit.Name + " · 音乐人 / 团体");
                 ToolTipService.SetToolTip(link, reference.Url);

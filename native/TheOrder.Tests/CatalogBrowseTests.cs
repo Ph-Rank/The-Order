@@ -97,12 +97,16 @@ public sealed class CatalogBrowseTests
         using var profile = new TransactionProfile(); var configuration = new NativeConfiguration(profile.Root); var rules = new LegacyClientTextRules();
         await using var offline = new OfflineLibraryClient(new IsolatedLibraryFactory(new NativeLibraryCodec(), configuration), rules);
         await using var workspace = new WorkspaceViewModel(offline, new IsolatedUiPreferencesStore(configuration), configuration, rules);
-        await using var model = new OnlineViewModel(client, new Credential(), new Registry(), new(offline, catalog), workspace) { Query = "Synthetic" };
+        await using var model = new OnlineViewModel(client, new Credential(), new Registry(), new(offline, catalog), workspace);
+        model.ResetBrowsing();
+        Assert.Empty(model.SearchMessage);
+        model.Query = "Synthetic";
         await model.SearchAsync(); Assert.Single(model.Items);
         held = true; var old = model.SearchAsync(true); policy.Set(false); model.ResetBrowsing();
         released.SetResult(Page(Row("2", "nsfw"))); await old;
         Assert.Empty(model.Items); Assert.False(model.CanLoadMore); Assert.Null(model.Details);
         Assert.Equal(OnlineState.Idle, model.SearchState);
+        Assert.Contains("请重新搜索", model.SearchMessage);
     }
     private sealed class Registry : IRemoteCoverRegistry { public string? Register(string? url, string revision) => url; }
 }

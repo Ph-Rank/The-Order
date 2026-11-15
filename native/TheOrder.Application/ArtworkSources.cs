@@ -1,4 +1,3 @@
-using TheOrder.Application;
 using TheOrder.Domain;
 
 namespace TheOrder.Application;
@@ -7,6 +6,17 @@ namespace TheOrder.Application;
 // fetches speculative URLs, or borrows artwork from another catalog work.
 public static class ArtworkSources
 {
+    public const string VndbPromoKind = "vndb-promo";
+
+    public static string? VndbWorkId(WorkMetadata work)
+    {
+        if (work.References.IsDefaultOrEmpty) return null;
+        var ids = work.References.Where(r => r.Source == "vndb" && r.Id.Length is >= 2 and <= 13 &&
+            r.Id[0] == 'v' && r.Id.Skip(1).All(char.IsAsciiDigit))
+            .Select(r => r.Id).Distinct().Take(2).ToArray();
+        return ids.Length == 1 ? ids[0] : null;
+    }
+
     public static string? Landscape(WorkMetadata? work)
     {
         if (work is null) return null;

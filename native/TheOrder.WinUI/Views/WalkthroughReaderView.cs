@@ -16,10 +16,10 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
     private readonly Func<long> auth;
     private readonly DispatcherTimer scopeTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     private readonly TextBlock status = Text("", 14), attribution = Text("", 13), routeFacts = Text("", 14);
-    private readonly ComboBox guides = new() { Header = "攻略来源与版本", PlaceholderText = "选择一份攻略", HorizontalAlignment = HorizontalAlignment.Stretch };
-    private readonly ComboBox routes = new() { Header = "路线段", HorizontalAlignment = HorizontalAlignment.Stretch };
-    private readonly Button read = new() { Content = "读取网络攻略" }, next = new() { Content = "下一页攻略" }, cancel = new() { Content = "取消读取" };
-    private readonly HyperlinkButton source = new() { Content = "原攻略出处", Padding = new Thickness(0) };
+    private readonly SelectedFirstComboBox guides = new() { Header = "攻略来源与版本", PlaceholderText = "选择一份攻略", HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly SelectedFirstComboBox routes = new() { Header = "路线段", HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly Button read = new() { Content = "读取网络攻略" }, cancel = new() { Content = "取消读取" };
+    private readonly ExternalLinkButton source = new() { Content = "原攻略出处" };
     private readonly SelectorBar modes = new();
     private readonly SelectorBarItem bodyTab = new() { Text = "连续阅读" }, graphTab = new() { Text = "流程图" };
     private readonly WalkthroughGraphView flow = new() { Visibility = Visibility.Collapsed };
@@ -29,7 +29,7 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
     private readonly StackPanel routePanel = new() { Spacing = 10 };
     private readonly ScrollViewer stepScroll = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalContentAlignment = HorizontalAlignment.Left };
-    private readonly Button moreSteps = new() { Content = "继续展开步骤" };
+    private readonly ScrollPageFooter moreSteps = new();
     private readonly ScrollViewer map = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalContentAlignment = HorizontalAlignment.Left };
     private readonly StackPanel overview = new() { Spacing = 20, Padding = new Thickness(0,0,0,16) };
@@ -40,7 +40,7 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
     private long authVersion;
     private int shownSteps = 60;
     private (WalkthroughDocument? Document, int Route, bool Graph, bool Original, int Count)? renderedRoute;
-    private bool initialRead;
+    private bool initialRead, readingMoreSources;
     private bool listFallback;
     private Action? reflow;
     private object? endEvidence;
@@ -58,9 +58,9 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
     public object LayoutForFixture() => new { width = ActualWidth, guides = model.Items.Length,
         selected = model.Document?.Summary.Id, routes = model.Document?.Segments.Length,
         steps = model.Document?.Segments.Sum(s => s.Steps.Length), sectionKeys = model.Document?.Sections.Select(s=>s.Key), graph = ShowGraph,
-        routeIndex = routes.SelectedIndex, graphNodes = overviewRoutes.Count,
+        routeIndex = routes.OptionIndex, graphNodes = overviewRoutes.Count,
         cards = steps.Children.Count, primaryFont = 16, originalVisible = original.IsOn,
-        dateHeadings = model.Document?.Segments.ElementAtOrDefault(routes.SelectedIndex)?.Steps.Count(GuideReadingText.IsHeading) ?? 0,
+        dateHeadings = model.Document?.Segments.ElementAtOrDefault(routes.OptionIndex)?.Steps.Count(GuideReadingText.IsHeading) ?? 0,
         status = status.Text, bodyWidth = body.ActualWidth, mapWidth = overview.ActualWidth,
         overviewSelectableText = overviewRoutes.Any(HasSelectableText),
         listWidth = guides.ActualWidth, bodyOffset = stepScroll.VerticalOffset, flow = flow.Evidence, end = endEvidence,
@@ -69,8 +69,8 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
     internal Task CaptureGraphForFixtureAsync(string path) => flow.CaptureForFixtureAsync(path);
     internal async Task EndForFixtureAsync()
     {
-        if (shownDocument is not { } document || routes.SelectedIndex < 0) throw new InvalidOperationException();
-        SetGraphForFixture(false); shownSteps = document.Segments[routes.SelectedIndex].Steps.Length; RenderRoute();
+        if (shownDocument is not { } document || routes.OptionIndex < 0) throw new InvalidOperationException();
+        SetGraphForFixture(false); shownSteps = document.Segments[routes.OptionIndex].Steps.Length; RenderRoute();
         UpdateLayout(); await Task.Delay(120); stepScroll.ChangeView(null,stepScroll.ScrollableHeight,null,true); await Task.Delay(120); UpdateLayout();
         var last = steps.Children.OfType<Border>().LastOrDefault() ?? throw new InvalidOperationException();
         var clips = new List<object>(); bool visible = true;
@@ -82,7 +82,7 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
                 visible &= fits; clips.Add(new {scroll.Name,top=top.Y,bottom=top.Y+last.ActualHeight,viewport=scroll.ViewportHeight,fits});
             }
         endEvidence = new {visible,offset=stepScroll.VerticalOffset,maximum=stepScroll.ScrollableHeight,
-            lastIndex=document.Segments[routes.SelectedIndex].Steps.Length-1,clips};
+            lastIndex=document.Segments[routes.OptionIndex].Steps.Length-1,clips};
     }
     public Func<string, Task>? OpenLink { get; set; }
     public WalkthroughReaderView(IWalkthroughReader reader, string? workId,
@@ -98,7 +98,7 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
         AutomationProperties.SetAutomationId(status, "WalkthroughStatus"); AutomationProperties.SetAutomationId(body, "WalkthroughBody");
         var header = new StackPanel { Spacing = 8 };
         var actions = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6 };
-        actions.Children.Add(read); actions.Children.Add(cancel); actions.Children.Add(next); actions.Children.Add(status);
+        actions.Children.Add(read); actions.Children.Add(cancel); actions.Children.Add(status);
         header.Children.Add(actions); header.Children.Add(guides); Children.Add(header);
         body.ColumnDefinitions.Add(new() { Width = new(210) }); body.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         body.RowDefinitions.Add(new() { Height = GridLength.Auto }); body.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
@@ -109,7 +109,7 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
                 Text("请核对攻略版本。路线与参考译文可能有误，以游戏中的选项为准。", 12) } } };
         routePanel.Children.Add(attributionInfo); body.Children.Add(routePanel);
         var narrowAttribution = new Button { Content = "来源与版本", FontSize = 12, Padding = new Thickness(8, 6, 8, 6), Visibility = Visibility.Collapsed };
-        var sourceSummary = Text("", 13); var originalSource = new HyperlinkButton { Content = "原攻略出处", Padding = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Left };
+        var sourceSummary = Text("", 13); var originalSource = new ExternalLinkButton { Content = "原攻略出处" };
         var sourceFlyout = new Flyout { Content = new StackPanel { Spacing = 10, MaxWidth = 320, Children = { sourceSummary, originalSource } } };
         sourceFlyout.Opening += (_, _) => { sourceSummary.Text = attribution.Text; originalSource.IsEnabled = Safe(model.Document?.Summary.SourceUrl); };
         originalSource.Click += async (_, _) => await OpenSourceAsync(); narrowAttribution.Flyout = sourceFlyout; routePanel.Children.Add(narrowAttribution);
@@ -131,12 +131,13 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
         map.SizeChanged += (_,e) => overview.Width = Math.Max(0,e.NewSize.Width-16);
         SetColumn(reading, 1); body.Children.Add(reading); SetRow(body, 1); Children.Add(body);
         read.Click += async (_, _) => await ReadAsync();
-        next.Click += async (_, _) => await model.NextAsync(); cancel.Click += (_, _) => model.Cancel();
-        guides.SelectionChanged += async (_, _) => { if (!syncing && guides.SelectedIndex >= 0 && guides.SelectedIndex < shownGuides.Length) await model.SelectAsync(shownGuides[guides.SelectedIndex].Id); };
-        routes.SelectionChanged += (_, _) => { if (!syncing) { shownSteps = 60; RenderRoute(); } };
+        guides.DropDownOpened += async (_, _) => await ReadRemainingSourcesAsync();
+        cancel.Click += (_, _) => model.Cancel();
+        guides.OptionChanged += async (_, _) => { if (!syncing && guides.OptionIndex >= 0 && guides.OptionIndex < shownGuides.Length) await model.SelectAsync(shownGuides[guides.OptionIndex].Id); };
+        routes.OptionChanged += (_, _) => { if (!syncing) { shownSteps = 60; RenderRoute(); } };
         modes.SelectionChanged += (_, _) => { listFallback = false; if (!syncing) RenderRoute(); };
         original.Toggled += (_, _) => RenderRoute();
-        moreSteps.Click += (_, _) => { shownSteps += 60; RenderRoute(); };
+        moreSteps.LoadNext = () => { shownSteps += 60; RenderRoute(); return Task.CompletedTask; };
         source.Click += async (_, _) => await OpenSourceAsync();
         ActualThemeChanged += (_, _) => { renderedRoute = null; RenderRoute(); };
         reflow = () => {
@@ -180,6 +181,21 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
         if (!disposed && model.IsSourceCurrent && !model.Busy && model.Items.Length == 1 && model.Document is null)
             await model.SelectAsync(model.Items[0].Id);
     }
+    private async Task ReadRemainingSourcesAsync()
+    {
+        if (readingMoreSources || disposed) return;
+        readingMoreSources = true;
+        try
+        {
+            while (guides.IsDropDownOpen && IsLoaded && model.IsSourceCurrent && !model.Busy && model.NextCursor is { } cursor)
+            {
+                await model.NextAsync();
+                if (model.NextCursor == cursor) break;
+            }
+        }
+        finally { readingMoreSources = false; Render(); }
+    }
+
     private void StateChanged(object? sender, PropertyChangedEventArgs args) => Render();
     private void Render()
     {
@@ -187,21 +203,28 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
         try
         {
             status.Text = model.Message; read.IsEnabled = !model.Busy && model.WorkId is not null;
-            next.Visibility = model.NextCursor is null ? Visibility.Collapsed : Visibility.Visible; next.IsEnabled = !model.Busy;
             cancel.Visibility = model.Busy ? Visibility.Visible : Visibility.Collapsed;
             cancel.IsEnabled = model.Busy; read.Content = model.Document is null ? "读取攻略" : "重新读取";
-            if (!shownGuides.SequenceEqual(model.Items))
+            var guidesChanged = !shownGuides.SequenceEqual(model.Items);
+            if (guidesChanged)
             {
-                shownGuides = model.Items.ToArray(); guides.Items.Clear();
-                foreach (var guide in shownGuides) guides.Items.Add(SourceName(guide.Source) + " · " + CatalogReleaseFacts.LanguageCaption(guide.Language) + " · " + guide.Release);
+                var incoming = model.Items;
+                var append = shownGuides.Length > 0 && incoming.Length >= shownGuides.Length
+                    && shownGuides.SequenceEqual(incoming.Take(shownGuides.Length));
+                var start = append ? shownGuides.Length : 0;
+                shownGuides = incoming.ToArray();
+                if (!append) guides.Options.Clear();
+                foreach (var guide in shownGuides.Skip(start))
+                    guides.Options.Add(SourceName(guide.Source) + " · " + CatalogReleaseFacts.LanguageCaption(guide.Language) + " · " + guide.Release);
             }
-            guides.IsEnabled = !model.Busy && shownGuides.Length > 0;
+            guides.IsEnabled = (!model.Busy || readingMoreSources) && shownGuides.Length > 0;
             guides.Visibility = shownGuides.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-            guides.SelectedIndex = Array.FindIndex(shownGuides, s => s.Id == model.SelectedId);
+            if (guidesChanged && shownGuides.Length > 0) InteractionMotion.RevealContent(guides, .72f);
+            guides.OptionIndex = Array.FindIndex(shownGuides, s => s.Id == model.SelectedId);
             body.Visibility = model.Document is null ? Visibility.Collapsed : Visibility.Visible;
             if (!ReferenceEquals(shownDocument, model.Document))
             {
-                shownDocument = model.Document; routes.Items.Clear(); shownSteps = 60;
+                shownDocument = model.Document; routes.Options.Clear(); shownSteps = 60;
                 if (shownDocument is { } document)
                 {
                     attribution.Text = SourceName(document.Summary.Source) + " · " + document.Summary.Release + " · 更新 " + document.Summary.UpdatedAt.Split('T')[0]
@@ -210,21 +233,23 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
                     foreach (var segment in document.Segments)
                     {
                         string section = document.Sections.FirstOrDefault(s => s.Key == segment.Section)?.Title.Display ?? "路线";
-                        routes.Items.Add(section + " · " + segment.From.Label.Display + " → " + segment.To.Label.Display);
+                        routes.Options.Add(section + " · " + segment.From.Label.Display + " → " + segment.To.Label.Display);
                     }
-                    routes.SelectedIndex = document.Segments.IsEmpty ? -1 : 0;
+                    routes.OptionIndex = document.Segments.IsEmpty ? -1 : 0;
                 }
                 RenderRoute();
+                if (shownDocument is not null) InteractionMotion.RevealContent(body, .72f);
             }
         }
         finally { syncing = false; }
     }
     private void RenderRoute()
     {
-        var key = (shownDocument, routes.SelectedIndex, ShowGraph, original.IsOn, shownSteps);
+        var key = (shownDocument, routes.OptionIndex, ShowGraph, original.IsOn, shownSteps);
         if (renderedRoute == key) return;
+        var viewChanged = renderedRoute?.Graph != ShowGraph;
         int start = renderedRoute is { } previous && ReferenceEquals(previous.Document, shownDocument)
-            && previous.Route == routes.SelectedIndex && !previous.Graph && !ShowGraph
+            && previous.Route == routes.OptionIndex && !previous.Graph && !ShowGraph
             && previous.Original == original.IsOn && previous.Count < shownSteps ? previous.Count : 0;
         renderedRoute = key;
         if (start == 0) { steps.Children.Clear(); overview.Children.Clear(); overviewRoutes.Clear(); }
@@ -233,16 +258,25 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
         map.Visibility = ShowGraph && listFallback ? Visibility.Visible : Visibility.Collapsed;
         flow.Visibility = ShowGraph && !listFallback ? Visibility.Visible : Visibility.Collapsed;
         reflow?.Invoke();
-        moreSteps.Visibility = Visibility.Collapsed;
-        if (shownDocument is not { } document || routes.SelectedIndex < 0 || routes.SelectedIndex >= document.Segments.Length) { flow.Hide(); return; }
-        var segment = document.Segments[routes.SelectedIndex];
+        if (shownDocument is not { } document || routes.OptionIndex < 0 || routes.OptionIndex >= document.Segments.Length)
+        { moreSteps.Update(null); flow.Hide(); return; }
+        var segment = document.Segments[routes.OptionIndex];
         routeFacts.Text = segment.From.Label.Display + " → " + segment.To.Label.Display
             + (segment.From.Requirement is null ? "" : "\n解锁条件：先完成 " + segment.From.Requirement)
             + (segment.Condition.Display.Length > 0 ? "\n条件：" + segment.Condition.Display : "");
         if (ShowGraph)
         {
-            if (listFallback) { flow.Hide(); DrawMap(document); }
-            else flow.Show(document,ActualTheme,segment.Section);
+            moreSteps.Update(null);
+            if (listFallback)
+            {
+                flow.Hide(); DrawMap(document);
+                InteractionMotion.EnterPage(map);
+            }
+            else
+            {
+                flow.Show(document, ActualTheme, segment.Section);
+                if (viewChanged) InteractionMotion.EnterPage(flow);
+            }
             return;
         }
         flow.Hide();
@@ -267,19 +301,21 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
                 BorderThickness = heading ? new Thickness(0, 0, 0, 1) : new Thickness(0),
                 BorderBrush = new SolidColorBrush(ActualTheme == ElementTheme.Dark ? Windows.UI.Color.FromArgb(45, 200, 203, 210) : Windows.UI.Color.FromArgb(40, 90, 92, 98)) };
             AutomationProperties.SetAutomationId(card, "WalkthroughStep-" + index); steps.Children.Add(card);
+            if (start > 0) InteractionMotion.RevealContent(card, .72f);
         }
-        moreSteps.Visibility = shownSteps < segment.Steps.Length ? Visibility.Visible : Visibility.Collapsed;
+        moreSteps.Update(shownSteps < segment.Steps.Length ? (segment.Key, shownSteps) : null);
+        if (start == 0 && steps.Children.Count > 0) InteractionMotion.EnterPage(stepScroll);
     }
     private void OpenStep(int route, int index)
     {
         if (shownDocument is not { } document || route < 0 || route >= document.Segments.Length
             || index < 0 || index > document.Segments[route].Steps.Length) return;
         syncing = true;
-        try { routes.SelectedIndex = route; modes.SelectedItem = bodyTab; shownSteps = Math.Max(60,index+60); }
+        try { routes.OptionIndex = route; modes.SelectedItem = bodyTab; shownSteps = Math.Max(60,index+60); }
         finally { syncing = false; }
         RenderRoute(); UpdateLayout();
         DispatcherQueue.TryEnqueue(() => {
-            if (disposed || ShowGraph || routes.SelectedIndex != route) return;
+            if (disposed || ShowGraph || routes.OptionIndex != route) return;
             if (steps.Children.OfType<Border>().FirstOrDefault(b => AutomationProperties.GetAutomationId(b)=="WalkthroughStep-"+index) is { } target)
             {
                 var point = target.TransformToVisual((UIElement)stepScroll.Content).TransformPoint(new Windows.Foundation.Point());
@@ -291,7 +327,6 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
     private void DrawMap(WalkthroughDocument document)
     {
         var entries=WalkthroughOverview.Build(document);
-        var guide=Text("按路线阅读分支。存档出处可单独查看，选择任意条目进入正文。",13);guide.Opacity=.75;overview.Children.Add(guide);
         string Section(int index)=>document.Sections.FirstOrDefault(s=>s.Key==document.Segments[index].Section)?.Title.Display??"路线";
         TextBlock Label(string value,double size,bool strong=false)
         {var text=Text(value,size,strong);text.IsTextSelectionEnabled=false;return text;}
@@ -317,7 +352,7 @@ public sealed class WalkthroughReaderView : Grid, IDisposable
             var saves=segment.Steps.Where(x=>x.Kind=="save").Select(x=>x.Text.Display.Length>0?x.Text.Display:x.SaveKey).OfType<string>().Distinct().ToArray();
             string saved=saves.Length==0?"":" · 存档："+string.Join("、",saves.Take(3))+(saves.Length>3?$" 等 {saves.Length} 处":"");
             var facts=Label($"{segment.Steps.Count(s=>!GuideReadingText.IsHeading(s))} 个步骤"+saved,12);facts.Opacity=.7;content.Children.Add(facts);
-            var open=Label("阅读步骤  →",12);open.Foreground=(Brush)Microsoft.UI.Xaml.Application.Current.Resources["AccentTextFillColorPrimaryBrush"];content.Children.Add(open);
+            content.Children.Add(Label("阅读步骤  →",12));
             var button=new Button { Content=content,Padding=new Thickness(12,10,12,10),HorizontalAlignment=HorizontalAlignment.Stretch,
                 HorizontalContentAlignment=HorizontalAlignment.Stretch,Margin=new Thickness(0,0,0,8) };
             AutomationProperties.SetAutomationId(button,"WalkthroughRoute-"+segment.Key);

@@ -51,6 +51,56 @@ public sealed class AppLifecycleTests
         Assert.Equal(SessionLifecycle.RecoveryPending, rig.Native.Lifecycle); Assert.Equal(6, rig.Library.Snapshot.Entries[0].PlayCount);
         Assert.Equal(ProcessTrackingState.RunningConfirmed, rig.Platform.Processes[71].State);
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExitAfterTrackingLossPreservesFinalizedSession(bool failFirstSave)
+    {
+        await using var rig = new SessionTestRig();
+        await rig.Start();
+        await rig.Engine.SampleAsync();
+        await rig.Advance(4);
+        await using var host = Host(rig);
+        await host.InitializeAsync();
+
+        var cutoff = rig.Clock.Utc;
+        var previous = rig.Stored;
+        var writes = rig.Disk.Writes;
+        rig.Disk.Fail = failFirstSave;
+        // Advance wall time during persistence so a second sync cannot reuse the original cutoff.
+        rig.Disk.BeforeSave = () => { rig.Clock.Advance(.05); return Task.CompletedTask; };
+        rig.Platform.Processes[71].State = ProcessTrackingState.Exited;
+        await rig.Engine.ObserveFactAsync(rig.Fact(ProcessEventKind.TrackingLimited));
+
+        var finalized = host.Session!.Session!;
+        Assert.Equal(SessionLifecycle.Incomplete, finalized.Native!.Lifecycle);
+        Assert.Equal(SessionReason.ProcessGone, finalized.Native.Reason);
+        Assert.Equal(cutoff, finalized.Native.AccountingCutoffAtUtc);
+        if (failFirstSave)
+        {
+            Assert.Equal(previous, rig.Stored);
+            Assert.False(await host.PrepareExitAsync());
+            Assert.Equal(finalized, host.Session!.Session);
+            Assert.Equal(writes, rig.Disk.Writes);
+            rig.Disk.Fail = false;
+        }
+        else
+        {
+            Assert.Equal(rig.Stored, finalized);
+            Assert.Null(host.Error);
+        }
+
+        Assert.True(await host.PrepareExitAsync());
+        await host.CheckpointAsync();
+        Assert.Null(host.Error);
+        Assert.Equal(writes + 1, rig.Disk.Writes);
+        Assert.Equal(cutoff, rig.Native.AccountingCutoffAtUtc);
+        Assert.Equal(previous.Id, rig.Stored.Id);
+        Assert.Equal(4, rig.Stored.Seconds);
+        Assert.Equal(1004, rig.Library.Snapshot.Entries[0].TotalPlaySeconds);
+        Assert.Equal(6, rig.Library.Snapshot.Entries[0].PlayCount);
+    }
+
     [Fact]
     public async Task IdleReadOnlyOrFailedStartupCanExitWithoutCreatingSession()
     {

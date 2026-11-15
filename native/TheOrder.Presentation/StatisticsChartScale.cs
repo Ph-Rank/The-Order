@@ -10,9 +10,9 @@ public sealed record StatisticsChartScale(double Minimum, double Maximum, double
         double divisor = largest < 60 ? 1 : largest < 3600 ? 60 : 3600;
         string unit = divisor == 1 ? "秒" : divisor == 60 ? "分" : "时";
         if (largest == 0) return new(0, 3600, 1200, 3600, "时");
-        double rough = (high - low) / divisor / 4;
+        double rough = Math.Max(1, (high - low) / divisor / 3);
         double magnitude = Math.Pow(10, Math.Floor(Math.Log10(rough)));
-        double step = new[] { 1d, 2, 2.5, 5, 10 }.First(x => x * magnitude >= rough) * magnitude * divisor;
+        double step = new[] { 1d, 2, 3, 5, 10 }.First(x => x * magnitude >= rough) * magnitude * divisor;
         return new(Math.Floor(low / step) * step, Math.Ceiling(high / step) * step, step, divisor, unit);
     }
 }

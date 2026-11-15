@@ -37,12 +37,19 @@ internal sealed partial class NativePlaygroundProvider
                     if (!modelIds.Add(id)) continue;
                     if (result.Count >= 10000) throw Invalid("模型目录超过安全容量；未返回不完整列表。");
                     var methods = ModelMethods(item, out bool methodsReported);
-                    string name = String(item[Kind == PlaygroundProviderKind.Gemini ? "displayName" : "display_name"], String(item["display_name"], id));
+                    string name = Kind switch
+                    {
+                        PlaygroundProviderKind.Gemini => String(item["displayName"], String(item["display_name"], id)),
+                        PlaygroundProviderKind.DeepSeek => String(item["name"], String(item["display_name"], id)),
+                        _ => String(item["display_name"], id)
+                    };
                     result.Add(new(id, name.Length > 240 ? name[..240] : name, Capabilities(id, endpoint))
                     {
                         Version = ModelString(item["version"], 128), CreatedAt = ModelCreatedAt(item),
                         GenerationMethods = methods, GenerationMethodsReported = methodsReported,
-                        Lifecycle = ModelString(item["lifecycle"], 64)
+                        Lifecycle = ModelString(item["lifecycle"], 64),
+                        CatalogFamily = Kind == PlaygroundProviderKind.Claude ? ModelString(item["line"], 64) : null,
+                        CatalogTextOutput = ModelTextOutput(item["output_modalities"])
                     });
                 }
                 string next;
@@ -100,6 +107,14 @@ internal sealed partial class NativePlaygroundProvider
         }
         return result.ToImmutable();
     }
+    private static bool? ModelTextOutput(JsonNode? value)
+    {
+        if (value is null) return null;
+        if (value is not JsonArray modalities || modalities.Count > 64) throw Invalid("模型输出类型格式异常。");
+        return modalities.Select(modality => ModelString(modality, 64) ?? throw Invalid("模型输出类型为空。"))
+            .ToArray().Contains("text", StringComparer.OrdinalIgnoreCase);
+    }
+
     private static DateTimeOffset? ModelCreatedAt(JsonNode item)
     {
         var value = item["created_at"] ?? item["created"];

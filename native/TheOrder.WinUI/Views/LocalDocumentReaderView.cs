@@ -15,7 +15,7 @@ public sealed class LocalDocumentReaderView(Func<LocalReadingFile, CancellationT
     Action<LocalReadingFile, int, float, float, bool>? rememberPosition = null,
     Func<ImmutableArray<LocalReadingFile>, string?>? lastFile = null) : Grid, IDisposable
 {
-    private readonly ComboBox files = new() { PlaceholderText = "选择文件", HorizontalAlignment = HorizontalAlignment.Stretch, MinWidth = 0 };
+    private readonly SelectedFirstComboBox files = new() { PlaceholderText = "选择文件", HorizontalAlignment = HorizontalAlignment.Stretch, MinWidth = 0 };
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12, Opacity = .8 };
     private readonly TextBlock position = new() { VerticalAlignment = VerticalAlignment.Center, MinWidth = 52, TextAlignment = TextAlignment.Center };
     private readonly StackPanel content = new() { Spacing = 10, Padding = new Thickness(12, 8, 16, 24), HorizontalAlignment = HorizontalAlignment.Left };
@@ -26,10 +26,9 @@ public sealed class LocalDocumentReaderView(Func<LocalReadingFile, CancellationT
     private int page, revision; private double zoom = 1; private bool initialized, changing, disposed;
     private ReadingPage? rendered;
     private readonly Image pageImage = new() { Stretch = Stretch.Uniform };
-    private byte[]? imagePixels;
     private readonly Button fileActions = new() { Content = "文件", Padding = new(10, 4, 10, 4), MinHeight = 30 };
     private LocalReadingFile? shownFile; private bool restoring; private int edgeWheel;
-    internal object Evidence => new { files = choices.Select(f => f.Name).ToArray(), selected = files.SelectedIndex, page, pages = document?.PageCount ?? 0,
+    internal object Evidence => new { files = choices.Select(f => f.Name).ToArray(), selected = files.OptionIndex, page, pages = document?.PageCount ?? 0,
         status = status.Text, width = ActualWidth, height = ActualHeight, viewportWidth = scrolling.ViewportWidth, viewportHeight = scrolling.ViewportHeight,
         extentWidth = scrolling.ExtentWidth, extentHeight = scrolling.ExtentHeight, horizontalOffset = scrolling.HorizontalOffset, verticalOffset = scrolling.VerticalOffset,
         zoom, imageWidth = rendered?.ImageWidth ?? 0, imageHeight = rendered?.ImageHeight ?? 0,
@@ -71,7 +70,7 @@ public sealed class LocalDocumentReaderView(Func<LocalReadingFile, CancellationT
         Children.Add(toolbar); SetRow(status, 1); status.Margin = new(0, 6, 0, 6); Children.Add(status); SetRow(scrolling, 2); scrolling.Margin = new(0, 8, 0, 0); Children.Add(scrolling); scrolling.Content = content;
         if (string.IsNullOrEmpty(AutomationProperties.GetAutomationId(this))) AutomationProperties.SetAutomationId(this, "LocalDocumentReader"); AutomationProperties.SetName(files, "阅读文件");
         AutomationProperties.SetLiveSetting(status, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
-        files.SelectionChanged += async (_, _) => { if (changing) return; Remember(); page = 0; zoom = 1; await LoadAsync(restore: true); };
+        files.OptionChanged += async (_, _) => { if (changing) return; Remember(); page = 0; zoom = 1; await LoadAsync(restore: true); };
         scrolling.SizeChanged += (_, _) => { if (rendered is not null) Draw(); };
         scrolling.ViewChanged += (_, _) => { if (!restoring) Remember(); };
         AddHandler(PointerWheelChangedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler(async (_, e) => {
@@ -95,22 +94,27 @@ public sealed class LocalDocumentReaderView(Func<LocalReadingFile, CancellationT
     }
     public async Task SetFilesAsync(ImmutableArray<LocalReadingFile> values, string? selected = null, bool load = true)
     {
-        Initialize(); Remember(); changing = true; selected ??= lastFile?.Invoke(values); choices = values; files.Items.Clear(); foreach (var value in values) files.Items.Add(value.Name);
-        int index = selected is null ? 0 : Array.FindIndex(values.ToArray(), v => v.Path == selected); files.SelectedIndex = values.IsEmpty ? -1 : Math.Max(0, index); changing = false; page = 0;
-        revision++; rendered = null; content.Children.Clear(); status.Text = "选择文件后可只读阅读。"; position.Text = "";
+        Initialize(); Remember(); changing = true; selected ??= lastFile?.Invoke(values); choices = values; files.OptionsSource = values.Select(value => value.Name).ToArray();
+        int index = selected is null ? 0 : Array.FindIndex(values.ToArray(), v => v.Path == selected); files.OptionIndex = values.IsEmpty ? -1 : Math.Max(0, index); changing = false; page = 0;
+        revision++; rendered = null; pageImage.Source = null; content.Children.Clear(); status.Text = "选择文件后可只读阅读。"; position.Text = "";
         if (load) await LoadAsync(restore: true);
     }
     public Task EnsureReadingAsync() => rendered is null ? LoadAsync(restore: true) : Task.CompletedTask;
     internal void ScrollForTest(float progress) { scrolling.ChangeView(null, scrolling.ScrollableHeight * Math.Clamp(progress, 0, 1), null, true); Remember(); }
-    internal async Task FileForTestAsync(int index) { if (index < 0 || index >= choices.Length) throw new InvalidDataException(); Remember(); changing = true; files.SelectedIndex = index; changing = false; page = 0; zoom = 1; await LoadAsync(restore: true); }
+    internal async Task FileForTestAsync(int index) { if (index < 0 || index >= choices.Length) throw new InvalidDataException(); Remember(); changing = true; files.OptionIndex = index; changing = false; page = 0; zoom = 1; await LoadAsync(restore: true); }
     public void Remember() { if (rendered is not null && shownFile is not null && !restoring) rememberPosition?.Invoke(shownFile, page, scrolling.ScrollableHeight > 0 ? (float)(scrolling.VerticalOffset / scrolling.ScrollableHeight) : 0, (float)zoom, false); }
     private async Task TurnAsync(int direction, bool continuous = false)
     { if (restoring || document is null || page + direction < 0 || page + direction >= document.PageCount) return; Remember(); page += direction; await LoadAsync(fraction: continuous && direction < 0 ? 1 : 0); }
     private async Task LoadAsync(bool restore = false, float fraction = 0)
     {
-        int expected = ++revision; var selected = files.SelectedIndex; if (disposed) return;
-        if (selected < 0 || selected >= choices.Length) { content.Children.Clear(); rendered = null; imagePixels = null; pageImage.Source = null; status.Visibility = Visibility.Visible; status.Text = "从“文件”中手动添加攻略或说明，即可在这里及游戏内只读阅读。"; position.Text = ""; return; }
+        int expected = ++revision; var selected = files.OptionIndex; if (disposed) return;
+        if (selected < 0 || selected >= choices.Length) { content.Children.Clear(); rendered = null; pageImage.Source = null; restoring = false; status.Visibility = Visibility.Visible; status.Text = "从“文件”添加攻略或说明。"; position.Text = ""; return; }
         var file = choices[selected]; int targetPage = page; status.Text = "正在读取…"; restoring = true;
+        if (rendered is null || shownFile?.Path != file.Path)
+        {
+            rendered = null; pageImage.Source = null; content.Children.Clear(); position.Text = "";
+            status.Visibility = Visibility.Visible;
+        }
         bool held = false;
         try
         {
@@ -118,13 +122,20 @@ public sealed class LocalDocumentReaderView(Func<LocalReadingFile, CancellationT
             if (document is null || currentPath != file.Path) { document?.Dispose(); document = null; currentPath = null; document = await open(file, lifetime.Token); currentPath = file.Path; }
             var saved = restore ? restorePosition?.Invoke(file) : null;
             if (saved is not null) { targetPage = Math.Clamp(saved.Page, 0, document.PageCount - 1); zoom = Math.Clamp(saved.Zoom, .7, 3); fraction = saved.Progress; }
-            var result = await document.PageAsync(targetPage, lifetime.Token); if (disposed || expected != revision) return;
+            var result = await document.PageAsync(targetPage, lifetime.Token);
+            if (disposed || expected != revision) return;
+            var source = result.Rgba is { Length: > 0 } pixels
+                ? await CreateImageAsync(pixels, result.ImageWidth, result.ImageHeight)
+                : null;
+            if (disposed || expected != revision) return;
+            pageImage.Source = source;
             restoring = true; page = targetPage; rendered = result; shownFile = file; position.Text = $"{targetPage + 1} / {document.PageCount}"; status.Text = document.Notice; status.Visibility = Visibility.Collapsed; ToolTipService.SetToolTip(files, document.Notice); Draw(); scrolling.UpdateLayout(); scrolling.ChangeView(0, scrolling.ScrollableHeight * fraction, null, true); restoring = false;
             rememberPosition?.Invoke(file, page, fraction, (float)zoom, true);
+            InteractionMotion.RevealContent(content, .7f);
         }
         catch (OperationCanceledException) { }
         catch (Exception error) when (error is not OutOfMemoryException)
-        { if (!disposed && expected == revision) { rendered = null; imagePixels = null; pageImage.Source = null; content.Children.Clear(); status.Visibility = Visibility.Visible; status.Text = error is InvalidDataException ? error.Message : "文件无法读取，可能已移动、已加密或格式损坏。原文件保持不变。"; } }
+        { if (!disposed && expected == revision) { rendered = null; pageImage.Source = null; content.Children.Clear(); status.Visibility = Visibility.Visible; status.Text = error is InvalidDataException ? error.Message : "文件无法读取，可能已移动、已加密或格式损坏。原文件保持不变。"; } }
         finally { if (held) reading.Release(); if (expected == revision) restoring = false; }
     }
     private void Draw()
@@ -135,13 +146,12 @@ public sealed class LocalDocumentReaderView(Func<LocalReadingFile, CancellationT
         content.Padding = pdf ? new(14, 8, 14, 24) : new(12, 8, 16, 24);
         scrolling.HorizontalContentAlignment = pdf ? HorizontalAlignment.Center : HorizontalAlignment.Left;
         content.HorizontalAlignment = pdf ? HorizontalAlignment.Center : HorizontalAlignment.Left;
-        if (rendered.Rgba is { Length: > 0 } pixels)
+        if (pageImage.Source is not null)
         {
             if (pdf) width = Math.Min(width, Math.Max(1, scrolling.ActualHeight - 40) * rendered.ImageWidth / rendered.ImageHeight);
             pageImage.Width = width * zoom; pageImage.Height = width * zoom * rendered.ImageHeight / rendered.ImageWidth;
-            content.Children.Add(pageImage); if (!ReferenceEquals(imagePixels, pixels)) { imagePixels = pixels; pageImage.Source = null; _ = SetImageAsync(pageImage, pixels, rendered.ImageWidth, rendered.ImageHeight); } content.Width = width * zoom + content.Padding.Left + content.Padding.Right;
+            content.Children.Add(pageImage); content.Width = width * zoom + content.Padding.Left + content.Padding.Right;
         }
-        else { imagePixels = null; pageImage.Source = null; }
         foreach (var block in rendered.Blocks)
         {
             if (block.Kind == "space") { content.Children.Add(new Border { Height = 4 }); continue; }
@@ -164,16 +174,14 @@ public sealed class LocalDocumentReaderView(Func<LocalReadingFile, CancellationT
         }
         TextBlock Text(string value, double size) => new() { Text = value, FontSize = size * zoom, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, LineHeight = size * zoom * 1.65 };
     }
-    private async Task SetImageAsync(Image target, byte[] pixels, int width, int height)
+    private static async Task<SoftwareBitmapSource> CreateImageAsync(byte[] pixels, int width, int height)
     {
-        try
-        {
-            using var rgba = SoftwareBitmap.CreateCopyFromBuffer(pixels.AsBuffer(), BitmapPixelFormat.Rgba8, width, height, BitmapAlphaMode.Straight);
-            using var bgra = SoftwareBitmap.Convert(rgba, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
-            var source = new SoftwareBitmapSource(); await source.SetBitmapAsync(bgra); if (!disposed && ReferenceEquals(imagePixels, pixels)) target.Source = source;
-        }
-        catch { if (!disposed && ReferenceEquals(imagePixels, pixels)) { status.Visibility = Visibility.Visible; status.Text = "图片显示失败，可尝试重新选择文件。"; } }
+        using var rgba = SoftwareBitmap.CreateCopyFromBuffer(pixels.AsBuffer(), BitmapPixelFormat.Rgba8, width, height, BitmapAlphaMode.Straight);
+        using var bgra = SoftwareBitmap.Convert(rgba, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+        var source = new SoftwareBitmapSource();
+        await source.SetBitmapAsync(bgra);
+        return source;
     }
-    public void Dispose() { if (disposed) return; Remember(); disposed = true; lifetime.Cancel(); imagePixels = null; rendered = null; pageImage.Source = null; content.Children.Clear(); _ = CloseAsync(); }
+    public void Dispose() { if (disposed) return; Remember(); disposed = true; lifetime.Cancel(); rendered = null; pageImage.Source = null; content.Children.Clear(); _ = CloseAsync(); }
     private async Task CloseAsync() { await reading.WaitAsync(); try { document?.Dispose(); document = null; } finally { reading.Release(); lifetime.Dispose(); } }
 }

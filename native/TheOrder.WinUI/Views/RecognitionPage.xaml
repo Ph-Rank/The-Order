@@ -10,7 +10,7 @@
     <Setter Target="ManualApplyButton.(Grid.Row)" Value="1" /><Setter Target="ManualApplyButton.(Grid.Column)" Value="0" /><Setter Target="ManualApplyButton.(Grid.ColumnSpan)" Value="2" /><Setter Target="ManualIdBox.(Grid.ColumnSpan)" Value="2" /><Setter Target="ManualActions.RowSpacing" Value="8" />
    </VisualState.Setters></VisualState>
   </VisualStateGroup></VisualStateManager.VisualStateGroups>
-  <StackPanel Spacing="8"><TextBlock Style="{StaticResource PageTitleStyle}" l:Localize.Text="识别与核对" /><TextBlock Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" l:Localize.Text="导入后自动识别：排序分严格大于 0.9、身份与版本一致且唯一领先时自动应用；歧义或证据不足的结果在此选择。排序分不是正确概率。" /></StackPanel>
+  <TextBlock Style="{StaticResource PageTitleStyle}" l:Localize.Text="识别与核对" />
   <Border Grid.Row="1" Style="{StaticResource ToolbarSurfaceStyle}" Padding="16">
    <VariableSizedWrapGrid Orientation="Horizontal" ItemWidth="184" ItemHeight="68" MaximumRowsOrColumns="6">
     <Button Click="OnMissing" AutomationProperties.AutomationId="RecognizeMissing" l:Localize.Content="只补缺失资料" />
@@ -44,7 +44,7 @@
      <local:CoverPresenter SourceKey="{x:Bind ViewModel.RemoteCoverKey, Mode=OneWay}" Width="140" Height="190" HorizontalAlignment="Left" />
      <local:MarkdownView Text="{x:Bind ViewModel.RemoteFacts, Mode=OneWay}" AutomationProperties.AutomationId="RecognitionRemoteFacts" />
      <ItemsControl ItemsSource="{x:Bind ViewModel.RemoteLinks, Mode=OneWay}" AutomationProperties.AutomationId="RecognitionRemoteLinks">
-      <ItemsControl.ItemTemplate><DataTemplate x:DataType="p:CandidateDetailLink"><StackPanel Spacing="4"><HyperlinkButton Content="{x:Bind Title}" Tag="{x:Bind Url}" Click="OnOpenLink" HorizontalAlignment="Left" /></StackPanel></DataTemplate></ItemsControl.ItemTemplate>
+      <ItemsControl.ItemTemplate><DataTemplate x:DataType="p:CandidateDetailLink"><local:ExternalLinkButton Content="{x:Bind Title}" Tag="{x:Bind Url}" Click="OnOpenLink" Margin="0,0,0,4" /></DataTemplate></ItemsControl.ItemTemplate>
      </ItemsControl>
     </StackPanel></ScrollViewer>
    </Border>

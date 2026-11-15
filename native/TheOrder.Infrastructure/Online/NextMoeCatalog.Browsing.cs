@@ -38,22 +38,26 @@ public sealed partial class NextMoeCatalog : IContentFilteredCatalog
             var works = new List<TheOrder.Domain.WorkMetadata>();
             foreach (var row in Rows(body.RootElement, "items"))
             {
-                if (Text(row, "object") != "work" || !ValidId(Text(row, "id"))) throw new OnlineException(OnlineFailure.InvalidResponse);
-                if (KunGalGalgameId(row) is null) continue;
-                // Validate the hydrated authoritative axis as well. Missing/unknown values
-                // cannot be silently inferred from age ratings, titles, tags or cover content.
-                if (!showNsfw)
-                {
-                    var limit = Field(row, "content_limit");
-                    if (limit.ValueKind != JsonValueKind.String || limit.GetString() is not ("sfw" or "nsfw"))
-                        throw new OnlineException(OnlineFailure.InvalidResponse);
-                    if (limit.GetString() == "nsfw") continue;
-                }
-                var work = new RemoteWorkDto(row).Map(includeExplicit && showNsfw, Now);
-                if (works.All(w => w.Id != work.Id)) works.Add(work);
+                if (MapDiscoveryWork(row, showNsfw) is { } work && works.All(w => w.Id != work.Id)) works.Add(work);
             }
             scope.Checkpoint(OnlineAcceptanceStage.Mapped);
             return new([.. works], next.Length == 0 ? null : next);
         }, cancellation);
+    }
+
+    private TheOrder.Domain.WorkMetadata? MapDiscoveryWork(JsonElement row, bool showNsfw)
+    {
+        if (Text(row, "object") != "work" || !ValidId(Text(row, "id"))) throw new OnlineException(OnlineFailure.InvalidResponse);
+        // Works can appear before a community-site claim. Use the editorial classification,
+        // which is independent of the age rating and the cover's image classification.
+        if (Text(row, "medium") != "galgame") return null;
+        if (!showNsfw)
+        {
+            var limit = Field(row, "content_limit");
+            if (limit.ValueKind != JsonValueKind.String || limit.GetString() is not ("sfw" or "nsfw"))
+                throw new OnlineException(OnlineFailure.InvalidResponse);
+            if (limit.GetString() == "nsfw") return null;
+        }
+        return new RemoteWorkDto(row).Map(includeExplicit && showNsfw, Now);
     }
 }

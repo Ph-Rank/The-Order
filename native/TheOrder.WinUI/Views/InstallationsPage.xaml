@@ -9,7 +9,6 @@
     <Border Style="{StaticResource SurfaceStyle}" Padding="20">
      <StackPanel Spacing="12">
       <TextBlock Style="{StaticResource SectionTitleStyle}" Text="这部作品的游戏文件夹" />
-      <TextBlock Text="选择已有的游戏文件夹即可关联；游戏文件仍保存在原位置。" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
       <ListView x:Name="InstallationList" ItemsSource="{x:Bind ViewModel.Installations.Rows, Mode=OneWay}" SelectionChanged="OnSelectionChanged" MaxHeight="230" SelectionMode="Single" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="Installations" AutomationProperties.Name="选择这部作品的游戏文件夹">
        <ListView.ItemContainerStyle><Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}"><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style></ListView.ItemContainerStyle>
        <ListView.ItemTemplate><DataTemplate x:DataType="app:InstallationRow"><StackPanel Padding="8,10" Spacing="4">
@@ -43,20 +42,16 @@
         <TextBox Text="{x:Bind ViewModel.Draft.Folder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="InstallationFolder" Header="游戏文件夹" PlaceholderText="选择包含游戏程序的文件夹" AutomationProperties.Name="游戏文件夹" />
         <Button x:Name="FolderBrowseButton" Grid.Column="1" VerticalAlignment="Bottom" Click="OnFolder" Content="选择游戏文件夹" />
        </Grid>
-       <StackPanel Spacing="6">
-        <Grid x:Name="ExecutableInputGrid" ColumnSpacing="8">
-         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-         <TextBox Text="{x:Bind ViewModel.Draft.Executable, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="InstallationExecutable" Header="启动文件" PlaceholderText="选择平时用来打开游戏的 exe 或 cmd" AutomationProperties.Name="游戏启动文件" />
-         <Button x:Name="ExecutableBrowseButton" Grid.Column="1" VerticalAlignment="Bottom" Click="OnExecutable" Content="选择启动文件" />
-        </Grid>
-        <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="选择文件不会启动游戏；留空可在首次启动时再选择。" TextWrapping="Wrap" />
-       </StackPanel>
+       <Grid x:Name="ExecutableInputGrid" ColumnSpacing="8">
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+        <TextBox Text="{x:Bind ViewModel.Draft.Executable, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="InstallationExecutable" Header="启动文件" PlaceholderText="可在首次启动时选择" AutomationProperties.Name="游戏启动文件" />
+        <Button x:Name="ExecutableBrowseButton" Grid.Column="1" VerticalAlignment="Bottom" Click="OnExecutable" Content="选择启动文件" />
+       </Grid>
        <CheckBox Content="默认从此文件夹启动" IsChecked="{x:Bind ViewModel.Draft.Preferred, Mode=TwoWay}" />
        <CheckBox Content="通过 Steam 启动" IsChecked="{x:Bind ViewModel.Draft.UseSteam, Mode=TwoWay}" Visibility="{x:Bind ShowSteam(ViewModel.Draft.SteamAppId), Mode=OneWay}" />
        <views:SmoothExpander x:Name="SaveFolderSection" Header="存档文件夹（可选）" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
         <StackPanel Spacing="12">
-         <TextBlock Text="记录存档位置，方便一键打开；此处不会复制或备份存档。" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
          <StackPanel Spacing="8">
           <Grid x:Name="SaveFolderInputGrid" ColumnSpacing="8">
            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
@@ -72,17 +67,15 @@
        </views:SmoothExpander>
        <views:SmoothExpander x:Name="LaunchHelpersSection" Header="{x:Bind ViewModel.Draft.HelpersSummary, Mode=OneWay}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="GameLaunchOverrides">
         <StackPanel Spacing="12">
-         <TextBlock x:Name="LaunchHelpersHeading" Text="仅在这个游戏文件夹需要不同的行为时更改；工具路径统一在全局设置中选择。" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
-         <ComboBox Header="Locale Emulator · 日文转区" SelectedIndex="{x:Bind ViewModel.Draft.LocaleMode, Mode=TwoWay}" HorizontalAlignment="Stretch" AutomationProperties.AutomationId="GameLocaleMode"><ComboBoxItem Content="跟随全局" /><ComboBoxItem Content="仅此游戏开启" /><ComboBoxItem Content="仅此游戏关闭" /></ComboBox>
-         <ComboBox Header="Magpie · 窗口缩放" SelectedIndex="{x:Bind ViewModel.Draft.MagpieMode, Mode=TwoWay}" HorizontalAlignment="Stretch" AutomationProperties.AutomationId="GameMagpieMode"><ComboBoxItem Content="跟随全局" /><ComboBoxItem Content="仅此游戏开启" /><ComboBoxItem Content="仅此游戏关闭" /></ComboBox>
-         <ComboBox Header="后台静音" SelectedIndex="{x:Bind ViewModel.Draft.MuteMode, Mode=TwoWay}" HorizontalAlignment="Stretch" AutomationProperties.AutomationId="GameMuteMode"><ComboBoxItem Content="跟随全局" /><ComboBoxItem Content="仅此游戏开启" /><ComboBoxItem Content="仅此游戏关闭" /></ComboBox>
+         <views:SelectedFirstComboBox Header="Locale Emulator · 日文转区" OptionIndex="{x:Bind ViewModel.Draft.LocaleMode, Mode=TwoWay}" HorizontalAlignment="Stretch" AutomationProperties.AutomationId="GameLocaleMode"><ComboBoxItem Content="跟随全局" /><ComboBoxItem Content="仅此游戏开启" /><ComboBoxItem Content="仅此游戏关闭" /></views:SelectedFirstComboBox>
+         <views:SelectedFirstComboBox Header="Magpie · 窗口缩放" OptionIndex="{x:Bind ViewModel.Draft.MagpieMode, Mode=TwoWay}" HorizontalAlignment="Stretch" AutomationProperties.AutomationId="GameMagpieMode"><ComboBoxItem Content="跟随全局" /><ComboBoxItem Content="仅此游戏开启" /><ComboBoxItem Content="仅此游戏关闭" /></views:SelectedFirstComboBox>
+         <views:SelectedFirstComboBox Header="后台静音" OptionIndex="{x:Bind ViewModel.Draft.MuteMode, Mode=TwoWay}" HorizontalAlignment="Stretch" AutomationProperties.AutomationId="GameMuteMode"><ComboBoxItem Content="跟随全局" /><ComboBoxItem Content="仅此游戏开启" /><ComboBoxItem Content="仅此游戏关闭" /></views:SelectedFirstComboBox>
          <Button Content="全部恢复为跟随全局" Click="OnResetLaunchOverrides" HorizontalAlignment="Left" AutomationProperties.AutomationId="ResetGameLaunchOverrides" />
          <TextBlock Text="{x:Bind ViewModel.Draft.LegacyToolsNotice, Mode=OneWay}" Visibility="{x:Bind ShowText(ViewModel.Draft.LegacyToolsNotice), Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
         </StackPanel>
        </views:SmoothExpander>
        <views:SmoothExpander x:Name="AdvancedLaunchSection" Header="高级启动设置" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
         <StackPanel Spacing="12">
-         <TextBlock Text="通常无需修改，仅在游戏或辅助工具有特殊要求时调整。" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
          <Grid x:Name="WorkingDirectoryInputGrid" ColumnSpacing="8">
           <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
           <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
@@ -91,8 +84,7 @@
          </Grid>
          <CheckBox IsChecked="{x:Bind ViewModel.Draft.Administrator, Mode=TwoWay}" HorizontalContentAlignment="Stretch" AutomationProperties.Name="以管理员身份启动，Windows 会请求授权"><TextBlock Text="以管理员身份启动（Windows 会请求授权）" TextWrapping="Wrap" /></CheckBox>
          <CheckBox IsChecked="{x:Bind ViewModel.Draft.HighDpi, Mode=TwoWay}" HorizontalContentAlignment="Stretch" AutomationProperties.Name="由游戏处理高分辨率缩放"><TextBlock Text="由游戏处理高分辨率缩放（DPI）" TextWrapping="Wrap" /></CheckBox>
-         <TextBlock Text="启动参数（可选）" />
-         <TextBlock Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" Text="每个输入框填一项参数，空格无需额外引号。" />
+         <TextBlock Text="启动参数（可选）" ToolTipService.ToolTip="每框一项，空格不用加引号。" />
          <ItemsControl ItemsSource="{x:Bind ViewModel.Draft.Arguments, Mode=OneWay}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="p:ArgumentDraft"><Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBox Text="{x:Bind Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" MaxLength="8192" AutomationProperties.Name="单项启动参数" /><Button Grid.Column="1" Tag="{x:Bind}" Click="OnRemoveArgument" Content="移除" AutomationProperties.Name="移除此启动参数" /></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
          <Button Click="OnArgument" Content="添加一项参数" />
         </StackPanel>

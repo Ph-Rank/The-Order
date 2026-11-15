@@ -15,22 +15,22 @@ public sealed partial class WindowsWalkthroughSessions
     private DateTimeOffset lastPositionSave;
     private void LoadOverlayPages(Dictionary<string, OverlayPagePreference> pages)
     {
-        if (pages.Count > 512 || pages.Any(p => p.Key.Length > 200 || p.Value is null || p.Value.Channel is < 0 or > 2)) throw new InvalidDataException("阅读页面记录无效。");
+        if (pages.Count > 512 || pages.Any(p => p.Key.Length > 200 || p.Value is null || p.Value.Channel is < 0 or > 3)) throw new InvalidDataException("阅读页面记录无效。");
         foreach (var pair in pages) overlayPages.Add(pair.Key, pair.Value);
     }
     public OverlayPagePreference? LastOverlayPage(string gameId) { lock (gate) return overlayPages.GetValueOrDefault(gameId); }
     private int InitialOverlayPage(Slot slot)
     {
-        int selected = LastOverlayPage(slot.GameId)?.Channel ?? SourceFor(slot.GameId);
-        if (selected == 2 && slot.Local.Notes.IsEmpty) selected = SourceFor(slot.GameId);
-        if (selected == 1 && slot.Local.Guides.IsEmpty) selected = 0;
-        if (selected != 2 && slot.Guides.IsEmpty && !slot.Local.Guides.IsEmpty) selected = 1;
-        return selected;
+        if (SourceFor(slot.GameId) == 1 && !slot.Local.Guides.IsEmpty) return 1;
+        if (!slot.Guides.IsEmpty) return 0;
+        if (!slot.Local.Guides.IsEmpty) return 1;
+        if (!slot.Local.Notes.IsEmpty) return 2;
+        return slot.Chat is null ? 0 : 3;
     }
     private void CaptureOverlayPage(Slot slot)
     {
         bool visible = slot.View.ReadInt32(16) != 0; if (visible || slot.View.ReadInt32(180) != 0) slot.WasVisible = true; if (!slot.WasVisible) return;
-        int channel = slot.View.ReadInt32(176); if (channel is < 0 or > 2) return;
+        int channel = slot.View.ReadInt32(176); if (channel is < 0 or > 3) return;
         bool graph = slot.View.ReadInt32(72) != 0; var previous = overlayPages.GetValueOrDefault(slot.GameId);
         if (previous?.Channel == channel && previous.Graph == graph) return;
         if (overlayPages.Count >= 512 && !overlayPages.ContainsKey(slot.GameId)) overlayPages.Remove(overlayPages.Keys.First());

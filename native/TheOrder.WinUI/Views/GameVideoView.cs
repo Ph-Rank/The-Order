@@ -18,8 +18,10 @@ public sealed class GameVideoView : StackPanel, IDisposable
     private readonly TextBox query = new() { PlaceholderText = "原名或别名", MaxLength = 200 };
     private readonly TextBox manual = new() { PlaceholderText = "HTTPS YouTube 视频地址", MaxLength = 500 };
     private readonly Button retry = new() { Content = "刷新影像" }, search = new() { Content = "查找游戏" }, add = new() { Content = "添加用户视频" }, cancel = new() { Content = "取消读取" };
-    private readonly AnimeAvailabilityView player = new("Game", "来源见所选影像 · 由 YouTube 原站播放器提供，不代表版权或本地发行版本已核验。");
+    private readonly AnimeAvailabilityView player = new("Game");
     private GameVideoViewModel? model;
+    private IgdbGame[]? shownCandidates;
+    private GameVideoItem[]? shownVideos;
     private string? sourceKey, playing;
     private bool syncing;
     public GameVideoView()
@@ -34,9 +36,9 @@ public sealed class GameVideoView : StackPanel, IDisposable
         searchRow.Children.Add(query); searchRow.Children.Add(search); Grid.SetColumn(search, 1);
         var details = new SmoothExpander { Header = "影像选项", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Content = new StackPanel { Spacing = 8, Children = { identityActions, searchRow, manual, add } } };
-        var attribution = Text(12, "资料来源：IGDB · YouTube。数据库收录不等于官方发布；作品级影像不保证对应本地版本。"); attribution.Opacity = .7;
-        section.Content = new StackPanel { Spacing = 10, Children = { status, candidates, otherVersions, videos, player,
-            new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6, Children = { retry, cancel } }, details, attribution } };
+        var options = new StackPanel { Spacing = 10, Children = {
+            new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6, Children = { retry, cancel } }, details } };
+        section.Content = new StackPanel { Spacing = 10, Children = { status, candidates, otherVersions, videos, player, options } };
         Children.Add(section);
         section.Expanding += async (_, _) => { if (!syncing && model is not null) await model.LoadAsync(); };
         section.Collapsed += (_, _) => { model?.Cancel(); StopPlayer(); };
@@ -64,14 +66,18 @@ public sealed class GameVideoView : StackPanel, IDisposable
     {
         if (model is null) return;
         if (model.Busy || !model.Videos.Any(x => x.VideoId == playing)) StopPlayer();
-        status.Text = model.Message; status.Visibility = status.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ShowStatus(model.Message);
         search.IsEnabled = add.IsEnabled = retry.IsEnabled = !model.Busy; cancel.Visibility = model.Busy ? Visibility.Visible : Visibility.Collapsed;
         identityActions.Children.Clear(); candidates.Children.Clear(); otherCandidates.Children.Clear(); videos.Children.Clear(); otherVersions.Visibility = Visibility.Collapsed;
         if (model.Game is { } game)
         {
-            var row = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6, Children = { Text(13, game.Name + " · " + GameVideos.CandidateKind(game) + " · " + (game.ReleaseDate ?? "日期未注明")) } };
-            var withdraw = Action("撤销游戏对应", "GameVideosWithdraw", () => model.WithdrawAsync()); identityActions.Children.Add(withdraw); candidates.Children.Add(row);
-            if (game.ParentGame is { } main) candidates.Children.Add(Text(12, "所属游戏 · IGDB " + main));
+            var edition = Text(13, string.Join(" · ", new[] { game.Name, GameVideos.CandidateKind(game), game.ReleaseDate }
+                .Where(value => !string.IsNullOrWhiteSpace(value))));
+            ToolTipService.SetToolTip(edition, game.ParentGame is { } main ? $"IGDB {game.Id} · 所属游戏 {main}" : $"IGDB {game.Id}");
+            identityActions.Children.Add(edition);
+            if (model.UsesWorkLevelMatch && model.Source is { CatalogWork: false })
+                identityActions.Children.Add(Text(13, "按作品匹配，可能与本地版本不同。"));
+            identityActions.Children.Add(Action("撤销游戏对应", "GameVideosWithdraw", () => model.WithdrawAsync()));
         }
         else
         {
@@ -81,23 +87,38 @@ public sealed class GameVideoView : StackPanel, IDisposable
             {
                 otherVersions.Header = "其他检索结果 · " + others.Length;
                 otherVersions.Visibility = Visibility.Visible;
-                otherCandidates.Children.Add(Text(12, "移植、合集、衍生作品或资料不足的结果在此核对；不会自动采用。"));
                 foreach (var item in others) otherCandidates.Children.Add(Candidate(item));
             }
         }
         foreach (var item in model.Videos)
         {
-            var title = Text(14, item.Name); var caption = Text(12, item.Classification + (item.UserProvided ? " · 来源：用户提供" : " · 来源：IGDB · YouTube") + (model.DefaultVideo == item.VideoId ? " · 默认" : ""));
+            var title = Text(14, item.Name + (model.DefaultVideo == item.VideoId ? " · 默认" : ""));
             var row = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6 };
             var play = Action("播放", "GameVideoPlay-" + item.VideoId, () => { playing = item.VideoId; player.Show(model.Game?.Id ?? 0, true, new("youtube", item.VideoId)); player.Expand(); return Task.CompletedTask; });
             play.Style = (Style)Microsoft.UI.Xaml.Application.Current.Resources["AccentButtonStyle"];
             row.Children.Add(play); row.Children.Add(Action("设为默认", "GameVideoDefault-" + item.VideoId, () => model.ChooseVideoAsync(item, false)));
             row.Children.Add(Action(item.UserProvided ? "移除" : "排除此视频", "GameVideoReject-" + item.VideoId, () => item.UserProvided ? model.RemoveManualAsync(item) : model.ChooseVideoAsync(item, true)));
-            var original = Action("YouTube ↗", "GameVideoOriginal-" + item.VideoId, async () => { if (!await Windows.System.Launcher.LaunchUriAsync(new Uri(item.Url))) status.Text = "无法打开原站，请检查默认浏览器。"; }); row.Children.Add(original);
+            var original = new ExternalLinkButton { Content = "YouTube", IsEnabled = !model.Busy };
+            AutomationProperties.SetAutomationId(original, "GameVideoOriginal-" + item.VideoId);
+            original.Click += async (_, _) =>
+            {
+                try { if (!await Windows.System.Launcher.LaunchUriAsync(new Uri(item.Url))) ShowStatus("无法打开 YouTube，请检查默认浏览器。"); }
+                catch { ShowStatus("无法打开 YouTube。"); }
+            };
+            row.Children.Add(original);
             ToolTipService.SetToolTip(title, item.UserProvided ? "用户提供，未核验" : "IGDB " + string.Join(" / ", item.Relations.Select(x => x.GameId + ":" + x.Id + " · " + x.Name)));
-            videos.Children.Add(new StackPanel { Spacing = 4, Children = { title, caption, row } });
+            videos.Children.Add(new StackPanel { Spacing = 4, Children = { title, row } });
         }
+        candidates.Visibility = candidates.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        videos.Visibility = videos.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (model.Videos.Length > 0 || model.Game?.Videos.Length > 0) identityActions.Children.Add(Action("重置视频选择", "GameVideosReset", () => model.ResetVideoChoicesAsync()));
+        if (!model.Busy)
+        {
+            if (model.Candidates.Length > 0 && !ReferenceEquals(shownCandidates, model.Candidates)) InteractionMotion.RevealContent(candidates, .72f);
+            if (model.Videos.Length > 0 && !ReferenceEquals(shownVideos, model.Videos)) InteractionMotion.RevealContent(videos, .72f);
+            shownCandidates = model.Candidates;
+            shownVideos = model.Videos;
+        }
     }
     private StackPanel Candidate(IgdbGame item)
     {
@@ -113,7 +134,12 @@ public sealed class GameVideoView : StackPanel, IDisposable
     private Button Action(string text, string id, Func<Task> action)
     {
         var button = new Button { Content = text, MinHeight = 32, Padding = new Thickness(12, 5, 12, 5), CornerRadius = new(6), IsEnabled = model?.Busy != true }; AutomationProperties.SetAutomationId(button, id);
-        button.Click += async (_, _) => { try { await action(); } catch { status.Text = "操作暂未完成，请重试。"; } }; return button;
+        button.Click += async (_, _) => { try { await action(); } catch { ShowStatus("操作暂未完成，请重试。"); } }; return button;
+    }
+    private void ShowStatus(string message)
+    {
+        status.Text = message;
+        status.Visibility = message.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
     private void StopPlayer() { player.Show(null, false, null); playing = null; }
     public void Suspend() { model?.Cancel(); StopPlayer(); }

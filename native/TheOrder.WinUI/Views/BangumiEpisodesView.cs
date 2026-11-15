@@ -16,13 +16,17 @@ public sealed class BangumiEpisodesView : Grid, IDisposable
     private readonly StackPanel body = new() { Spacing = 12 }, rows = new() { Spacing = 8 };
     private readonly TextBlock notice = Text(""), provenance = Text("保留 Bangumi 原始章节类型与同类排序；目录项数可能与作品集数不同。"), filterNotice = Text("", 12);
     private readonly TagFlowPanel filters = new() { HorizontalSpacing = 6, VerticalSpacing = 6 };
-    private readonly Button refresh = Button("刷新目录"), more = Button("加载下一页"), cancel = Button("取消读取"), retry = Button("重试");
-    private readonly HyperlinkButton source = new() { Content = "在 Bangumi 查看分集目录 ↗", Padding = new(0), HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly Button refresh = Button("刷新目录"), cancel = Button("取消读取"), retry = Button("重试");
+    private readonly ScrollPageFooter more = new();
+    private readonly ExternalLinkButton source = new() { Content = "在 Bangumi 查看分集目录" };
     private BangumiEpisodesViewModel? model;
     private BangumiEpisode[]? shown;
     private int? shownType;
     private readonly Dictionary<int, Action> expandEpisode = [];
     private readonly HashSet<int> expandedEpisodes = [];
+    private readonly Dictionary<int, (BangumiEpisode Episode, BangumiEpisodeRowView View, Border Container)> renderedRows = [];
+    private readonly Dictionary<int, TextBlock> groupHeadings = [];
+    private readonly Dictionary<int, ToggleButton> filterButtons = [];
     private readonly List<HyperlinkButton> episodeLinks = [];
     private readonly List<BangumiEpisodeRowView> episodeRows = [];
     private Task expanding = Task.CompletedTask;
@@ -38,7 +42,7 @@ public sealed class BangumiEpisodesView : Grid, IDisposable
         section.Expanding += async (_, _) => { if (model is not null) { expanding = model.ExpandAsync(); await expanding; } };
         section.Collapsed += (_, _) => model?.Cancel();
         refresh.Click += async (_, _) => { if (model is not null) await model.RefreshAsync(); };
-        more.Click += async (_, _) => { if (model is not null) await model.MoreAsync(); };
+        more.LoadNext = () => model?.MoreAsync() ?? Task.CompletedTask;
         retry.Click += async (_, _) => { if (model is not null) await model.RefreshAsync(); };
         cancel.Click += (_, _) => model?.Cancel();
         source.Click += async (_, _) => { if (model?.SubjectId is { } id) await OpenSourceAsync(new Uri("https://bgm.tv/subject/" + id + "/ep")); };
@@ -52,7 +56,8 @@ public sealed class BangumiEpisodesView : Grid, IDisposable
     public void SetSource(string? verifiedBangumiId)
     {
         if (disposed) return;
-        section.IsExpanded = false; shown = null; model?.SetSource(verifiedBangumiId); Render();
+        section.IsExpanded = false; shown = null; expandedEpisodes.Clear();
+        model?.SetSource(verifiedBangumiId); Render();
     }
     private void ModelChanged(object? sender, PropertyChangedEventArgs e) => Render();
     private void Render()
@@ -64,7 +69,8 @@ public sealed class BangumiEpisodesView : Grid, IDisposable
         refresh.IsEnabled = retry.IsEnabled = model?.CanLoad == true;
         cancel.Visibility = model?.IsBusy == true ? Visibility.Visible : Visibility.Collapsed;
         retry.Visibility = model?.State is BangumiEpisodesState.Failed or BangumiEpisodesState.Cancelled ? Visibility.Visible : Visibility.Collapsed;
-        more.Visibility = model?.CanMore == true ? Visibility.Visible : Visibility.Collapsed; more.IsEnabled = model?.CanMore == true;
+        more.Update(model is { HasUnloadedEpisodes: true, AtDisplayLimit: false }
+            ? (model.SubjectId, model.NextOffset) : null, model?.IsBusy == true);
         source.IsEnabled = model?.SubjectId is not null;
         var displayed = model?.VisibleEpisodes ?? [];
         filterNotice.Text = model?.HasUnloadedEpisodes == true
@@ -72,34 +78,72 @@ public sealed class BangumiEpisodesView : Grid, IDisposable
             : model?.Result is not null ? $"显示 {displayed.Length} / {model.Episodes.Length} 项" : "";
         filterNotice.Visibility = filterNotice.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (ReferenceEquals(shown, model?.Episodes) && shownType == model?.SelectedType) return;
-        shown = model?.Episodes; shownType = model?.SelectedType; rows.Children.Clear(); filters.Children.Clear();
-        expandEpisode.Clear(); expandedEpisodes.Clear(); episodeLinks.Clear(); episodeRows.Clear();
-        foreach (var filter in model?.TypeFilters ?? [])
+        var filterChanged = shownType != model?.SelectedType;
+        shown = model?.Episodes; shownType = model?.SelectedType;
+        var ids = (shown ?? []).Select(x => x.Id).ToHashSet();
+        expandedEpisodes.IntersectWith(ids);
+        foreach (var stale in renderedRows.Keys.Where(id => !ids.Contains(id)).ToArray()) renderedRows.Remove(stale);
+        expandEpisode.Clear(); episodeLinks.Clear(); episodeRows.Clear();
+        var chips = new List<UIElement>();
+        var types = model?.TypeFilters ?? [];
+        foreach (var filter in types)
         {
-            var chip = new ToggleButton { Content = $"{filter.Caption} {filter.Count}", IsChecked = filter.Type == model?.SelectedType,
-                CornerRadius = new(6), Padding = new(10, 5, 10, 5) };
-            AutomationProperties.SetAutomationId(chip, "BangumiEpisodeFilter-" + (filter.Type?.ToString() ?? "all"));
+            if (!filterButtons.TryGetValue(filter.Type ?? -1, out var chip))
+            {
+                chip = new ToggleButton { CornerRadius = new(6), Padding = new(10, 5, 10, 5) };
+                AutomationProperties.SetAutomationId(chip, "BangumiEpisodeFilter-" + (filter.Type?.ToString() ?? "all"));
+                chip.Click += (_, _) => { if (model?.SelectedType == filter.Type) chip.IsChecked = true; else model?.SetType(filter.Type); };
+                filterButtons.Add(filter.Type ?? -1, chip);
+            }
+            chip.Content = $"{filter.Caption} {filter.Count}"; chip.IsChecked = filter.Type == shownType;
             AutomationProperties.SetName(chip, filter.Caption + "，已载入 " + filter.Count + " 项");
-            chip.Click += (_, _) => { if (model?.SelectedType == filter.Type) chip.IsChecked = true; else model?.SetType(filter.Type); };
-            filters.Children.Add(chip);
+            chips.Add(chip);
         }
+        Reconcile(filters.Children, chips);
+        var elements = new List<UIElement>();
         if (displayed.Length == 0 && model?.Result is not null && model.Episodes.Length > 0)
-            rows.Children.Add(Text(model.HasUnloadedEpisodes ? "已载入的章节中没有此类型；可继续加载下一页。" : "当前目录没有此类型章节。"));
-        int? group = null; var multipleTypes = (model?.TypeFilters.Length ?? 0) > 2;
+            elements.Add(Text(model.HasUnloadedEpisodes ? "已载入的章节中没有此类型。" : "当前目录没有此类型章节。"));
+        int? group = null;
         foreach (var episode in displayed)
         {
-            if (shownType is null && multipleTypes && group != episode.Type)
+            if (shownType is null && types.Length > 2 && group != episode.Type)
             {
-                var header = Text(BangumiEpisodeDisplay.TypeName(episode.Type), 14); header.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
-                header.Margin = new(0, 6, 0, 2); rows.Children.Add(header); group = episode.Type;
+                if (!groupHeadings.TryGetValue(episode.Type, out var header))
+                {
+                    header = Text(BangumiEpisodeDisplay.TypeName(episode.Type), 14);
+                    header.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold; header.Margin = new(0, 6, 0, 2);
+                    groupHeadings.Add(episode.Type, header);
+                }
+                elements.Add(header); group = episode.Type;
             }
-            var row = new BangumiEpisodeRowView(episode, OpenSourceAsync, expanded =>
+            if (!renderedRows.TryGetValue(episode.Id, out var saved) || saved.Episode != episode)
             {
-                if (expanded) expandedEpisodes.Add(episode.Id); else expandedEpisodes.Remove(episode.Id);
-            });
-            if (row.CanExpand) expandEpisode[episode.Id] = row.Expand;
-            episodeRows.Add(row); episodeLinks.Add(row.SourceLink);
-            rows.Children.Add(new Border { Child = row, Padding = new(14, 12, 14, 12), CornerRadius = new(6), BorderThickness = new(1), BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["CardStrokeColorDefaultBrush"] });
+                var row = new BangumiEpisodeRowView(episode, OpenSourceAsync, expanded =>
+                {
+                    if (expanded) expandedEpisodes.Add(episode.Id); else expandedEpisodes.Remove(episode.Id);
+                });
+                if (expandedEpisodes.Contains(episode.Id)) row.Expand();
+                var frame = new Border { Child = row, Padding = new(14, 12, 14, 12), CornerRadius = new(6), BorderThickness = new(1),
+                    BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["CardStrokeColorDefaultBrush"] };
+                saved = (episode, row, frame); renderedRows[episode.Id] = saved;
+                if (!filterChanged) InteractionMotion.RevealContent(frame, .72f);
+            }
+            if (saved.View.CanExpand) expandEpisode[episode.Id] = saved.View.Expand;
+            episodeRows.Add(saved.View); episodeLinks.Add(saved.View.SourceLink); elements.Add(saved.Container);
+        }
+        Reconcile(rows.Children, elements);
+        if (filterChanged && displayed.Length > 0) InteractionMotion.RevealContent(rows, .74f);
+    }
+    private static void Reconcile(UIElementCollection current, List<UIElement> target)
+    {
+        var retained = target.ToHashSet();
+        for (var i = current.Count - 1; i >= 0; i--) if (!retained.Contains(current[i])) current.RemoveAt(i);
+        for (var i = 0; i < target.Count; i++)
+        {
+            var element = target[i];
+            if (i < current.Count && ReferenceEquals(current[i], element)) continue;
+            if (current.Contains(element)) current.Remove(element);
+            current.Insert(i, element);
         }
     }
     private async Task OpenSourceAsync(Uri uri)
@@ -139,7 +183,7 @@ public sealed class BangumiEpisodesView : Grid, IDisposable
         SelectedType = model?.SelectedType, DisplayedCount = model?.VisibleEpisodes.Length ?? 0, HasUnloaded = model?.HasUnloadedEpisodes ?? false,
         Types = model?.TypeFilters, ExpandedEpisodes = expandedEpisodes.Order().ToArray(), VisibleEpisodes = model?.VisibleEpisodes.Select(x => new { x.Id, x.Type, x.Sort }).ToArray(),
         Links = episodeLinks.Select(InteractiveCardEvidence.Hit).ToArray(), Rows = episodeRows.Select(x => x.Evidence).ToArray() };
-    public void Dispose() { if (disposed) return; disposed = true; if (model is not null) { model.PropertyChanged -= ModelChanged; model.Dispose(); } rows.Children.Clear(); filters.Children.Clear(); expandEpisode.Clear(); expandedEpisodes.Clear(); episodeLinks.Clear(); episodeRows.Clear(); shown = null; }
+    public void Dispose() { if (disposed) return; disposed = true; if (model is not null) { model.PropertyChanged -= ModelChanged; model.Dispose(); } rows.Children.Clear(); filters.Children.Clear(); expandEpisode.Clear(); expandedEpisodes.Clear(); renderedRows.Clear(); groupHeadings.Clear(); filterButtons.Clear(); episodeLinks.Clear(); episodeRows.Clear(); shown = null; }
 }
 
 // A shared page scroller, a readable title column, and separate source/detail actions.
@@ -149,11 +193,11 @@ internal sealed class BangumiEpisodeRowView : Grid
     private readonly StackPanel prose = new() { Spacing = 12, MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly HyperlinkButton toggle = Action("展开");
     private readonly TextBlock title;
-    private readonly Border detail;
+    private readonly DisclosureBody detail = new();
     private readonly BangumiEpisode episode;
     private readonly Action<bool> changed;
-    private bool compact, expanded;
-    internal HyperlinkButton SourceLink { get; } = Action("↗");
+    private bool compact;
+    internal ExternalLinkButton SourceLink { get; } = new() { Content = "原站" };
     internal bool CanExpand { get; }
 
     internal BangumiEpisodeRowView(BangumiEpisode episode, Func<Uri, Task> openSource, Action<bool> changed)
@@ -172,7 +216,6 @@ internal sealed class BangumiEpisodeRowView : Grid
         var facts = Text(string.Join("   ·   ", new[] { episode.AirDate, episode.Duration.Length > 0 ? episode.Duration : null }.Where(x => !string.IsNullOrEmpty(x))), 12);
         facts.Opacity = .72; facts.Visibility = facts.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         SetColumn(facts, 1); SetRow(facts, 1); Children.Add(facts);
-        SourceLink.Padding = new(8, 0, 8, 0);
         AutomationProperties.SetAutomationId(SourceLink, "BangumiEpisodeSource-" + episode.Id);
         AutomationProperties.SetName(SourceLink, title.Text + "，在 Bangumi 查看本集");
         ToolTipService.SetToolTip(SourceLink, "在 Bangumi 查看本集");
@@ -190,11 +233,11 @@ internal sealed class BangumiEpisodeRowView : Grid
         toggle.Visibility = CanExpand ? Visibility.Visible : Visibility.Collapsed;
         AutomationProperties.SetAutomationId(toggle, "BangumiEpisodeDescription-" + episode.Id);
         AutomationProperties.SetName(toggle, title.Text + " · 展开或收起原文与说明");
-        detail = new Border { Child = prose, HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = 760,
+        detail.Children.Add(new Border { Child = prose, HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = 760,
             BorderThickness = new(0, 1, 0, 0), BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["DividerBrush"],
-            Padding = new(0, 12, 0, 2), Margin = new(0, 8, 0, 0), Visibility = Visibility.Collapsed };
+            Padding = new(0, 12, 0, 2), Margin = new(0, 8, 0, 0) });
         SetColumn(detail, 1); SetColumnSpan(detail, 2); SetRow(detail, 3); Children.Add(detail);
-        toggle.Click += (_, _) => SetExpanded(!expanded);
+        toggle.Click += (_, _) => SetExpanded(!detail.IsExpanded);
         void Reflow()
         {
             compact = ActualWidth < 520;
@@ -206,7 +249,7 @@ internal sealed class BangumiEpisodeRowView : Grid
     private void SetExpanded(bool value)
     {
         if (!CanExpand) return;
-        expanded = value; detail.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+        detail.IsExpanded = value;
         ((TextBlock)toggle.Content).Text = value ? "收起" : "展开"; changed(value);
     }
     internal void Expand() => SetExpanded(true);
@@ -218,7 +261,7 @@ internal sealed class BangumiEpisodeRowView : Grid
     private static HyperlinkButton Action(string value) => new() { Content = new TextBlock { Text = value, FontSize = 13, IsHitTestVisible = false },
         MinHeight = 32, Padding = new(0), HorizontalAlignment = HorizontalAlignment.Left };
     private static TextBlock Text(string value, double size) => new() { Text = value, FontSize = size, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
-    internal object Evidence => new { episode.Id, compact, expanded, width = ActualWidth, titleWidth = title.ActualWidth,
+    internal object Evidence => new { episode.Id, compact, expanded = detail.IsExpanded, width = ActualWidth, titleWidth = title.ActualWidth,
         titleSize = title.FontSize, proseWidth = prose.ActualWidth, source = InteractiveCardEvidence.Hit(SourceLink),
         toggle = CanExpand ? InteractiveCardEvidence.Hit(toggle) : null };
 }

@@ -1,12 +1,13 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text.RegularExpressions;
 using TheOrder.Application;
 
 namespace TheOrder.Infrastructure.Online;
 
-// Only registered API/library artwork is eligible. HTTPS public DNS destinations, no credentials/cookies,
-// no redirects, no alternate ports. DNS is checked and the checked IP is used for the actual socket.
-public sealed class RemoteCoverSource(HttpClient http, IRemoteArtworkCache? disk = null, HttpClient? originalArtwork = null) : IImageSourceProvider, IRemoteCoverRegistry, IRemoteArtworkPreparation
+// Only registered API/library artwork is eligible. Arbitrary hosts use checked public DNS and sockets.
+// Canonical paths on known artwork hosts can use the separate anonymous system route.
+public sealed partial class RemoteCoverSource(HttpClient http, IRemoteArtworkCache? disk = null, HttpClient? originalArtwork = null) : IImageSourceProvider, IRemoteCoverRegistry, IRemoteArtworkPreparation
 {
     private readonly object gate = new();
     private readonly Dictionary<string, Uri> sources = [];
@@ -16,6 +17,8 @@ public sealed class RemoteCoverSource(HttpClient http, IRemoteArtworkCache? disk
         && uri.AbsoluteUri.Length <= 8192 && uri.HostNameType == UriHostNameType.Dns && uri.Host.Contains('.')
         && !uri.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase) && !uri.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase)
         && !uri.Host.EndsWith(".internal", StringComparison.OrdinalIgnoreCase);
+    [GeneratedRegex(@"\A/([0-9a-f]{2})/([0-9a-f]{2})/\1\2[0-9a-f]{60}(?:_(?:mini|[0-9]{2,4}))?\.webp\z")]
+    private static partial Regex KunGalImagePath();
     public string? Register(string? url, string revision)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || !Allowed(uri)) return null;
@@ -39,10 +42,11 @@ public sealed class RemoteCoverSource(HttpClient http, IRemoteArtworkCache? disk
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation); timeout.CancelAfter(TimeSpan.FromSeconds(20));
         try
         {
-            var transport = originalArtwork is not null && (VndbArtworkSource.OriginalImageUri(uri) || SteamArtworkSource.OriginalImageUri(uri)
+            var kunGalImage = uri.Host == "image.kungal.iloveren.link" && uri.Query.Length == 0 && KunGalImagePath().IsMatch(uri.AbsolutePath);
+            var transport = originalArtwork is not null && (kunGalImage || VndbArtworkSource.OriginalImageUri(uri) || SteamArtworkSource.OriginalImageUri(uri)
                 || BangumiRelationsService.ValidCoverUrl(uri.AbsoluteUri) || MusicBrainzValidation.CoverUri(uri.AbsoluteUri)
                 || AniListValidation.Image(uri.AbsoluteUri)) ? originalArtwork : http;
-            using var response = await ReadResponseAsync(transport, uri, timeout.Token).ConfigureAwait(false);
+            using var response = await ReadResponseAsync(transport, uri, kunGalImage, timeout.Token).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode || response.Content.Headers.ContentType?.MediaType is not ("image/jpeg" or "image/png" or "image/webp")) return null;
             var bytes = await CatalogTransport.ReadBoundedAsync(response.Content, MaximumBytes, timeout.Token).ConfigureAwait(false);
             if(disk is not null)
@@ -63,20 +67,21 @@ public sealed class RemoteCoverSource(HttpClient http, IRemoteArtworkCache? disk
         catch (OperationCanceledException) when (!cancellation.IsCancellationRequested) { return null; }
         catch (Exception e) when (e is HttpRequestException or OnlineException or IOException) { return null; }
     }
-    private static async Task<HttpResponseMessage> ReadResponseAsync(HttpClient transport, Uri original, CancellationToken cancellation)
+    private static async Task<HttpResponseMessage> ReadResponseAsync(HttpClient transport, Uri original, bool kunGalImage, CancellationToken cancellation)
     {
         var uri = original;
         // Only CAA edition-addressed artwork may redirect. Other image sources retain the no-redirect policy.
         string? releaseId = null;
         if (MusicBrainzValidation.CoverUri(original.AbsoluteUri))
         {
-            var match = System.Text.RegularExpressions.Regex.Match(original.AbsolutePath, @"(?:/release/|/mbid-)([a-f0-9-]{36})/");
+            var match = Regex.Match(original.AbsolutePath, @"(?:/release/|/mbid-)([a-f0-9-]{36})/");
             if (match.Success) releaseId = match.Groups[1].Value;
         }
         for (int hop = 0; ; hop++)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-            if (releaseId is not null) request.Headers.UserAgent.ParseAdd(MusicBrainzProvider.UserAgent);
+            if (kunGalImage) request.Headers.UserAgent.ParseAdd(CatalogTransport.UserAgent);
+            else if (releaseId is not null) request.Headers.UserAgent.ParseAdd(MusicBrainzProvider.UserAgent);
             var response = await transport.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation).ConfigureAwait(false);
             if (response.RequestMessage?.RequestUri is { } returned && returned != uri)
             { response.Dispose(); throw new HttpRequestException("Unexpected artwork redirect."); }

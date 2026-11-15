@@ -38,9 +38,11 @@ function Invoke-Check($Process,[string]$Control,[string]$Action,[hashtable]$Payl
 function Assert-Ready($Evidence){
     Assert-That ($Evidence.startup.ready -and !$Evidence.startup.failed -and $Evidence.startup.libraryLoaded -and $Evidence.startup.sessionsReady) 'Startup did not complete with a ready library and session service.'
     Assert-That ($Evidence.pageMotion.opacity -eq 1) 'The static page is not fully opaque.'
-    if($null -ne $Evidence.pageMotion.translation){
-        $position=$Evidence.pageMotion.translation
-        Assert-That ($position.x -eq 0 -and $position.y -eq 0 -and $position.z -eq 0) 'Page translation was not restored to zero.'
+    Assert-That (!$Evidence.pageMotion.entrance.Pending) 'The first-frame fade is still queued.'
+    if($Evidence.pageMotion.animationCount -gt 0){
+        $fade=$Evidence.pageMotion.entrance
+        Assert-That ($fade.Starts -eq $Evidence.pageMotion.animationCount -and $fade.InitialOpacity -gt 0 -and
+            $fade.InitialOpacity -lt 1 -and $fade.DurationMilliseconds -eq 220) 'Page entry did not use the shared opacity fade.'
     }
 }
 
@@ -67,7 +69,7 @@ foreach($scenario in @('cold-reduced-motion','normal-and-toggle','animation-fail
         $evidence=Invoke-Check $process $control 'probe'
         Assert-Ready $evidence
         if($scenario -eq 'cold-reduced-motion'){
-            Assert-That (!$evidence.material.motionAllowed -and !$evidence.pageMotion.translationEnabled -and !$evidence.pageMotion.failed -and $evidence.pageMotion.animationCount -eq 0) 'Cold reduced-motion startup touched or failed the optional Translation property.'
+            Assert-That (!$evidence.material.motionAllowed -and !$evidence.pageMotion.failed -and $evidence.pageMotion.animationCount -eq 0) 'Cold reduced-motion startup attempted page animation.'
         }else{
             Assert-That ($evidence.material.motionAllowed) 'Windows animations must be enabled for the positive/toggle and failure scenarios; this is not a passing run.'
         }
@@ -77,9 +79,9 @@ foreach($scenario in @('cold-reduced-motion','normal-and-toggle','animation-fail
             Assert-That ($evidence.visualScreen -eq $page) 'The requested page did not become current.'
         }
         if($scenario -eq 'cold-reduced-motion'){
-            Assert-That (!$evidence.pageMotion.translationEnabled -and !$evidence.pageMotion.failed -and $evidence.pageMotion.animationCount -eq 0) 'Reduced-motion navigation attempted page animation.'
+            Assert-That (!$evidence.pageMotion.failed -and $evidence.pageMotion.animationCount -eq 0) 'Reduced-motion navigation attempted page animation.'
         }elseif($scenario -eq 'normal-and-toggle'){
-            Assert-That ($evidence.pageMotion.translationEnabled -and !$evidence.pageMotion.failed -and $evidence.pageMotion.animationCount -gt 0) 'Enabled animations were not exercised.'
+            Assert-That (!$evidence.pageMotion.failed -and $evidence.pageMotion.animationCount -gt 0) 'Enabled animations were not exercised.'
             $count=$evidence.pageMotion.animationCount
             $evidence=Invoke-Check $process $control 'motion' @{value=$true}
             Assert-Ready $evidence

@@ -11,8 +11,8 @@ public sealed record DailyPlaytime(string GameId, string Name, DateOnly Date, lo
 public sealed record PlaytimeReport(ImmutableArray<DailyPlaytime> Days, long UnknownSeconds, long TotalSeconds);
 public static class PlaytimeStatistics
 {
-    // Historical sessions do not store pause intervals. Cross-day allocation is labelled an estimate,
-    // and only terminal, dated records enter charts. Unattributable totals remain separate.
+    // Historical sessions do not store pause intervals. Cross-day allocation is labelled an estimate.
+    // Only dated, terminal records enter charts, using credited seconds rather than wall time.
     public static PlaytimeReport Build(IEnumerable<LibraryEntry> entries, TimeZoneInfo zone, CancellationToken cancellation = default)
     {
         var rows = new Dictionary<(string, DateOnly), DailyPlaytime>(); long unknown = 0, total = 0;
@@ -20,10 +20,10 @@ public static class PlaytimeStatistics
         {
             cancellation.ThrowIfCancellationRequested();
             long attributed = 0; total = checked(total + e.EffectivePlaySeconds);
-            foreach (var s in e.Sessions)
+            foreach (var s in e.RecordedSessions)
             {
                 cancellation.ThrowIfCancellationRequested();
-                if (s.Seconds <= 0 || s.Native is { Lifecycle: not SessionLifecycle.Completed } || !Parse(s.StartedAt, out var start) || !Parse(s.EndedAt, out var end)
+                if (s.Seconds <= 0 || !TryGetAccountingWindow(s, out var start, out var end)
                     || end <= start || (end - start).TotalDays > 367 || s.Seconds > (end - start).TotalSeconds + 1) continue;
                 var first = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(start, zone).DateTime);
                 var last = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(end.AddTicks(-1), zone).DateTime);
@@ -49,6 +49,21 @@ public static class PlaytimeStatistics
         }
         return new([.. rows.Values.OrderBy(x => x.Date).ThenBy(x => x.GameId, StringComparer.Ordinal)], unknown, total);
     }
+    private static bool TryGetAccountingWindow(PlaySession session, out DateTimeOffset start, out DateTimeOffset end)
+    {
+        // ProcessGone seals confirmed samples. The accounting cutoff bounds those samples without asserting an exit time.
+        if (session.Native is { Lifecycle: SessionLifecycle.Incomplete, Reason: SessionReason.ProcessGone,
+            StartedAtUtc: { } observedStart, AccountingCutoffAtUtc: { } cutoff })
+        {
+            start = observedStart;
+            end = cutoff;
+            return true;
+        }
+        start = end = default;
+        return (session.Native is null or { Lifecycle: SessionLifecycle.Completed })
+            && Parse(session.StartedAt, out start) && Parse(session.EndedAt, out end);
+    }
+
     private static bool Parse(string text, out DateTimeOffset value) => DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out value);
     private static DateTimeOffset Midnight(DateOnly day, TimeZoneInfo zone)
     {

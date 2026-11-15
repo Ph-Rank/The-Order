@@ -14,6 +14,7 @@ public sealed class SessionEngine : IAsyncDisposable
     private readonly ISessionClock clock;
     private readonly ISessionRecoveryTokens tokens;
     private readonly ISessionPowerEvents? power;
+    private readonly bool requireRecordingMinimum;
     private readonly GameLaunchService launch;
     private readonly IDisposable engineLease;
     private readonly Channel<Func<Task>> commands = Channel.CreateBounded<Func<Task>>(new BoundedChannelOptions(256) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
@@ -51,9 +52,11 @@ public sealed class SessionEngine : IAsyncDisposable
 
     public SessionEngine(TransactionalLibrary library, IFilesystemIdentity filesystem, IGameProcessPlatform platform,
         ILaunchPositionStore positions, ISessionClock clock, ISessionRecoveryTokens tokens,
-        ISessionPowerEvents? power = null, bool autoPoll = true, LaunchTrackingOptions? launchOptions = null, LaunchPolicy? launchPolicy = null)
+        ISessionPowerEvents? power = null, bool autoPoll = true, LaunchTrackingOptions? launchOptions = null, LaunchPolicy? launchPolicy = null,
+        bool requireRecordingMinimum = false)
     {
         this.library = library; this.filesystem = filesystem; this.platform = platform; this.clock = clock; this.tokens = tokens; this.power = power;
+        this.requireRecordingMinimum = requireRecordingMinimum;
         engineLease = library.AcquireSessionEngine();
         launch = new(new SessionLaunchLibrary(library), filesystem, platform, positions, launchOptions, launchPolicy);
         worker = Task.Run(ConsumeAsync);
@@ -278,7 +281,8 @@ public sealed class SessionEngine : IAsyncDisposable
         if (active is { Native.IsTerminal: false }) throw new SessionConflictException(UiText.Get("不允许第二个 owned Session。"));
         active?.Observed?.Dispose();
         var n = new NativeSession(1, origin.Game.GameId, origin.Installation.Id, CreationUtc(status.Initial), Utc(), null, null,
-            0, SessionLifecycle.Open, null, false, 0, library.SessionWriterOwner, new(0, null), null);
+            0, SessionLifecycle.Open, null, false, 0, library.SessionWriterOwner, new(0, null), null)
+        { AwaitingRecordingMinimum = requireRecordingMinimum };
         var r = active = new(origin, n.Project(origin.OperationId.ToString()), status.Current, true);
         SetToken(r); await SaveAsync(r).ConfigureAwait(false);
     }
@@ -303,7 +307,11 @@ public sealed class SessionEngine : IAsyncDisposable
                 SetToken(r); break;
             case ProcessEventKind.TrackingLimited:
                 r.FullMonitor = false; r.Tracking = r.Current is null ? SessionTracking.Unknown : SessionTracking.CurrentProcessOnly;
-                Freeze(r); await SampleCoreAsync().ConfigureAwait(false); break;
+                Freeze(r);
+                await SampleCoreAsync().ConfigureAwait(false);
+                // Sampling may have finalized the session. Keep its cutoff fixed even if the save failed.
+                if (r.Native.IsTerminal) return;
+                break;
             case ProcessEventKind.Detached:
                 r.FullMonitor = false; r.Tracking = SessionTracking.Detached; Freeze(r);
                 if (r.Native.Lifecycle != SessionLifecycle.RecoveryPending)
@@ -384,7 +392,9 @@ public sealed class SessionEngine : IAsyncDisposable
             await SaveAsync(r).ConfigureAwait(false); r.Time.Freeze(); r.Timing = SessionTiming.PersistenceBlocked;
             r.Error ??= UiText.Get("此会话已达到历史格式的时长上限，计时已冻结；原记录保留。");
         }
-        else if (r.Time.Accumulated - r.Time.Durable >= SessionAccumulator.CheckpointTicks) await SaveAsync(r).ConfigureAwait(false);
+        else if (r.Time.Accumulated - r.Time.Durable >= SessionAccumulator.CheckpointTicks
+            || r.Durable.Native!.AwaitingRecordingMinimum && !r.Native.AwaitingRecordingMinimum)
+            await SaveAsync(r).ConfigureAwait(false);
     }
     private async Task HandlePowerAsync(bool suspended)
     {
@@ -405,7 +415,12 @@ public sealed class SessionEngine : IAsyncDisposable
         r.Time.Freeze(); r.Bridge = null; r.Timing = SessionTiming.Unverified;
         if (!r.Native.IsTerminal) Set(r, r.Native with { AccountingCutoffAtUtc = Utc() });
     }
-    private void SyncDuration(Runtime r) => Set(r, r.Native with { Accumulated100ns = r.Time.Accumulated, AccountingCutoffAtUtc = Utc() });
+    private void SyncDuration(Runtime r) => Set(r, r.Native with
+    {
+        Accumulated100ns = r.Time.Accumulated,
+        AccountingCutoffAtUtc = Utc(),
+        AwaitingRecordingMinimum = r.Native.AwaitingRecordingMinimum && r.Time.Accumulated < NativeSession.MinimumRecordedTicks
+    });
     private void Finish(Runtime r, SessionReason reason)
     {
         Freeze(r); SyncDuration(r); Set(r, r.Native with { Lifecycle = SessionLifecycle.Incomplete, Reason = reason, EndedAtUtc = null, RecoveryToken = null });
@@ -423,8 +438,11 @@ public sealed class SessionEngine : IAsyncDisposable
             RecoveryToken = r.Native.IsTerminal ? null : r.Native.RecoveryToken };
         try
         {
-            var committed = await library.CommitSessionAsync(r.Launch.Game, target.Project(r.Record.Id), create: r.Durable is null).ConfigureAwait(false);
-            r.Record = r.Durable = committed.Value; r.Time.Acknowledge(committed.Value.Native!.Accumulated100ns); r.Error = null;
+            var saved = target.Project(r.Record.Id);
+            if (r.Durable is null && target.IsTerminal && target.AwaitingRecordingMinimum)
+                await library.ReleaseUnrecordedLaunchAsync(r.Launch.Game, target.InstallationId).ConfigureAwait(false);
+            else saved = (await library.CommitSessionAsync(r.Launch.Game, saved, create: r.Durable is null).ConfigureAwait(false)).Value;
+            r.Record = r.Durable = saved; r.Time.Acknowledge(saved.Native!.Accumulated100ns); r.Error = null;
             if (r.Native.IsTerminal) r.Timing = SessionTiming.Stopped;
             else if (!r.Suspended) r.Timing = r.Native.UserPaused ? SessionTiming.Stopped : SessionTiming.Unverified;
             return true;

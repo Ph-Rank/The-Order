@@ -24,11 +24,6 @@ public sealed partial class MainWindow
     private HttpClient? playgroundHttp;
     private bool playgroundNavigationVisible = true;
     private Task playgroundOpening = Task.CompletedTask;
-    private void RefreshPlaygroundNotices()
-    {
-        NoticeStack.Visibility = ViewModel.Page == WorkspacePage.Playground && !NoticeStack.Children.OfType<Microsoft.UI.Xaml.Controls.InfoBar>().Any(bar => bar.IsOpen)
-            ? Visibility.Collapsed : Visibility.Visible;
-    }
     private void RefreshPlaygroundPolicy()
     {
         if (materialPolicy is not null) PlaygroundAppearance.SetHighContrast(materialPolicy.HighContrast);
@@ -45,8 +40,6 @@ public sealed partial class MainWindow
         playgroundConfiguration = configuration; playgroundLibrary = library;
         playgroundNavigationPreferences = new(configuration);
         Root.ActualThemeChanged += (_, _) => RefreshPlaygroundPolicy();
-        foreach (var bar in NoticeStack.Children.OfType<Microsoft.UI.Xaml.Controls.InfoBar>())
-            bar.RegisterPropertyChangedCallback(Microsoft.UI.Xaml.Controls.InfoBar.IsOpenProperty, (_, _) => RefreshPlaygroundNotices());
     }
     private async Task LoadPlaygroundNavigationAsync()
     {
@@ -72,9 +65,9 @@ public sealed partial class MainWindow
         catch { ApplyPlaygroundNavigation("入口设置未能保存，原设置已保留。请稍后重试。"); }
     }
     private async void OnHidePlayground(object sender, RoutedEventArgs e) => await ChangePlaygroundVisibilityAsync(false);
-    private PlaygroundView EnsurePlaygroundView()
+    private PlaygroundService EnsurePlaygroundService()
     {
-        if (playgroundView is not null) { playgroundView.FollowWindowTheme(Root.ActualTheme); return playgroundView; }
+        if (playground is not null) return playground;
         var configuration = playgroundConfiguration ?? throw new InvalidOperationException("Playground 环境尚未就绪。");
         var library = playgroundLibrary ?? throw new InvalidOperationException("书架尚未就绪。");
         playgroundHttp = new(new SocketsHttpHandler
@@ -88,13 +81,32 @@ public sealed partial class MainWindow
         var store = new WindowsPlaygroundStore(configuration);
         playground = CreatePlaygroundFixture(configuration, library) ?? new PlaygroundService(store, credentials,
             registry.Providers, () => library.CurrentSnapshot, ReadPlaygroundSession);
-        playgroundView = new(playground)
+        return playground;
+    }
+    private Task<PlaygroundService> GameChatServiceAsync(CancellationToken cancellation)
+    {
+        var ready = new TaskCompletionSource<PlaygroundService>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!DispatcherQueue.TryEnqueue(async () =>
         {
+            try { cancellation.ThrowIfCancellationRequested(); var chat = EnsurePlaygroundService(); await InitializePlaygroundFixtureAsync(chat); await chat.InitializeAsync(cancellation); ready.TrySetResult(chat); }
+            catch (Exception error) { ready.TrySetException(error); }
+        })) ready.TrySetException(new InvalidOperationException("窗口已关闭。"));
+        return ready.Task.WaitAsync(cancellation);
+    }
+    private PlaygroundView EnsurePlaygroundView()
+    {
+        if (playgroundView is not null) { playgroundView.FollowWindowTheme(Root.ActualTheme); return playgroundView; }
+        EnsurePlaygroundService();
+        var configuration = playgroundConfiguration!; var library = playgroundLibrary!;
+        var store = new WindowsPlaygroundStore(configuration);
+        playgroundView = new(playground!)
+        {
+            ReportNotice = (message, severity) => statusPage.Post(new("对话", message, severity)),
             BrowserDataDirectory = Path.Combine(configuration.Profile!.Root, "playground", "browser"),
             PickAttachments = PickPlaygroundAttachmentsAsync,
             OpenSource = OpenPlaygroundSourceAsync,
             RestorePreviousState = () => store.RestoreLastGoodAsync(default),
-            ProgressWorks = () => playground.Snapshot.Settings.Permissions.Library
+            ProgressWorks = () => playground!.Snapshot.Settings.Permissions.Library
                 ? (library.CurrentSnapshot?.Entries ?? []).Select(e => (PlaygroundService.WorkKeyFor(e), e.Name)).ToArray()
                 : []
         };

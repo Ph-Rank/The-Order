@@ -28,21 +28,9 @@
   </DataTemplate>
  </Page.Resources>
  <Grid x:Name="LibraryCanvas" SizeChanged="OnLibrarySizeChanged" KeyDown="OnPageKeyDown">
-  <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-  <StackPanel x:Name="NoticePanel" Grid.Row="0" Spacing="8" Margin="0" Visibility="Collapsed">
-  <InfoBar x:Name="DiscoveryNotice" IsOpen="False" IsClosable="True" CloseButtonClick="OnDismissDiscovery" Title="库目录发现了新安装" Severity="Informational"><InfoBar.ActionButton><Button x:Name="DiscoveryAction" Content="选择要导入的游戏" Click="OnReviewDiscovery" /></InfoBar.ActionButton></InfoBar>
-  <InfoBar x:Name="ApiReminder" IsOpen="False" IsClosable="False" Severity="Informational" AutomationProperties.AutomationId="CatalogAccessReminder">
-   <InfoBar.ActionButton><Button Content="前往设置" Click="OnApiSettings" AutomationProperties.AutomationId="CatalogAccessSettings" /></InfoBar.ActionButton>
-  </InfoBar>
-  <Border x:Name="RecognitionStatus" Visibility="Collapsed" Style="{StaticResource ContinueCardStyle}">
-   <Grid ColumnSpacing="16"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-    <StackPanel Spacing="6"><TextBlock Text="作品识别进度" FontWeight="SemiBold" /><TextBlock x:Name="RecognitionCounts" TextWrapping="Wrap" AutomationProperties.AutomationId="LibraryRecognitionProgress" /><ProgressBar x:Name="RecognitionBar" Minimum="0" /><TextBlock x:Name="RecognitionMessage" TextWrapping="Wrap" Style="{StaticResource SecondaryTextStyle}" /></StackPanel>
-    <Button x:Name="CancelRecognition" Grid.Column="1" Content="取消识别" Click="OnCancelRecognition" VerticalAlignment="Center" />
-   </Grid>
-  </Border>
-  </StackPanel>
+  <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
   <!-- Header: title + count, then sort · filter · view · select · import (labels collapse below 900). -->
-  <Grid x:Name="HeaderRow" Grid.Row="1" Padding="32,16,24,8" ColumnSpacing="16"><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+  <Grid x:Name="HeaderRow" Padding="32,0,24,8" ColumnSpacing="16"><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
    <StackPanel x:Name="HeaderIdentity" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
     <TextBlock Style="{StaticResource TitleTextBlockStyle}" l:Localize.Text="书架" />
     <TextBlock x:Name="CountText" Text="{x:Bind ViewModel.CountText, Mode=OneWay}" Style="{StaticResource MetadataTextStyle}" VerticalAlignment="Bottom" Margin="0,0,0,6" AutomationProperties.AutomationId="LibraryStatus" />
@@ -55,7 +43,7 @@
     <DropDownButton x:Name="SortButton" AutomationProperties.AutomationId="LibrarySort" l:Localize.Name="作品排序">
      <StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="" FontSize="14" /><TextBlock x:Name="SortLabel" l:Localize.Text="最近添加" /></StackPanel>
      <DropDownButton.Flyout>
-      <MenuFlyout x:Name="SortMenu" Placement="BottomEdgeAlignedRight">
+      <MenuFlyout x:Name="SortMenu" Opening="OnSortMenuOpening" Placement="BottomEdgeAlignedRight">
        <RadioMenuFlyoutItem Tag="added" GroupName="Sort" Click="OnSortItem" l:Localize.Text="最近添加" /><RadioMenuFlyoutItem Tag="recent" GroupName="Sort" Click="OnSortItem" l:Localize.Text="最近游玩" />
        <RadioMenuFlyoutItem Tag="name" GroupName="Sort" Click="OnSortItem" l:Localize.Text="名称" /><RadioMenuFlyoutItem Tag="rating" GroupName="Sort" Click="OnSortItem" l:Localize.Text="我的评分" />
        <RadioMenuFlyoutItem Tag="playtime" GroupName="Sort" Click="OnSortItem" l:Localize.Text="游玩时长" />
@@ -68,14 +56,14 @@
       <Grid x:Name="FilterPanel" Width="300" Height="520" MaxHeight="520" RowSpacing="12"><Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
        <ScrollViewer x:Name="FilterBody" AutomationProperties.AutomationId="FilterBody" VerticalScrollBarVisibility="Auto"><StackPanel Spacing="12" Padding="0,0,12,0">
         <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" l:Localize.Text="筛选作品" />
-        <ComboBox x:Name="ViewChoice" HorizontalAlignment="Stretch" SelectionChanged="OnFilter" AutomationProperties.AutomationId="LibraryView" l:Localize.Header="作品范围" l:Localize.Name="作品范围"><ComboBoxItem Tag="all" l:Localize.Content="全部作品" /><ComboBoxItem Tag="local" l:Localize.Content="本地游戏" /><ComboBoxItem Tag="wishlist" l:Localize.Content="愿望单" /><ComboBoxItem Tag="unmatched" l:Localize.Content="缺资料" /><ComboBoxItem Tag="unconfigured" l:Localize.Content="待设启动程序" /></ComboBox>
-        <ComboBox x:Name="StatusChoice" HorizontalAlignment="Stretch" SelectionChanged="OnFilter" AutomationProperties.AutomationId="StatusFilter" l:Localize.Header="游玩状态" l:Localize.Name="按游玩状态筛选"><ComboBoxItem Tag="all" l:Localize.Content="全部状态" /><ComboBoxItem Tag="completed" l:Localize.Content="玩过" /><ComboBoxItem Tag="playing" l:Localize.Content="在玩" /><ComboBoxItem Tag="wish" l:Localize.Content="想玩" /><ComboBoxItem Tag="paused" l:Localize.Content="搁置" /><ComboBoxItem Tag="dropped" l:Localize.Content="放弃" /><ComboBoxItem Tag="planned" l:Localize.Content="未设置" /></ComboBox>
+        <views:SelectedFirstComboBox x:Name="ViewChoice" HorizontalAlignment="Stretch" OptionChanged="OnFilter" AutomationProperties.AutomationId="LibraryView" l:Localize.Header="作品范围" l:Localize.Name="作品范围"><ComboBoxItem Tag="all" l:Localize.Content="全部作品" /><ComboBoxItem Tag="local" l:Localize.Content="本地游戏" /><ComboBoxItem Tag="wishlist" l:Localize.Content="愿望单" /><ComboBoxItem Tag="unmatched" l:Localize.Content="缺资料" /><ComboBoxItem Tag="unconfigured" l:Localize.Content="待设启动程序" /></views:SelectedFirstComboBox>
+        <views:SelectedFirstComboBox x:Name="StatusChoice" HorizontalAlignment="Stretch" OptionChanged="OnFilter" AutomationProperties.AutomationId="StatusFilter" l:Localize.Header="游玩状态" l:Localize.Name="按游玩状态筛选"><ComboBoxItem Tag="all" l:Localize.Content="全部状态" /><ComboBoxItem Tag="completed" l:Localize.Content="玩过" /><ComboBoxItem Tag="playing" l:Localize.Content="在玩" /><ComboBoxItem Tag="wish" l:Localize.Content="想玩" /><ComboBoxItem Tag="paused" l:Localize.Content="搁置" /><ComboBoxItem Tag="dropped" l:Localize.Content="放弃" /><ComboBoxItem Tag="planned" l:Localize.Content="未设置" /></views:SelectedFirstComboBox>
         <TextBox x:Name="CategoryFilter" TextChanged="OnFilterText" AutomationProperties.AutomationId="CategoryFilter" l:Localize.Header="分类" l:Localize.PlaceholderText="输入完整分类名称" l:Localize.Name="按完整分类名称筛选" />
         <TextBox x:Name="TagFilter" TextChanged="OnFilterText" AutomationProperties.AutomationId="TagFilter" l:Localize.Header="个人标签" l:Localize.PlaceholderText="输入完整标签名称" l:Localize.Name="按完整个人标签筛选" />
-        <ComboBox x:Name="MinimumChoice" HorizontalAlignment="Stretch" SelectionChanged="OnFilter" AutomationProperties.AutomationId="RatingFilter" l:Localize.Header="个人评分" l:Localize.Name="按个人评分筛选"><ComboBoxItem Tag="" l:Localize.Content="全部评分" /><ComboBoxItem Tag="0" l:Localize.Content="已评分" /><ComboBoxItem Tag="6" l:Localize.Content="评分 ≥ 6" /><ComboBoxItem Tag="8" l:Localize.Content="评分 ≥ 8" /></ComboBox>
+        <views:SelectedFirstComboBox x:Name="MinimumChoice" HorizontalAlignment="Stretch" OptionChanged="OnFilter" AutomationProperties.AutomationId="RatingFilter" l:Localize.Header="个人评分" l:Localize.Name="按个人评分筛选"><ComboBoxItem Tag="" l:Localize.Content="全部评分" /><ComboBoxItem Tag="0" l:Localize.Content="已评分" /><ComboBoxItem Tag="6" l:Localize.Content="评分 ≥ 6" /><ComboBoxItem Tag="8" l:Localize.Content="评分 ≥ 8" /></views:SelectedFirstComboBox>
         <CheckBox x:Name="FavoriteFilter" Checked="OnFavoriteFilter" Unchecked="OnFavoriteFilter" AutomationProperties.AutomationId="FavoriteFilter" l:Localize.Content="只看收藏" />
         <Border Height="1" Background="{ThemeResource DividerBrush}" Margin="0,4" />
-        <ComboBox x:Name="SavedChoice" HorizontalAlignment="Stretch" ItemsSource="{x:Bind ViewModel.SavedFilters, Mode=OneWay}" DisplayMemberPath="Name" SelectionChanged="OnSavedFilter" AutomationProperties.AutomationId="SavedFilters" l:Localize.Header="常用筛选" l:Localize.PlaceholderText="选择保存的筛选" l:Localize.Name="应用常用筛选" />
+        <views:SelectedFirstComboBox x:Name="SavedChoice" HorizontalAlignment="Stretch" OptionsSource="{x:Bind ViewModel.SavedFilters, Mode=OneWay}" DisplayMemberPath="Name" OptionChanged="OnSavedFilter" AutomationProperties.AutomationId="SavedFilters" l:Localize.Header="常用筛选" l:Localize.PlaceholderText="选择保存的筛选" l:Localize.Name="应用常用筛选" />
        </StackPanel></ScrollViewer>
        <StackPanel x:Name="FilterFooter" Grid.Row="1" Orientation="Horizontal" Spacing="8"><Button Style="{StaticResource AccentButtonStyle}" Click="OnFinishFilter" AutomationProperties.AutomationId="FinishFilter" l:Localize.Content="完成" l:Localize.Name="完成筛选，条件已即时应用" /><Button Click="OnSaveFilter" IsEnabled="{x:Bind ViewModel.CanManageFilters, Mode=OneWay}" l:Localize.Content="保存筛选" l:Localize.Name="保存当前筛选条件" /><Button Click="OnClear" l:Localize.Content="清除条件" l:Localize.Name="清除全部筛选条件" /></StackPanel>
       </Grid>
@@ -98,14 +86,14 @@
    </StackPanel>
   </Grid>
   <!-- Active conditions: one chip each (× removes it) + 清除全部. Present only while filters are active. -->
-  <Grid x:Name="ActiveFilterRegion" Grid.Row="2" Visibility="Collapsed" Padding="32,0,24,8" ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+  <Grid x:Name="ActiveFilterRegion" Grid.Row="1" Visibility="Collapsed" Padding="32,0,24,8" ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
    <ScrollViewer HorizontalScrollBarVisibility="Hidden" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
     <StackPanel x:Name="FilterChips" Orientation="Horizontal" Spacing="8" AutomationProperties.AutomationId="ActiveFilterSummary" l:Localize.Name="当前筛选条件" />
    </ScrollViewer>
    <HyperlinkButton Grid.Column="1" Click="OnClear" l:Localize.Content="清除全部" l:Localize.Name="清除全部筛选条件" />
   </Grid>
   <!-- Selection mode bar (replaces the header actions while selecting). -->
-  <Grid x:Name="SelectionContext" Grid.Row="3" Visibility="Collapsed" Margin="24,0,24,8" Padding="12,8" ColumnSpacing="8" CornerRadius="8" Background="{ThemeResource ContentBrush}" BorderBrush="{ThemeResource StrokeBrush}" BorderThickness="1">
+  <Grid x:Name="SelectionContext" Grid.Row="2" Visibility="Collapsed" Margin="24,0,24,8" Padding="12,8" ColumnSpacing="8" CornerRadius="8" Background="{ThemeResource ContentBrush}" BorderBrush="{ThemeResource StrokeBrush}" BorderThickness="1">
    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
    <TextBlock x:Name="SelectionCountText" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" AutomationProperties.AutomationId="LibrarySelectionCount" AutomationProperties.LiveSetting="Polite" l:Localize.Text="已选择 0 项" />
@@ -118,7 +106,7 @@
    </views:TagFlowPanel>
    <Button x:Name="SelectionDoneButton" Grid.Column="2" VerticalAlignment="Center" Click="OnSelectionDone" AutomationProperties.AutomationId="SelectionDone" l:Localize.Content="完成" l:Localize.Name="完成选择" />
   </Grid>
-  <Grid x:Name="BooksViewport" Grid.Row="4">
+  <Grid x:Name="BooksViewport" Grid.Row="3">
    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
    <ProgressBar Grid.RowSpan="2" IsIndeterminate="True" Height="2" VerticalAlignment="Top" Canvas.ZIndex="1" Visibility="{x:Bind Visible(ViewModel.IsSearching), Mode=OneWay}" l:Localize.Name="正在更新书架" />
     <!-- Sticky column headers match the poster/metadata rows; secondary columns hide on narrow viewports. -->
@@ -141,8 +129,8 @@
     <Button x:Name="EmptyImport" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Center" Click="OnImport" IsEnabled="{x:Bind ViewModel.CanEdit, Mode=OneWay}" l:Localize.Content="导入游戏" />
     <Button x:Name="EmptyClear" HorizontalAlignment="Center" Click="OnClear" l:Localize.Content="清除筛选" />
    </StackPanel>
-   <ProgressRing Grid.Row="1" IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}" HorizontalAlignment="Center" VerticalAlignment="Center" l:Localize.Name="正在加载书架" />
+   <views:LoadingMark Grid.Row="1" Width="42" Height="42" IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}" HorizontalAlignment="Center" VerticalAlignment="Center" l:Localize.Name="正在加载书架" />
   </Grid>
-  <TextBlock Grid.Row="5" x:Name="DiagnosticsText" Visibility="Collapsed" FontSize="11" Margin="24,0" AutomationProperties.AutomationId="VirtualizationProbe" />
+  <TextBlock Grid.Row="4" x:Name="DiagnosticsText" Visibility="Collapsed" FontSize="11" Margin="24,0" AutomationProperties.AutomationId="VirtualizationProbe" />
  </Grid>
 </Page>

@@ -13,9 +13,10 @@ public sealed class CatalogReleasesView : StackPanel, IDisposable
     private sealed record FilterOption(string? Value, string Label) { public override string ToString() => Label; }
     private readonly Expander section = new SmoothExpander() { Header = "发行与版本资料 · NextMoe", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel body = new() { Spacing = 12 }, rows = new() { Spacing = 8 };
-    private readonly TextBlock message = Text("展开后按需读取发行资料。", 14), provenance = Text("", 12), count = Text("", 13);
-    private readonly Button refresh = new() { Content = "刷新发行资料" }, next = new() { Content = "读取下一页" }, cancel = new() { Content = "取消读取" }, clear = new() { Content = "清除筛选" };
-    private readonly ComboBox kinds = Filter("发行类型", "CatalogReleasesKind"), languages = Filter("语言", "CatalogReleasesLanguage"), platforms = Filter("平台", "CatalogReleasesPlatform");
+    private readonly TextBlock message = Text("", 14), count = Text("", 13);
+    private readonly Button refresh = new() { Content = "刷新发行资料" }, cancel = new() { Content = "取消读取" }, clear = new() { Content = "清除筛选" };
+    private readonly SelectedFirstComboBox kinds = Filter("发行类型", "CatalogReleasesKind"), languages = Filter("语言", "CatalogReleasesLanguage"), platforms = Filter("平台", "CatalogReleasesPlatform");
+    private readonly ScrollPageFooter next = new();
     private readonly HashSet<string> expandedRows = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Expander> rowExpanders = new(StringComparer.Ordinal);
     private CatalogReleasesViewModel? model;
@@ -28,22 +29,21 @@ public sealed class CatalogReleasesView : StackPanel, IDisposable
     {
         Spacing = 10; Visibility = Visibility.Collapsed;
         AutomationProperties.SetAutomationId(this, "CatalogReleases"); AutomationProperties.SetAutomationId(section, "CatalogReleasesExpand");
-        AutomationProperties.SetAutomationId(refresh, "CatalogReleasesRefresh"); AutomationProperties.SetAutomationId(next, "CatalogReleasesNext");
+        AutomationProperties.SetAutomationId(refresh, "CatalogReleasesRefresh"); AutomationProperties.SetAutomationId(next, "CatalogReleasesPageFooter");
         AutomationProperties.SetAutomationId(cancel, "CatalogReleasesCancel"); AutomationProperties.SetAutomationId(message, "CatalogReleasesStatus");
         AutomationProperties.SetAutomationId(clear, "CatalogReleasesClearFilters"); AutomationProperties.SetAutomationId(count, "CatalogReleasesCount");
-        body.Children.Add(Text("按类型、语言或平台筛选已载入的发行。展开单条可查看该版本的引擎和来源。", 13));
         var filters = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 8 };
         filters.Children.Add(kinds); filters.Children.Add(languages); filters.Children.Add(platforms); filters.Children.Add(clear); body.Children.Add(filters);
         var actions = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6 };
         actions.Children.Add(refresh); actions.Children.Add(cancel); body.Children.Add(actions); body.Children.Add(message); body.Children.Add(count);
-        provenance.Opacity = .72; body.Children.Add(provenance); body.Children.Add(rows); body.Children.Add(next);
+        body.Children.Add(rows); body.Children.Add(next);
         section.Content = body; Children.Add(section);
         section.Expanding += async (_, _) => { if (!syncing && model is not null) await model.ExpandAsync(); };
         section.Collapsed += (_, _) => { if (!syncing) model?.Collapse(); };
         refresh.Click += async (_, _) => { if (model is not null) await model.RefreshAsync(); };
-        next.Click += async (_, _) => { if (model is not null) await model.NextAsync(); };
+        next.LoadNext = NextAsync;
         cancel.Click += (_, _) => model?.Cancel(); clear.Click += (_, _) => model?.ClearFilters();
-        kinds.SelectionChanged += FilterChanged; languages.SelectionChanged += FilterChanged; platforms.SelectionChanged += FilterChanged;
+        kinds.OptionChanged += FilterChanged; languages.OptionChanged += FilterChanged; platforms.OptionChanged += FilterChanged;
         Unloaded += (_, _) => { if (!IsLoaded) Deactivate(); };
     }
     public void Configure(ICatalogReleaseReader reader, Func<long>? authGeneration = null)
@@ -67,8 +67,8 @@ public sealed class CatalogReleasesView : StackPanel, IDisposable
     }
     private void FilterChanged(object sender, SelectionChangedEventArgs args)
     {
-        if (!syncing) model?.SetFilters((kinds.SelectedItem as FilterOption)?.Value,
-            (languages.SelectedItem as FilterOption)?.Value, (platforms.SelectedItem as FilterOption)?.Value);
+        if (!syncing) model?.SetFilters((kinds.SelectedOption as FilterOption)?.Value,
+            (languages.SelectedOption as FilterOption)?.Value, (platforms.SelectedOption as FilterOption)?.Value);
     }
     private void StateChanged(object? sender, PropertyChangedEventArgs e) { if (!disposed) Render(); }
     private void Render()
@@ -80,25 +80,33 @@ public sealed class CatalogReleasesView : StackPanel, IDisposable
         if (!ReferenceEquals(filterRows, model.Items))
         {
             filterRows = model.Items;
-            kinds.ItemsSource = new[] { new FilterOption(null, UiText.Get("所有类型")) }.Concat(model.Kinds.Select(value => new FilterOption(value, UiText.Get(CatalogReleaseFacts.KindCaption(value)) + (CatalogReleaseFacts.KindCaption(value) == "其他发行" ? " · " + value : "")))).ToArray();
-            languages.ItemsSource = new[] { new FilterOption(null, UiText.Get("所有语言")) }.Concat(model.Languages.Select(value => new FilterOption(value, UiText.Get(CatalogReleaseFacts.LanguageCaption(value)) + " · " + value))).ToArray();
-            platforms.ItemsSource = new[] { new FilterOption(null, UiText.Get("所有平台")) }.Concat(model.Platforms.Select(value => new FilterOption(value, UiText.Get(CatalogReleaseFacts.PlatformCaption(value))))).ToArray();
+            kinds.OptionsSource = new[] { new FilterOption(null, UiText.Get("所有类型")) }.Concat(model.Kinds.Select(value => new FilterOption(value, UiText.Get(CatalogReleaseFacts.KindCaption(value)) + (CatalogReleaseFacts.KindCaption(value) == "其他发行" ? " · " + value : "")))).ToArray();
+            languages.OptionsSource = new[] { new FilterOption(null, UiText.Get("所有语言")) }.Concat(model.Languages.Select(value => new FilterOption(value, UiText.Get(CatalogReleaseFacts.LanguageCaption(value)) + " · " + value))).ToArray();
+            platforms.OptionsSource = new[] { new FilterOption(null, UiText.Get("所有平台")) }.Concat(model.Platforms.Select(value => new FilterOption(value, UiText.Get(CatalogReleaseFacts.PlatformCaption(value))))).ToArray();
         }
         Select(kinds, model.KindFilter); Select(languages, model.LanguageFilter); Select(platforms, model.PlatformFilter); syncing = false;
         kinds.IsEnabled = languages.IsEnabled = platforms.IsEnabled = model.Items.Length > 0; clear.IsEnabled = model.HasFilters;
-        message.Text = UiText.Get(model.Message.Length > 0 ? model.Message : "展开后按需读取发行资料。");
+        var showMessage = model.State != CatalogReleasesState.Ready || model.Items.Length == 0
+            || model.Items.Length >= CatalogReleasesViewModel.MaximumRows && model.NextCursor is not null;
+        message.Text = showMessage ? UiText.Get(model.Message) : "";
+        message.Visibility = message.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         count.Text = model.Loaded ? $"{UiText.Get("显示")} {model.VisibleItems.Length} / {model.Items.Length} {UiText.Get("条已载入发行")}" + (model.NextCursor is not null ? UiText.Get(" · 尚有后续记录") : "") : "";
-        refresh.IsEnabled = model.CanLoad; next.IsEnabled = model.CanNext;
-        next.Visibility = model.NextCursor is not null && model.Items.Length < CatalogReleasesViewModel.MaximumRows ? Visibility.Visible : Visibility.Collapsed;
+        refresh.IsEnabled = model.CanLoad;
+        next.Update(model.Expanded && model.Items.Length < CatalogReleasesViewModel.MaximumRows ? model.NextCursor : null, model.IsBusy);
         cancel.Visibility = model.IsBusy ? Visibility.Visible : Visibility.Collapsed;
-        provenance.Text = model.FetchedAtUtc is not null ? "资料来自 NextMoe 作品目录；空缺表示来源未收录。" : "";
         if (ReferenceEquals(shownRows, model.VisibleItems)) return;
-        shownRows = model.VisibleItems; rows.Children.Clear(); rowExpanders.Clear();
-        if (model.Loaded && model.HasFilters && model.VisibleItems.Length == 0)
-            rows.Children.Add(Text("已载入记录中没有符合条件的发行。可清除筛选；若有下一页，也可继续读取。", 14));
-        foreach (var row in model.VisibleItems) AddRow(row);
+        var incoming = model.VisibleItems;
+        var append = shownRows is { Length: > 0 } previous && previous.Length <= incoming.Length
+            && previous.SequenceEqual(incoming.Take(previous.Length));
+        var start = append ? shownRows!.Length : 0;
+        shownRows = incoming;
+        if (!append) { rows.Children.Clear(); rowExpanders.Clear(); }
+        if (model.Loaded && model.HasFilters && incoming.Length == 0)
+            rows.Children.Add(Text(model.NextCursor is null ? "没有符合筛选条件的发行。" : "已载入记录中没有符合条件的发行。", 14));
+        foreach (var row in incoming.Skip(start)) AddRow(row, append);
+        if (!append && rows.Children.Count > 0) InteractionMotion.RevealContent(rows, .7f);
     }
-    private void AddRow(CatalogReleaseEdition row)
+    private void AddRow(CatalogReleaseEdition row, bool reveal)
     {
         var heading = new StackPanel { Spacing = 4, IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Stretch };
         var title = Text(string.IsNullOrWhiteSpace(row.Title) ? "发行标题未收录" : row.Title, 15); title.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold; heading.Children.Add(title);
@@ -118,7 +126,7 @@ public sealed class CatalogReleasesView : StackPanel, IDisposable
             var label = CatalogContentView.SiteName(reference.Source) + " · " + reference.Id;
             if (SafeSource(reference.Url))
             {
-                var link = new HyperlinkButton { Content = label, Padding = new Thickness(0, 2, 0, 2), HorizontalAlignment = HorizontalAlignment.Left };
+                var link = new ExternalLinkButton { Content = label };
                 AutomationProperties.SetName(link, label + UiText.Get("，原始发行资料"));
                 link.Click += async (_, _) =>
                 {
@@ -136,11 +144,12 @@ public sealed class CatalogReleasesView : StackPanel, IDisposable
         entry.Expanding += (_, _) => expandedRows.Add(row.Id); entry.Collapsed += (_, _) => expandedRows.Remove(row.Id);
         AutomationProperties.SetAutomationId(entry, "CatalogRelease-" + row.Id); AutomationProperties.SetName(entry, (row.Title ?? UiText.Get("发行标题未收录")) + "，" + string.Join("，", facts));
         rowExpanders[row.Id] = entry; rows.Children.Add(entry);
+        if (reveal) InteractionMotion.RevealContent(entry, .72f);
     }
-    private static void Select(ComboBox box, string? value) => box.SelectedItem = box.Items.Cast<FilterOption>().FirstOrDefault(option => option.Value == value);
-    private static ComboBox Filter(string name, string id)
+    private static void Select(SelectedFirstComboBox box, string? value) => box.SelectedOption = box.PrimaryOptions.Cast<FilterOption>().FirstOrDefault(option => option.Value == value);
+    private static SelectedFirstComboBox Filter(string name, string id)
     {
-        var box = new ComboBox { MinWidth = 130, MaxWidth = 220, HorizontalAlignment = HorizontalAlignment.Left };
+        var box = new SelectedFirstComboBox { MinWidth = 130, MaxWidth = 220, HorizontalAlignment = HorizontalAlignment.Left };
         AutomationProperties.SetName(box, UiText.Get(name)); AutomationProperties.SetAutomationId(box, id); return box;
     }
     private static bool SafeSource(string? url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == "https"

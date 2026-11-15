@@ -45,7 +45,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         var contentStore = new ContentLanguagePreferencesStore(configuration);
         var contentLanguages = new ContentLanguageSettings(contentStore);
         await contentLanguages.InitializeAsync();
-        host = Composition.Create(languages, languageStore, contentLanguages, contentStore);
+        host = await Composition.CreateAsync(languages, languageStore, contentLanguages, contentStore);
+        await host.Window.LoadClosePreferenceAsync();
         host.LogStarted();
         UnhandledException += (_, error) => host?.LogFatal(error.Exception);
         host.Window.AppWindow.Closing += (sender, close) =>
@@ -53,6 +54,7 @@ public partial class App : Microsoft.UI.Xaml.Application
             if (allowClose) return;
             close.Cancel = true;
             if (exiting) return;
+            if (host.Window.ExitOnClose) { _ = RequestExitAsync(); return; }
             windowLifetime.TrayAvailable = TrayAvailable;
             if (windowLifetime.CloseToTray()) { host.Window.SetVisualWindowVisible(false); host.Window.AppWindow.Hide(); _ = CheckpointHiddenAsync(); }
             // No tray means no way back to a hidden window. × then takes the same orderly

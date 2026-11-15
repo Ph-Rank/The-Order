@@ -8,7 +8,7 @@ public sealed partial class ArtworkStage
     // Invoked only by the isolated visual Test fixture, never by normal UI or Production.
     internal async Task<object> AuditLifecycleAsync()
     {
-        if (!loaded || optical is null || Images is null || coverKey is null)
+        if (!loaded || Effective != "Glass" || !HasCurrentPresentation || Images is null || coverKey is null)
             throw new InvalidOperationException("Audit requires a settled advanced stage");
         var savedImages = Images; var savedKey = coverKey; var savedMode = Mode;
         var savedAllowed = allowed; var savedContrast = highContrast;

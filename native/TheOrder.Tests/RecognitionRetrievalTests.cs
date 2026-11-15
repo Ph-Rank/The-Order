@@ -41,6 +41,58 @@ public sealed class RecognitionRetrievalTests
         Assert.True(Assert.Single(identity.LocalCandidates).Exact); Assert.Single(identity.Evidence.IndexProofs); Assert.Contains("vndb:v9", identity.References);
     }
 
+    [Theory]
+    [InlineData("TsukihimeR", "folder", true)]
+    [InlineData("月姬 R", "folder", true)]
+    [InlineData("月姬 R 本地 PC 应用", "file-description", true)]
+    [InlineData("Tsukihime", "folder", false)]
+    public async Task SpecificTsukihimeEditionBeatsTheBaseNameInReadme(string observed, string source, bool isRemake)
+    {
+        const string official = "Tsukihime -A piece of blue glass moon-";
+        var indexJson = System.Text.Json.JsonSerializer.Serialize(new { version = 1, records = new[]
+        {
+            new { names = new[] { "Tsukihime", "月姫", "月姬" }, references = new[] { "vndb:v7" } },
+            new { names = new[] { official, "月姫 -A piece of blue glass moon-" }, references = new[] { "vndb:v17909" } }
+        } });
+        var index = new TitleIndex(() => new MemoryStream(Gzip(indexJson)));
+        var input = Entry(isRemake ? "TsukihimeR" : "Tsukihime", @"C:\synthetic\Tsukihime");
+        var evidence = Evidence(new LocalTitleEvidence(observed, source), new LocalTitleEvidence("使用 TsukihimePC.exe 开始游戏", "readme-heading"));
+        var identity = await RecognitionIdentityBuilder.BuildAsync(input, evidence, index, default);
+        Assert.Contains(isRemake ? "vndb:v17909" : "vndb:v7", identity.References);
+        if (isRemake)
+        {
+            Assert.Contains(official, identity.Queries);
+            Assert.DoesNotContain("vndb:v7", identity.References);
+            Assert.DoesNotContain(identity.Evidence.Titles, t => t.Source == "readme-title" && t.Value == "Tsukihime");
+        }
+        var original = Work("574", "月姬") with
+        { TitleEvidence = [new("Tsukihime", "latin", false, "ja")], References = [new("vndb", "v7", null)] };
+        var remake = Work("603", "月姬重制版") with
+        { TitleEvidence = [new(official, "official", false, "en")], References = [new("vndb", "v17909", null)] };
+        var releases = new Dictionary<string, ImmutableArray<ReleaseIdentity>>
+        {
+            ["574"] = [new("1", "574", "Tsukihime", "Tsukihime", "default", null)],
+            ["603"] = [new("2", "603", official, official, "digital", null)]
+        };
+        var ranker = new ReleaseAwareRanking();
+        var ranked = ranker.Rank(identity.Evidence, [original, remake], releases);
+        Assert.Equal(isRemake ? "603" : "574", ranked[0].Work.Id);
+        Assert.True(ranked[0].HighConfidence);
+        if (isRemake)
+        {
+            Assert.True(ranked.Single(r => r.Work.Id == "574").VersionNeedsConfirmation);
+            Assert.False(AutomaticRecognitionPolicy.Eligible(Assert.Single(ranker.Rank(identity.Evidence, [original], releases))));
+        }
+    }
+
+    [Theory]
+    [InlineData("TsukihimePC", "product-name")]
+    [InlineData("TsukihimeR", "custom-name")]
+    [InlineData("Tsukihime R II", "folder")]
+    [InlineData("The Stellar Voyage R", "folder")]
+    public void OtherLocalNamesDoNotBecomeRemakeAliases(string title, string source)
+        => Assert.Equal(title, LocalTitleCleaner.Clean(title, source));
+
     [Fact]
     public async Task FuzzyLookupHasFanoutInputAndCancellationBounds()
     {

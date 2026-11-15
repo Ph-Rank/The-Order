@@ -115,6 +115,37 @@ public sealed class BannerSelectionTests
         Assert.Equal(dialogue?"https://example.org/cg":"https://example.org/hero",choice!.Url);
         Assert.True(choice.TextScreened); Assert.Equal(work.Id,choice.SourceWorkId); Assert.Equal(2,images.Calls);
     }
+    [Theory]
+    [InlineData(ArtworkSources.VndbPromoKind, "title", true)]
+    [InlineData("vndb-screenshot", "title", false)]
+    [InlineData(ArtworkSources.VndbPromoKind, "dialogue", false)]
+    [InlineData(ArtworkSources.VndbPromoKind, "menu", false)]
+    public async Task OnlyVerifiedPromoAllowsAGroupedTitle(string kind, string text, bool eligible)
+    {
+        var raster = Raster(256, 144, (x, y) => ((byte)(90 + x / 4), (byte)(70 + y / 3), (byte)150));
+        await using var images = new FakeImages(_ => new(raster, "loaded"), BannerSelection.TextAnalysisEdge);
+        var work = Work() with
+        {
+            Presentation = new("curated", [new("https://example.org/wide", 1200, 675, kind)], [], [], [], [], [], [], [])
+        };
+        await using var detector = new RegionsDetector(text switch
+        {
+            "title" => [new(.342, .787, .371, .053, .99), new(.383, .931, .236, .021, .98)],
+            "dialogue" => [new(.12, .76, .70, .026, .99)],
+            _ => [new(.342, .30, .371, .053, .99), new(.72, .76, .16, .024, .99)]
+        });
+        var result = await BannerSelection.AnalyzeAsync(work, null, images, new Registry(), default, detector);
+        Assert.Equal(eligible, result.Choice is { TextScreened: true });
+        Assert.Equal(eligible ? "eligible" : "overlay-text", Assert.Single(result.Assessments).Result);
+    }
+
+    private sealed class RegionsDetector(ImmutableArray<ArtworkTextRegion> regions) : IArtworkTextDetector
+    {
+        public Task<ArtworkTextDetection> AnalyzeAsync(RasterPixels pixels, CancellationToken cancellation)
+            => Task.FromResult(new ArtworkTextDetection(true, regions, "fixture"));
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     private sealed class LibraryHeroDetector(bool dialogue):IArtworkTextDetector
     {
         public Task<ArtworkTextDetection> AnalyzeAsync(RasterPixels pixels,CancellationToken cancellation)=>Task.FromResult(new ArtworkTextDetection(true,

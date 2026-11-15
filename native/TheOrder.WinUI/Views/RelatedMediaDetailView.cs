@@ -21,11 +21,11 @@ public sealed class RelatedMediaDetailView : Grid, IDisposable
     private readonly TextBlock summary = new() { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
     private readonly TextBlock provenance = new() { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
-    private readonly ProgressRing progress = new() { Width = 18, Height = 18, IsActive = false };
+    private readonly LoadingMark progress = new() { Width = 18, Height = 18, IsActive = false };
     private readonly Button cancel = new() { Content = "取消读取", MinHeight = 32 };
     private readonly Button retry = new() { Content = "重试读取", MinHeight = 32 };
     private readonly Button refresh = new() { Content = "刷新资料", MinHeight = 32, HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly HyperlinkButton source = new() { Content = "在 Bangumi 查看原站", Padding = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly ExternalLinkButton source = new() { Content = "在 Bangumi 查看原站" };
     private readonly TagFlowPanel facts = new() { HorizontalSpacing = 20, VerticalSpacing = 8, MaximumItemWidth = 400, CenterInlineItems = false };
     private readonly TagFlowPanel actions = new() { HorizontalSpacing = 8, VerticalSpacing = 6 };
     private readonly CoverPresenter picture = new() { Width = 136, Height = 182, PreserveEntireImage = true, ImageCornerRadius = 8, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
@@ -172,22 +172,26 @@ public sealed class RelatedMediaDetailView : Grid, IDisposable
         BangumiRelationKind.Book => "书籍", BangumiRelationKind.Game => "游戏", _ => "作品"
     };
 
+    private BangumiSubjectDetails? displayedDetails;
     private void Synchronize()
     {
         var item = model?.Item;
         var details = model?.Result?.Details;
+        var reveal = details is not null && !ReferenceEquals(details, displayedDetails);
+        displayedDetails = details;
         title.Text = details?.Title ?? item?.Title ?? "关联作品";
         originalTitle.Text = details?.OriginalTitle ?? item?.OriginalTitle ?? "";
         originalTitle.Visibility = Visible(originalTitle.Text.Length > 0 && originalTitle.Text != title.Text);
-        media.Text = item is null ? "Bangumi" : KindName(item.Kind) + " · Bangumi";
+        media.Text = item is null ? "" : KindName(item.Kind);
         var rawRelation = string.IsNullOrWhiteSpace(item?.Relation) ? "未标明关系类型" : item.Relation;
         var displayRelation = string.IsNullOrWhiteSpace(RelationLabel) ? rawRelation : RelationLabel;
         relation.Text = originTitle.Length == 0 ? "关联 · " + displayRelation : $"与《{originTitle}》的关联 · {displayRelation}";
         relation.Visibility = Visible(item is not null);
         summary.Text = details is null
-            ? model?.State is BangumiSubjectDetailsState.Failed or BangumiSubjectDetailsState.Cancelled
-                ? "暂未取得简介，可重试或查看原站。" : "完整资料读取后显示简介。"
-            : string.IsNullOrWhiteSpace(details.Summary) ? "原站暂未提供简介。" : details.Summary;
+            ? ""
+            : details.Summary;
+        if (summary.Parent is FrameworkElement summarySection)
+            summarySection.Visibility = Visible(summary.Text.Length > 0);
         summary.Opacity = details is not null && details.Summary.Length > 0 ? 1 : .75;
         facts.Children.Clear();
         if (details is not null)
@@ -222,6 +226,7 @@ public sealed class RelatedMediaDetailView : Grid, IDisposable
         var fetched = details is null ? "" : "\n资料读取时间 · " + details.FetchedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
         var relationEvidence = string.IsNullOrWhiteSpace(RelationEvidence) ? "" : "\n关系说明 · " + RelationEvidence;
         provenance.Text = item is null ? "Bangumi 公开作品资料" : $"来源 · Bangumi\n作品编号 · {item.Id}\n原始关系标注 · {rawRelation}" + relationEvidence + fetched;
+        if (reveal) InteractionMotion.EnterPage(scroll);
     }
 
     private void AddFact(string name, string value) => facts.Children.Add(new TextBlock
@@ -248,6 +253,7 @@ public sealed class RelatedMediaDetailView : Grid, IDisposable
 
     public void Deactivate()
     {
+        InteractionMotion.StopPage(scroll);
         active = false; generation++; model?.Deactivate();
         musicView?.Deactivate();
         aniListView?.Deactivate();

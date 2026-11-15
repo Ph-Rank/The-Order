@@ -18,6 +18,20 @@ public sealed partial class MainWindow : Window
     private LibraryPage libraryPage = null!;
     private DetailsPage detailsPage = null!;
     private SettingsPage settingsPage = null!;
+    private readonly StatusPage statusPage;
+    private readonly WindowsClosePreference closePreference;
+    private bool startupExitOnClose, closePreferenceLoaded;
+    internal bool ExitOnClose => settingsPage?.ExitOnClose ?? startupExitOnClose;
+
+    internal async Task LoadClosePreferenceAsync()
+    {
+        try
+        {
+            startupExitOnClose = await closePreference.ReadAsync();
+            closePreferenceLoaded = true;
+        }
+        catch { closePreferenceLoaded = false; }
+    }
     private StatisticsPage statisticsPage = null!;
     private WorkspacePage detailsParent = WorkspacePage.Library;
     private readonly AppUpdateViewModel updates;
@@ -32,7 +46,6 @@ public sealed partial class MainWindow : Window
     public LaunchViewModel Launch { get; }
     public AppSessionHost Sessions { get; }
     private bool commandsBlocked;
-    private string? lifecycleMessage;
     private readonly DispatcherTimer launchTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly InstallationNavigation installationNavigation;
     private readonly IImagePipeline images;
@@ -53,11 +66,12 @@ public sealed partial class MainWindow : Window
     private readonly BangumiSettingsViewModel bangumiSettings;
     private readonly LibraryBackupViewModel backups;
     private readonly DispatcherTimer backupTimer = new() { Interval = TimeSpan.FromMinutes(5) };
-    public MainWindow(WorkspaceViewModel workspace, NativeConfiguration configuration, FilesViewModel files, IImagePipeline images, IOfflineFilesClient filesClient, OnlineViewModel online, RecognitionViewModel recognition, LaunchViewModel launch, AppSessionHost sessions, IMaterialPreferencesStore materialPreferences, IPersonalBannerStore personalBanners, OnlineCoverSelectionClient coverSelection, IRemoteCoverRegistry coverRegistry, IOnlineCatalog catalog, IEntityCatalog entities, CatalogPresentationService presentations, OfflineLibraryClient library, CatalogBrowseClient browsing, CatalogBrowsePolicy browsingPolicy, CatalogBrowseSettings browsingSettings, LanguageSettings languages, ContentLanguageSettings contentLanguages, LaunchFileDiscovery launchFiles, AppUpdateViewModel updates, NextMoeSettingsViewModel nextMoeSettings, LibraryBackupViewModel backups, LibrarySourcesService sources, WindowsLibrarySourcesWatcher sourceWatcher, LibraryExtrasClient extras, MetadataSourceClient metadataSources, WindowsLocalResources resources, IBangumiRelationsReader bangumiRelations, IBangumiSubjectDetailsReader bangumiSubjects, IRelatedSemanticReader relationSemantics, IMusicBrainzReader musicBrainz, IAniListReader aniList, IWatchLinkPreferencesStore watchPreferences, IBangumiWatchLinksReader watchReader, BangumiSettingsViewModel bangumiSettings, IBookBibliographyReader bookBibliography, IBangumiBookRelationsReader bookRelations, IBangumiEpisodesReader episodes, ICatalogReleaseReader catalogReleases, IMusicBrainzEntityReader musicEntities, GlobalLaunchSettings launchDefaults, LaunchPolicy launchPolicy, GameVideoReader gameVideos, IMediaIdentityDecisions identityDecisions, LibraryMigrationService migrationService, SyntheticScenario? scenario = null, SyntheticOnline? onlineFixture = null)
+    public MainWindow(WorkspaceViewModel workspace, NativeConfiguration configuration, FilesViewModel files, IImagePipeline images, IOfflineFilesClient filesClient, OnlineViewModel online, RecognitionViewModel recognition, LaunchViewModel launch, AppSessionHost sessions, IMaterialPreferencesStore materialPreferences, IPersonalBannerStore personalBanners, OnlineCoverSelectionClient coverSelection, IRemoteCoverRegistry coverRegistry, IOnlineCatalog catalog, IEntityCatalog entities, CatalogPresentationService presentations, OfflineLibraryClient library, CatalogBrowseClient browsing, CatalogBrowsePolicy browsingPolicy, CatalogBrowseSettings browsingSettings, LanguageSettings languages, ContentLanguageSettings contentLanguages, LaunchFileDiscovery launchFiles, AppUpdateViewModel updates, NextMoeSettingsViewModel nextMoeSettings, LibraryBackupViewModel backups, LibrarySourcesService sources, WindowsLibrarySourcesWatcher sourceWatcher, LibraryExtrasClient extras, MetadataSourceClient metadataSources, WindowsLocalResources resources, IBangumiRelationsReader bangumiRelations, IBangumiSubjectDetailsReader bangumiSubjects, IRelatedSemanticReader relationSemantics, IMusicBrainzReader musicBrainz, IAniListReader aniList, IWatchLinkPreferencesStore watchPreferences, IBangumiWatchLinksReader watchReader, BangumiSettingsViewModel bangumiSettings, IBookBibliographyReader bookBibliography, IBangumiBookRelationsReader bookRelations, IBangumiEpisodesReader episodes, ICatalogReleaseReader catalogReleases, IMusicBrainzEntityReader musicEntities, GlobalLaunchSettings launchDefaults, LaunchPolicy launchPolicy, GameVideoReader gameVideos, IMediaIdentityDecisions identityDecisions, LibraryMigrationService migrationService, DiscoveryFeedViewModel discovery, IsolatedHeroFrameCache heroFrames, WindowsClosePreference closePreference, ImageCacheStorage imageCacheStorage, SyntheticScenario? scenario = null, SyntheticOnline? onlineFixture = null)
     {
         Sessions = sessions; this.launchDefaults = launchDefaults; this.launchPolicy = launchPolicy;
         this.nextMoeSettings = nextMoeSettings; this.bangumiSettings = bangumiSettings;
         this.backups = backups;
+        this.closePreference = closePreference;
         this.sources = sources; this.sourceWatcher = sourceWatcher; this.extras = extras; this.metadataSources = metadataSources; this.resources = resources;
         this.updates = updates;
         this.scenario = scenario; this.online = online; this.onlineFixture = onlineFixture; Launch = launch;
@@ -73,7 +87,11 @@ public sealed partial class MainWindow : Window
         performanceFixture = configuration.Diagnostics && Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test
             && Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_PERFORMANCE_OUTPUT") is not null;
         installationNavigation = new(files);
-        ViewModel = workspace; InitializeComponent();
+        ViewModel = workspace;
+        InitializeComponent();
+        statusPage = new();
+        statusPage.UnreadAttentionChanged += UpdateStatusBadge;
+        ApplyTheme();
         ConfigurePlayground(configuration, library);
         AppTitleBar.Title = Title = AppReleaseIdentity.IsBeta ? $"The Order {AppReleaseIdentity.Version} · Beta" : "The Order";
 #if PLAYGROUND_ISOLATED_CANDIDATE
@@ -83,6 +101,7 @@ public sealed partial class MainWindow : Window
             AppTitleBar.Title = Title = $"The Order {typeof(App).Assembly.GetName().Version!.ToString(3)} Test · 只读登录验收";
         updates.PropertyChanged += OnAppUpdateState;
         bangumiSettings.Access.Changed += OnBangumiAccessChanged;
+        bangumiSettings.PropertyChanged += OnBangumiStatus;
         if (configuration.Profile is NativeProfileStore { Manifest.ProfileKind: NativeProfileKind.Production })
         {
             updateTimer = new() { Interval = TimeSpan.FromSeconds(15) };
@@ -96,8 +115,9 @@ public sealed partial class MainWindow : Window
         initializePages = () =>
         {
         libraryPage = new(workspace, configuration.Diagnostics, images) { OpenDetails = id => Navigate(WorkspacePage.Details, id), ResolveUnsaved = ResolveUnsavedAsync, OpenImport = () => Navigate(WorkspacePage.Import), QuickLaunch = QuickLaunchAsync };
-        statisticsPage = new(() => extras.Snapshot) { OpenDetails = id => Navigate(WorkspacePage.Details, id, WorkspacePage.Statistics), OpenImport = () => Navigate(WorkspacePage.Import) };
-        detailsPage = new(workspace, images, launch, recognition) { GoBack = GoBackAsync, ResolveUnsaved = ResolveUnsavedAsync, ActivateLaunch = ActivateLaunchAsync, ManageInstallations = async () => { if (workspace.SelectedId is { } id) await installationNavigation.OpenAsync(id, ResolveUnsavedAsync, () => Navigate(WorkspacePage.Installations)); },
+        statisticsPage = new(() => extras.Snapshot) { OpenDetails = id => Navigate(WorkspacePage.Details, id, WorkspacePage.Statistics), OpenImport = () => Navigate(WorkspacePage.Import), OpenStatus = () => Navigate(WorkspacePage.Status) };
+        statisticsPage.ViewModel.PropertyChanged += OnStatisticsStatus;
+        detailsPage = new(workspace, images, launch, recognition, heroFrames) { GoBack = GoBackAsync, ResolveUnsaved = ResolveUnsavedAsync, ActivateLaunch = ActivateLaunchAsync, ConfirmLaunchPosition = ConfirmLaunchPositionAsync, ManageInstallations = async () => { if (workspace.SelectedId is { } id) await installationNavigation.OpenAsync(id, ResolveUnsavedAsync, () => Navigate(WorkspacePage.Installations)); },
             ChangeCover = async () => { if (await ResolveUnsavedAsync() && workspace.Draft?.Source is { } details && await PickFile(".png", ".jpg", ".jpeg") is { } path) await workspace.ExecuteFileMutationAsync(token => filesClient.CoverAsync(details, path, token), details.Id); } };
         detailsPage.ChooseWorkCover = () => ChooseWorkCoverAsync(coverSelection, coverRegistry);
         detailsPage.ConfigurePersonalSync(nextMoeSettings);
@@ -113,18 +133,18 @@ public sealed partial class MainWindow : Window
         detailsPage.RestoreDefaultBanner = () => ChangePersonalBannerAsync(personalBanners, restore: true);
         detailsPage.RestoreDefaultCover = async () => { if (await ResolveUnsavedAsync() && workspace.Draft?.Source is { } details)
             await workspace.ExecuteFileMutationAsync(token => filesClient.CoverAsync(details, null, token), details.Id); };
-        onlinePage = new(online, images, browsing, browsing, coverRegistry, presentations, () => library.CurrentSnapshot);
+        onlinePage = new(online, discovery, images, browsing, browsing, coverRegistry, presentations, () => library.CurrentSnapshot);
         onlinePage.ConfigureRelatedWorks(bangumiRelations, bangumiSubjects, relationSemantics, catalog as IRelatedGameIdentityReader, () => bangumiSettings.Access.Capture().Scope);
         onlinePage.ConfigureMusic(musicBrainz, musicEntities);
         onlinePage.ConfigureAniList(aniList, watchPreferences, watchReader);
         onlinePage.ConfigureBooks(bookBibliography, bookRelations);
         onlinePage.ConfigureEpisodes(episodes);
+        onlinePage.ConfigureGameVideos(gameVideos, identityDecisions);
         onlinePage.ConfigureReleases(catalogReleases, () => online.AuthGeneration);
         onlinePage.NavigationChanged += RefreshBackNavigation;
         libraryPage.RecognizeSelected = async ids => { if (await ResolveUnsavedAsync()) { await recognition.StartAsync(ids, RecognitionMode.Reidentify); if (!ids.IsEmpty) await Navigate(WorkspacePage.Details, ids[0]); } };
         detailsPage.Recognize = async () => { if (workspace.SelectedId is { } id && await ResolveUnsavedAsync()) { await recognition.StartAsync([id], RecognitionMode.Reidentify); } };
         libraryPage.OpenPendingReview = OpenPendingReviewAsync;
-        libraryPage.OpenSettings = async () => { await Navigate(WorkspacePage.Settings); settingsPage.RevealSources(); };
         libraryPage.RemoveSelected = ids => RemoveFromLibraryAsync(library, ids);
         recognition.ReviewCompleted = async (completed, next) =>
         {
@@ -136,19 +156,23 @@ public sealed partial class MainWindow : Window
             ChooseBackupDestination = PickBackupDestination, ChooseBackupFile = () => PickFile(".json"),
             ChooseMigrationFile = () => PickFile(".zip"), ImportMigration = (preview, token) => ImportManagerLibraryAsync(preview, migrationService, token),
             PrepareBackupAction = ResolveUnsavedAsync, RestoreLibrary = preview => RestoreLibraryAsync(preview, library),
-            InstallUpdate = package => App.Instance?.RequestUpgradeAsync(package) ?? Task.FromResult(false) };
+            InstallUpdate = package => App.Instance?.RequestUpgradeAsync(package) ?? Task.FromResult(false),
+            OpenFeedback = OpenFeedbackAsync };
         var managerExport = new TheOrder.Application.Migrations.LibraryManagerExportService(library,
             new TheOrder.Infrastructure.Legacy.NativeLibraryCodec(), new TheOrder.Infrastructure.Migration.ManagerArchiveWriter(), new WindowsManagerExportSink(configuration));
+        settingsPage.ConfigureClosePreference(closePreference, startupExitOnClose, closePreferenceLoaded);
+        settingsPage.GuideSettings = walkthroughSessions;
+        settingsPage.ConfigureImageCache(imageCacheStorage);
         settingsPage.PreviewManagerExport = managerExport.PreviewAsync;
         settingsPage.SaveManagerExport = managerExport.SaveAsync;
         settingsPage.ChooseManagerExportDestination = PickManagerExportDestination;
         settingsPage.CredentialSaved = async () =>
         {
-            libraryPage.ShowCatalogReminder(online.CatalogReminder);
+            RefreshCatalogStatus();
             if (online.CanAccessCatalog && recognition.UseOnline) _ = ResumeRecognitionAsync(retryPending: true);
             await Task.CompletedTask;
         };
-        online.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(OnlineViewModel.CatalogReminder)) libraryPage.ShowCatalogReminder(online.CatalogReminder); };
+        online.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(OnlineViewModel.CatalogReminder)) RefreshCatalogStatus(); };
         nextMoeSettings.Access.Changed += OnNextMoeAccessChanged;
         nextMoeSettings.IdentityChanged = async () => { await online.CheckCredentialAsync(); if (settingsPage.CredentialSaved is { } ready) await ready(); };
         var personalSyncTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
@@ -168,12 +192,13 @@ public sealed partial class MainWindow : Window
         detailsPage.RemoveWishlist = async () => { if (workspace.SelectedId is { } id) await RemoveFromLibraryAsync(library, [id]); };
         files.RecognizeImported = recognition.StartImportedAsync;
         importPage = new(files, workspace, recognition) { ChooseFolder = PickFolder };
+        files.PropertyChanged += OnFilesStatus;
         installationsPage = new(files, workspace) { ChooseFolder = PickFolder, ChooseExecutable = () => PickFile(".exe", ".cmd") };
         ConfigureP1Pages();
         settingsPage.ChangePlaygroundVisibility = ChangePlaygroundVisibilityAsync;
         InitializeVisualSystem(configuration);
         workspace.ThemeChanged += ApplyTheme; workspace.PropertyChanged += OnState;
-        ApplyTheme(); ShowPage();
+        ShowPage();
         InitializeShellInput(configuration.Diagnostics);
         launchTimer.Tick += OnLaunchRefresh; launchTimer.Start();
         backupTimer.Tick += async (_, _) => { if (!commandsBlocked && Sessions.Ready && !Sessions.Closing) await backups.AutomaticAsync(); };
@@ -216,10 +241,11 @@ public sealed partial class MainWindow : Window
                     throw new IOException("Startup library unavailable");
                 await LoadMaterialPreferencesAsync(); await LoadRecognitionPreferencesAsync(); await browsingSettings.InitializeAsync();
                 await online.CheckCredentialAsync(); await updates.ReadReceiptAsync(); await nextMoeSettings.InitializeAsync(); await bangumiSettings.InitializeAsync();
-                libraryPage.ShowCatalogReminder(online.CatalogReminder);
+                RefreshCatalogStatus();
+                RefreshLibraryAccessStatus();
             }, () => libraryPage.WaitForInitialArtworkAsync(), NextStartupFrameAsync);
-            StartupRing.IsActive = false; StartupSurface.Visibility = Visibility.Collapsed;
-            Navigation.Opacity = 1; Navigation.IsHitTestVisible = true;
+            if (startupFrameCapture is not null) await startupFrameCapture;
+            RevealStartupHome();
             if (!commandsBlocked && !Sessions.Closing) { updateTimer?.Start(); libraryPage.FocusResults(); }
             backgroundInitialization = InitializeBackgroundAsync();
             if (Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test
@@ -229,8 +255,16 @@ public sealed partial class MainWindow : Window
         catch (Exception exception)
         {
             StartupHasFailed = true;
-            App.TraceVisualFailure(exception); lifecycleMessage = UiText.Get("启动恢复未完成，已禁用操作；请退出后重试。"); ViewModel.ReportUnexpected();
-            StartupRing.IsActive = false; StartupRing.Visibility = Visibility.Collapsed;
+            App.TraceVisualFailure(exception); ViewModel.ReportUnexpected();
+            StartupRing.IsActive = false;
+            StopStartupLogoLighting();
+            StopStartupHomeFade();
+            WorkspaceSurface.Opacity = 0;
+            Navigation.IsHitTestVisible = false;
+            RailIndicator.Visibility = Visibility.Collapsed;
+            StartupSurface.IsHitTestVisible = true;
+            StartupSurface.Visibility = Visibility.Visible;
+            StartupRing.Visibility = Visibility.Collapsed;
             StartupError.Text = "程序未能完成启动，原资料已保留。请退出后重试。";
             StartupError.Visibility = StartupExit.Visibility = Visibility.Visible;
             if (Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test
@@ -242,80 +276,67 @@ public sealed partial class MainWindow : Window
     }
     public void SetCommandsBlocked(bool value)
     { commandsBlocked = value; nextMoeSettings.PauseCommands(value); if (value) { coverDialog?.Hide(); p1Dialog?.Hide(); settingsPage?.CancelBackupDialog(); settingsPage?.CancelMigrationDialog(); } PageContent.IsEnabled = !value; RefreshSession(); }
-    public void ShowLifecycleError(string message) { lifecycleMessage = message; RefreshSession(); }
-    public void CancelBackgroundRequests() { playground?.Stop(); CancelOnlineRequests(); recognition.CancelAll(); files.CancelScan(); ViewModel.CancelPendingOperation(); nextMoeSettings.Cancel(); bangumiSettings.Cancel(); }
+    public void ShowLifecycleError(string message) => statusPage.Post(new("程序运行", message, InfoBarSeverity.Error));
+    public void CancelBackgroundRequests() { playground?.Stop(); CancelOnlineRequests(); recognition.CancelAll(); files.CancelScan(); ViewModel.CancelPendingOperation(); nextMoeSettings.Cancel(); bangumiSettings.Cancel(); feedbackDialog?.CancelForExit(); }
     public Task DrainPersonalRequestsAsync() => Task.WhenAll(nextMoeSettings.DrainAsync(), bangumiSettings.DrainAsync(), p1Operation);
     private async Task ResumeRecognitionAsync(bool retryPending)
     { try { await recognition.StartUnidentifiedAsync(retryPending); } catch (OperationCanceledException) { } catch { ViewModel.ReportUnexpected(); } }
-    private async void OnPauseTiming(object sender, RoutedEventArgs e) { try { await Sessions.PauseAsync(); } catch { ShowLifecycleError(UiText.Get("暂停计时未完成，请重试。")); } RefreshSession(); }
-    private async void OnResumeTiming(object sender, RoutedEventArgs e) { try { await Sessions.ResumeAsync(); } catch { ShowLifecycleError(UiText.Get("恢复计时未完成，请重试。")); } RefreshSession(); }
     private void RefreshSession()
     {
         Navigation.IsEnabled = startupReady && Sessions.Ready && !Sessions.Closing && !commandsBlocked;
-        var value = SessionPresentation.From(Sessions.Session, Sessions.Library, Sessions.CanMutate && !commandsBlocked);
-        var notice = lifecycleMessage ?? backgroundAudio.Failure;
-        LifecycleNotice.IsOpen = notice is not null; LifecycleNotice.Message = notice ?? "";
-        SessionTitle.Text = value.Title; SessionState.Text = Sessions.Error ?? (Sessions.Ready ? value.State : UiText.Get("正在恢复上次会话…"));
-        SessionDuration.Text = value.Duration; SessionFlyoutDuration.Text = value.Duration; SessionHistory.Text = value.History;
-        SessionChipTitle.Text = Sessions.Session?.Session is null ? (Sessions.Error is not null ? UiText.Get("会话异常") : UiText.Get("正在恢复会话")) : value.Title;
-        SessionHistory.Visibility = string.IsNullOrEmpty(value.History) ? Visibility.Collapsed : Visibility.Visible;
-        PauseTiming.IsEnabled = value.CanPause; ResumeTiming.IsEnabled = value.CanResume;
-        UpdateSessionChrome(value);
-        if (visualFixtureTimer is not null && round3TimerOverride is not null) { SessionDuration.Text = round3TimerOverride; SessionDuration.Visibility = Visibility.Visible; }
-        App.Instance?.RefreshTray(value);
+        RefreshSessionStatus();
+        ApplyMaterialPolicy();
+        App.Instance?.RefreshTray(SessionPresentation.From(Sessions.Session, Sessions.Library, Sessions.CanMutate && !commandsBlocked));
     }
-    private DispatcherTimer? noticeTimer;
-    private ClientResult? timedNotice;
     private void OnState(object? sender, PropertyChangedEventArgs e)
     {
         backups.RefreshAvailability();
         if (ViewModel.Page == WorkspacePage.Statistics && statisticsPage?.IsLoaded == true) _ = statisticsPage.RefreshAsync();
         if (e.PropertyName == nameof(WorkspaceViewModel.Page)) ShowPage();
-        if (e.PropertyName == nameof(WorkspaceViewModel.Notice)) {
-            noticeTimer?.Stop();
-            NoticeBar.Severity = ViewModel.Notice.Outcome switch
-            {
-                ClientOutcome.Committed => InfoBarSeverity.Success, ClientOutcome.CommittedWithWarning or ClientOutcome.ReadOnly or ClientOutcome.Conflict or ClientOutcome.CandidateStale => InfoBarSeverity.Warning,
-                ClientOutcome.ValidationFailure or ClientOutcome.IoFailure or ClientOutcome.LoadFailure => InfoBarSeverity.Error, _ => InfoBarSeverity.Informational
-            };
-            if (ViewModel.Notice.Outcome is ClientOutcome.Success or ClientOutcome.Committed) {
-                timedNotice = ViewModel.Notice;
-                if (noticeTimer is null) { noticeTimer = new() { Interval = TimeSpan.FromSeconds(5) }; noticeTimer.Tick += (_,_) => { noticeTimer.Stop(); if (ReferenceEquals(timedNotice, ViewModel.Notice)) NoticeBar.IsOpen = false; }; }
-                noticeTimer.Start();
-            }
-        }
+        if (e.PropertyName == nameof(WorkspaceViewModel.Notice)) ReportWorkspaceNotice();
+        if (e.PropertyName is nameof(WorkspaceViewModel.IsReadOnly) or nameof(WorkspaceViewModel.CapabilityMessage)) RefreshLibraryAccessStatus();
     }
+    private string? shownGameId;
     private void ShowPage()
     {
         synchronizing = true;
-        FrameworkElement destination = ViewModel.Page switch { WorkspacePage.Playground => EnsurePlaygroundView(), WorkspacePage.Statistics => statisticsPage, WorkspacePage.Online => onlinePage, WorkspacePage.Details => detailsPage, WorkspacePage.Settings => settingsPage, WorkspacePage.Import => importPage, WorkspacePage.Installations => installationsPage, _ => libraryPage };
-        // Playground is a peer workbench with its own header; it has no back row.
-        bool workbench = ViewModel.Page == WorkspacePage.Playground;
-        ContentLayer.RowDefinitions[0].Height = new GridLength(workbench ? 0 : 44);
-        PageNavigationToolbar.Visibility = workbench ? Visibility.Collapsed : Visibility.Visible;
+        FrameworkElement destination = ViewModel.Page switch { WorkspacePage.Playground => EnsurePlaygroundView(), WorkspacePage.Statistics => statisticsPage, WorkspacePage.Online => onlinePage, WorkspacePage.Details => detailsPage, WorkspacePage.Settings => settingsPage, WorkspacePage.Status => statusPage, WorkspacePage.Import => importPage, WorkspacePage.Installations => installationsPage, _ => libraryPage };
         RefreshPlaygroundPolicy();
-        RefreshPlaygroundNotices();
+        statusPage.SetViewing(ViewModel.Page == WorkspacePage.Status);
         var changed = !ReferenceEquals(PageContent.Content, destination);
+        var gameId = ReferenceEquals(destination, detailsPage) ? ViewModel.SelectedId : null;
+        var changedGame = shownGameId != gameId;
+        shownGameId = gameId;
         if (changed)
         {
             LeaveGallery();
-            // Release graphics owners while they are still in the live tree.
-            if (ViewModel.Page != WorkspacePage.Library) libraryPage.ReleaseStageBeforeLeave();
+            if (ReferenceEquals(PageContent.Content, onlinePage)) online.Leave();
+            // Release the detail artwork while its graphics owner is still in the live tree.
             if (ViewModel.Page != WorkspacePage.Details) detailsPage.ReleaseStageBeforeLeave();
             PageContent.Content = destination; pageSwapCount++;
         }
-        Navigation.SelectedItem = ViewModel.Page == WorkspacePage.Playground || detailsParent == WorkspacePage.Playground && ViewModel.Page is WorkspacePage.Details or WorkspacePage.Installations ? PlaygroundNavigation : ViewModel.Page == WorkspacePage.Statistics || detailsParent == WorkspacePage.Statistics && ViewModel.Page is WorkspacePage.Details or WorkspacePage.Installations ? StatisticsNavigation : ViewModel.Page == WorkspacePage.Settings ? SettingsNavigation : ViewModel.Page == WorkspacePage.Online ? OnlineNavigation : LibraryNavigation;
+        var section = ViewModel.Page is WorkspacePage.Details or WorkspacePage.Installations ? detailsParent : ViewModel.Page;
+        var selection = section switch
+        {
+            WorkspacePage.Playground => PlaygroundNavigation,
+            WorkspacePage.Statistics => StatisticsNavigation,
+            WorkspacePage.Settings => SettingsNavigation,
+            WorkspacePage.Status => StatusNavigation,
+            WorkspacePage.Online => OnlineNavigation,
+            _ => LibraryNavigation
+        };
+        if (!ReferenceEquals(Navigation.SelectedItem, selection)) Navigation.SelectedItem = selection;
+        QueueRailIndicator(selection);
         if (changed && ViewModel.Page == WorkspacePage.Statistics) _ = statisticsPage.RefreshAsync();
         RefreshBackNavigation();
         synchronizing = false;
-        if (changed) AnimatePage();
+        if (changed || changedGame) AnimatePage();
     }
     private async Task Navigate(WorkspacePage page, string? id = null, WorkspacePage returnTo = WorkspacePage.Library)
     {
         if (!startupReady || commandsBlocked) return;
         if (page == WorkspacePage.Recognition) { await OpenPendingReviewAsync(); return; }
         installationNavigation.Invalidate();
-        if (page != WorkspacePage.Online) online.Leave();
         if (navigating) return; navigating = true;
         try { if (await ResolveInstallationDraft()) { if (await ViewModel.NavigateAsync(page, id, ChooseUnsaved)) detailsParent = page == WorkspacePage.Details ? returnTo : page == WorkspacePage.Installations ? detailsParent : WorkspacePage.Library; ShowPage(); } }
         catch (Exception) { ViewModel.ReportUnexpected(); }
@@ -325,7 +346,13 @@ public sealed partial class MainWindow : Window
     {
         if (args.InvokedItemContainer is NavigationViewItem { Tag: "visual-gallery" }) { ShowGallery(); return; }
         if (args.InvokedItemContainer is NavigationViewItem { Tag: "visual-states" }) { ShowSessionStateFixtures(); return; }
-        if (!synchronizing && args.InvokedItemContainer is NavigationViewItem item) await Navigate((item.Tag as string) switch { "playground" => WorkspacePage.Playground, "statistics" => WorkspacePage.Statistics, "settings" => WorkspacePage.Settings, "online" => WorkspacePage.Online, "recognition" => WorkspacePage.Recognition, _ => WorkspacePage.Library });
+        if (synchronizing || args.InvokedItemContainer is not NavigationViewItem item) return;
+        if (item.Tag is "settings" && ViewModel.Page == WorkspacePage.Settings && startupReady && !commandsBlocked)
+        {
+            settingsPage.TryGoBack();
+            return;
+        }
+        await Navigate((item.Tag as string) switch { "playground" => WorkspacePage.Playground, "statistics" => WorkspacePage.Statistics, "settings" => WorkspacePage.Settings, "status" => WorkspacePage.Status, "online" => WorkspacePage.Online, "recognition" => WorkspacePage.Recognition, _ => WorkspacePage.Library });
     }
     private async void OnTitleBack(TitleBar sender, object args) => await GoBackAsync();
     private async void OnRailBack(object sender, RoutedEventArgs e) => await GoBackAsync();
@@ -336,7 +363,7 @@ public sealed partial class MainWindow : Window
     });
     private void OnRecognitionState(object? sender, PropertyChangedEventArgs e)
     { if (e.PropertyName == nameof(RecognitionViewModel.Reviews)) libraryPage.ShowPendingReviews(recognition.Reviews.Count);
-        if (e.PropertyName == nameof(RecognitionViewModel.ProgressText)) libraryPage.ShowRecognition(recognition);
+        if (e.PropertyName == nameof(RecognitionViewModel.ProgressText)) RefreshRecognitionStatus();
         if (recognitionPreferencesLoaded && !recognitionPreferencesReadOnly && e.PropertyName is nameof(RecognitionViewModel.UseOnline) or nameof(RecognitionViewModel.IncludePe)) QueueRecognitionPreferences(); }
     private async Task OpenPendingReviewAsync()
     {
@@ -349,7 +376,7 @@ public sealed partial class MainWindow : Window
         var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme,
             Title = $"从书架移除 {ids.Length} 部作品？", Content = "将移除所选作品的书架条目、个人编辑、安装和游玩记录。不会删除游戏文件。此操作不可撤销。",
             PrimaryButtonText = "从书架移除", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        if (await dialog.ShowInShellAsync() != ContentDialogResult.Primary) return;
         var result = await ViewModel.ExecuteFileMutationAsync(token => library.RemoveEntriesAsync(ids, token));
         if (result.IsCommitted)
         {
@@ -360,12 +387,15 @@ public sealed partial class MainWindow : Window
     private void RefreshBackNavigation()
     {
         var canGoBack = ShellNavigationPolicy.CanGoBack(ViewModel.Page, onlinePage.IsBrowsing);
+        PageNavigationToolbar.Visibility = canGoBack ? Visibility.Visible : Visibility.Collapsed;
         RailBack.Visibility = canGoBack ? Visibility.Visible : Visibility.Collapsed;
         RailBack.IsEnabled = canGoBack && !commandsBlocked;
     }
     private async Task GoBackAsync()
     {
-        if (!startupReady || commandsBlocked || !ShellNavigationPolicy.CanGoBack(ViewModel.Page, onlinePage.IsBrowsing)) return;
+        if (!startupReady || commandsBlocked) return;
+        if (ViewModel.Page == WorkspacePage.Settings) { settingsPage.TryGoBack(); return; }
+        if (!ShellNavigationPolicy.CanGoBack(ViewModel.Page, onlinePage.IsBrowsing)) return;
         if (ViewModel.Page == WorkspacePage.Details && await detailsPage.GoBackCatalogAsync()) return;
         if (ViewModel.Page == WorkspacePage.Online) { await onlinePage.GoBackAsync(); return; }
         if (ShellNavigationPolicy.Parent(ViewModel.Page, detailsParent) is { } parent)
@@ -375,7 +405,7 @@ public sealed partial class MainWindow : Window
     private async Task<UnsavedChoice> ChooseUnsaved()
     {
         var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme, Title = UiText.Get("保留尚未保存的修改？"), Content = UiText.Get("离开前可以保存修改，或放弃草稿。"), PrimaryButtonText = UiText.Get("保存并继续"), SecondaryButtonText = UiText.Get("放弃草稿"), CloseButtonText = UiText.Get("继续编辑"), DefaultButton = ContentDialogButton.Close };
-        return await dialog.ShowAsync() switch { ContentDialogResult.Primary => UnsavedChoice.Save, ContentDialogResult.Secondary => UnsavedChoice.Discard, _ => UnsavedChoice.Stay };
+        return await dialog.ShowInShellAsync() switch { ContentDialogResult.Primary => UnsavedChoice.Save, ContentDialogResult.Secondary => UnsavedChoice.Discard, _ => UnsavedChoice.Stay };
     }
     public async Task<bool> ResolveUnsavedAsync() => !navigating && await ResolveLaunchDefaults() && await ResolveInstallationDraft() && await ViewModel.ResolveUnsavedAsync(ChooseUnsaved);
     private async Task<bool> ResolveLaunchDefaults()
@@ -384,7 +414,7 @@ public sealed partial class MainWindow : Window
         var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme,
             Title = "保留全局启动设置的修改？", Content = "辅助工具的默认行为尚未保存。",
             PrimaryButtonText = "保存并继续", SecondaryButtonText = "放弃修改", CloseButtonText = "继续编辑", DefaultButton = ContentDialogButton.Close };
-        var choice = await dialog.ShowAsync();
+        var choice = await dialog.ShowInShellAsync();
         if (choice == ContentDialogResult.Secondary) { launchDefaults.Cancel(); return true; }
         if (choice == ContentDialogResult.Primary) { await launchDefaults.SaveAsync(); return !launchDefaults.HasChanges; }
         return false;
@@ -394,7 +424,7 @@ public sealed partial class MainWindow : Window
         await files.WaitForMutationAsync();
         if (files.Draft is null) return true;
         var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme, Title = UiText.Get("保留安装草稿？"), Content = UiText.Get("安装路径和参数尚未保存。"), PrimaryButtonText = UiText.Get("保存并继续"), SecondaryButtonText = UiText.Get("放弃草稿"), CloseButtonText = UiText.Get("继续编辑"), DefaultButton = ContentDialogButton.Close };
-        var choice = await dialog.ShowAsync();
+        var choice = await dialog.ShowInShellAsync();
         if (choice == ContentDialogResult.Secondary) { files.CancelDraft(); return true; }
         if (choice == ContentDialogResult.Primary) { await files.SaveAsync(); return files.Draft is null; }
         return false;
@@ -417,7 +447,7 @@ public sealed partial class MainWindow : Window
     private void OnBrowsingChanged() { online.ResetBrowsing(); onlinePage.ResetBrowsing(); detailsPage.ResetBrowsing(); }
     private void OnLaunchRefresh(object? sender, object e)
     {
-        Launch.Refresh(); RefreshSession();
+        Launch.Refresh(); RefreshSession(); RefreshLaunchTrackingStatus();
         walkthroughSessions?.SetAppearance(Root.ActualTheme == ElementTheme.Light, (int)Math.Round((Root.XamlRoot?.RasterizationScale ?? 1) * 96));
         walkthroughSessions?.Tick(Launch.Runtime);
         RefreshGuideStatus();
@@ -429,7 +459,7 @@ public sealed partial class MainWindow : Window
     private void OnNextMoeAccessChanged(object? sender, EventArgs e) => DispatcherQueue.TryEnqueue(() =>
     {
         if (Sessions.Closing) return;
-        online.RefreshAccessState(); nextMoeSettings.RefreshAccessState();
+        online.RefreshAccessState(); nextMoeSettings.RefreshAccessState(); onlinePage.InvalidateDiscoveryIfStale();
     });
     private void OnBangumiAccessChanged() => DispatcherQueue.TryEnqueue(() => { bangumiSettings.RefreshState(); detailsPage?.InvalidateBangumiAccess(); onlinePage?.InvalidateBangumiAccess(); });
     public async ValueTask StopAsync()
@@ -437,7 +467,9 @@ public sealed partial class MainWindow : Window
         await StopPlaygroundAsync();
         if (settingsPage is not null) { settingsPage.CancelMigrationDialog(); await settingsPage.Migration.DisposeAsync(); }
         nextMoeSettings.Access.Changed -= OnNextMoeAccessChanged;
-        bangumiSettings.Access.Changed -= OnBangumiAccessChanged; bangumiSettings.Dispose();
+        bangumiSettings.Access.Changed -= OnBangumiAccessChanged;
+        bangumiSettings.PropertyChanged -= OnBangumiStatus;
+        bangumiSettings.Dispose();
         detailsPage?.DisposeBangumi();
         onlinePage?.DisposeRelated();
         await StopP1Async();
@@ -456,8 +488,9 @@ public sealed partial class MainWindow : Window
         await Launch.DisposeAsync();
         installationNavigation.Invalidate();
         if (diagnosticsTimer is not null) { diagnosticsTimer.Stop(); diagnosticsTimer.Tick -= OnDiagnostics; }
-        noticeTimer?.Stop(); timedNotice = null;
         ViewModel.ThemeChanged -= ApplyTheme; ViewModel.PropertyChanged -= OnState;
+        files.PropertyChanged -= OnFilesStatus;
+        statisticsPage.ViewModel.PropertyChanged -= OnStatisticsStatus;
         // Startup may still hold user preference overrides. Finish loading/merging them
         // before disposal cancels the lifetime, then drain the resulting persistence queue.
         if (initialization is not null) await initialization;

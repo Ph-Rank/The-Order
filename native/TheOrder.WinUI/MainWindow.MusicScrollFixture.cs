@@ -23,7 +23,7 @@ public sealed partial class MainWindow
         if(action=="open")
         {
             if(musicScrollFixture is not null) throw new InvalidOperationException();
-            await Navigate(WorkspacePage.Details,"ui-2"); NoticeBar.IsOpen=false; await Task.Delay(350);
+            await Navigate(WorkspacePage.Details,"ui-2"); await Task.Delay(350);
             var nodes=P1Elements(detailsPage).OfType<FrameworkElement>().ToArray();
             var host=nodes.OfType<ContentControl>().Single(x=>x.Name=="RelatedMediaHost");
             musicScrollPreviousBody=host.Content;
@@ -59,6 +59,8 @@ public sealed partial class MainWindow
             finally{CompositionTarget.Rendering-=sample;}
             await File.WriteAllTextAsync(Path.Combine(fixtureDirectory,"music-scroll-trace.json"),JsonSerializer.Serialize(new{rows,intervals,isolatedTest=true,productionAccess=false,view=view.Evidence}));
         }
+        else if (action == "bottom-disclosure")
+            await RecordMusicBottomDisclosureAsync(scroll);
         else if(action=="offset")
         {var offset=request.GetProperty("offset").GetDouble();if(!double.IsFinite(offset)||offset<0||offset>1000000)throw new InvalidDataException();scroll.ChangeView(null,offset,null,true);await Task.Delay(250);}
         else if(action=="disc")
@@ -91,6 +93,62 @@ public sealed partial class MainWindow
         else if(action is not ("open" or "inspect" or "replay" or "offset" or "disc" or "track" or "jump" or "more" or "estimated" or "fixed"))throw new InvalidDataException();
         await File.WriteAllTextAsync(Path.Combine(fixtureDirectory,"music-scroll-evidence.json"),JsonSerializer.Serialize(new{action,view=view.Evidence,extent=scroll.ExtentHeight,range=scroll.ScrollableHeight,offset=scroll.VerticalOffset,viewport=scroll.ViewportHeight,isolatedTest=true,productionAccess=false}));
     }
+
+    private async Task RecordMusicBottomDisclosureAsync(ScrollViewer scroll)
+    {
+        var album = (StackPanel)scroll.Content;
+        var sources = album.Children.OfType<SmoothExpander>().Single(x => AutomationProperties.GetAutomationId(x) == "MusicAlbumSources");
+        var sourceBody = (StackPanel)sources.Content;
+        var evidence = sourceBody.Children.OfType<SmoothExpander>().Single();
+        var checks = new List<object>();
+        var motionEnabled = InteractionMotion.Enabled;
+        var passed = true;
+
+        foreach (var group in new[] { evidence, sources })
+        {
+            sources.IsExpanded = evidence.IsExpanded = true;
+            await Task.Delay(380);
+            scroll.ChangeView(null, scroll.ScrollableHeight, null, true);
+            await Task.Delay(130);
+            var frames = new List<(double Height, double Offset, double Range)>();
+            void Record() => frames.Add((group.ActualHeight, scroll.VerticalOffset, scroll.ScrollableHeight));
+            EventHandler<object> render = (_, _) => Record();
+            Record();
+            CompositionTarget.Rendering += render;
+            try
+            {
+                group.IsExpanded = false;
+                await Task.Delay(380);
+            }
+            finally { CompositionTarget.Rendering -= render; }
+            Record();
+
+            var start = frames[0];
+            var end = frames[^1];
+            var heightChange = start.Height - end.Height;
+            var offsetChange = start.Offset - end.Offset;
+            var heightSteps = frames.Zip(frames.Skip(1), (a, b) => Math.Abs(a.Height - b.Height)).ToArray();
+            var offsetSteps = frames.Zip(frames.Skip(1), (a, b) => Math.Abs(a.Offset - b.Offset)).ToArray();
+            var interiorHeights = frames.Select(x => Math.Round(x.Height)).Distinct().Count(x => x > end.Height + 2 && x < start.Height - 2);
+            var motionPass = motionEnabled
+                ? interiorHeights >= 3 && heightSteps.Max() < heightChange * .7 && offsetSteps.Max() < offsetChange * .8
+                : interiorHeights == 0;
+            var sectionPassed = heightChange > 40 && offsetChange > 40 && Math.Abs(start.Offset - start.Range) < 2
+                && Math.Abs(end.Offset - end.Range) < 2 && !group.ContentShown && motionPass;
+            passed &= sectionPassed;
+            checks.Add(new
+            {
+                header = group.Header, sectionPassed, heightChange, offsetChange, interiorHeights,
+                maxHeightStep = heightSteps.Max(), maxOffsetStep = offsetSteps.Max(),
+                frames = frames.Select(x => new { x.Height, x.Offset, x.Range }).ToArray()
+            });
+        }
+
+        await File.WriteAllTextAsync(Path.Combine(fixtureDirectory!, "music-bottom-disclosure.json"),
+            JsonSerializer.Serialize(new { motionEnabled, passed, checks }));
+        if (!passed) throw new InvalidOperationException("The album bottom and collapsing section did not move together.");
+    }
+
     private sealed class MusicScrollData(int count):IBangumiSubjectDetailsReader,IMusicBrainzReader
     {
         private const string Release="11111111-2222-4333-8444-555555555555",Group="22222222-3333-4444-8555-666666666666";

@@ -16,9 +16,21 @@ public static class RecognitionIdentityBuilder
     public static async Task<RecognitionIdentity> BuildAsync(LibraryEntry entry, RecognitionEvidence evidence, ITitleIndex index, CancellationToken cancellation)
     {
         var readme = await index.FindReadmeTitlesAsync([.. evidence.Titles.Where(t => t.Source == "readme-heading").Select(t => t.Value)], cancellation).ConfigureAwait(false);
-        // Release-format noise is removed before lookup and ranking; provenance (source) is kept.
-        evidence = evidence with { Titles = [.. evidence.Titles.Where(t => t.Source != "readme-heading").Concat(readme.Select(t => new LocalTitleEvidence(t, "readme-title")))
-            .Select(t => t.Source == "sidecar" ? t : t with { Value = LocalTitleCleaner.Clean(t.Value, t.Source) }).Distinct().Take(40)] };
+        // Keep the source of each local observation when expanding title spellings.
+        var local = evidence.Titles.Where(t => t.Source != "readme-heading")
+            .Select(t => t.Source == "sidecar" ? t : t with { Value = LocalTitleCleaner.Clean(t.Value, t.Source) }).ToArray();
+        var namedEditions = local.Where(t => ReleaseAwareRanking.IdentitySource(t.Source) && t.Source is not ("custom-name" or "readme-title"))
+            .Select(t => TitleMatching.Markers(t.Value)).Where(m => m.Base.Length >= 2 && !ReleaseAwareRanking.Identity(m).IsEmpty).ToArray();
+        // Readme headings are substring matches. A launcher name in the text can mention the
+        // base work; a more specific physical title keeps that inferred name from taking over.
+        bool LessSpecificReadme(string title)
+        {
+            var readmeTitle = TitleMatching.Markers(title);
+            return namedEditions.Any(m => m.Base == readmeTitle.Base &&
+                ReleaseAwareRanking.Identity(m).IsProperSupersetOf(ReleaseAwareRanking.Identity(readmeTitle)));
+        }
+        evidence = evidence with { Titles = [.. local.Concat(readme.Select(LocalTitleCleaner.Clean).Where(t => !LessSpecificReadme(t))
+            .Select(t => new LocalTitleEvidence(t, "readme-title"))).Distinct().Take(40)] };
         var names = Names(evidence.Titles.Where(t => t.Source != "sidecar").Select(t => t.Value));
         // Script variants broaden lookup, not the actual evidence. Exact row proofs below still
         // require the original spelling; inferred references retain their title-index provenance.

@@ -63,7 +63,7 @@ public sealed partial class SettingsPage
                     Content = content, PrimaryButtonText = "备份并导入", IsPrimaryButtonEnabled = preview.CanApply,
                     CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
                 migrationDialog = dialog;
-                var result = await dialog.ShowAsync();
+                var result = await dialog.ShowInShellAsync();
                 migrationDialog = null;
                 if (revision != migrationGeneration || !IsLoaded) break;
                 if (migrationReviewKey is { } key)
@@ -91,14 +91,14 @@ public sealed partial class SettingsPage
         panel.Children.Add(Text(MigrationReview.Explain(row.Reasons)));
         panel.Children.Add(Text(MigrationFormats.Display(preview.Dataset.Manager) + " · " + source.Name));
         panel.Children.Add(Text($"{StatusNames.Display(source.Status)} · 累计 {Duration(source.TotalSeconds)}"));
-        var targets = new ComboBox { Header = "对应当前书架", HorizontalAlignment = HorizontalAlignment.Stretch,
-            ItemsSource = row.ReviewCandidates.Select(c => c.Name).ToArray() };
+        var targets = new SelectedFirstComboBox { Header = "对应当前书架", HorizontalAlignment = HorizontalAlignment.Stretch,
+            OptionsSource = row.ReviewCandidates.Select(c => c.Name).ToArray() };
         panel.Children.Add(targets);
         var targetInfo = Text(""); panel.Children.Add(targetInfo);
-        var history = new ComboBox { Header = "累计时长", HorizontalAlignment = HorizontalAlignment.Stretch };
-        history.Items.Add(new ComboBoxItem { Content = "相加两边时长" });
-        history.Items.Add(new ComboBoxItem { Content = "保留本地时长" });
-        history.Items.Add(new ComboBoxItem { Content = "采用来源累计值（不相加）" });
+        var history = new SelectedFirstComboBox { Header = "累计时长", HorizontalAlignment = HorizontalAlignment.Stretch };
+        history.Options.Add(new ComboBoxItem { Content = "相加两边时长" });
+        history.Options.Add(new ComboBoxItem { Content = "保留本地时长" });
+        history.Options.Add(new ComboBoxItem { Content = "采用来源累计值（不相加）" });
         panel.Children.Add(history);
         var timeNote = Text(""); panel.Children.Add(timeNote);
         var evidence = Text("");
@@ -111,15 +111,15 @@ public sealed partial class SettingsPage
             SecondaryButtonText = row.HumanReviewed ? "撤销本条核验" : "", CloseButtonText = "返回预览", DefaultButton = ContentDialogButton.Close };
         confirm.Checked += (_, _) => dialog.IsPrimaryButtonEnabled = true;
         confirm.Unchecked += (_, _) => dialog.IsPrimaryButtonEnabled = false;
-        targets.SelectionChanged += (_, _) =>
+        targets.OptionChanged += (_, _) =>
         {
-            if (targets.SelectedIndex < 0) return;
-            var c = row.ReviewCandidates[targets.SelectedIndex];
+            if (targets.OptionIndex < 0) return;
+            var c = row.ReviewCandidates[targets.OptionIndex];
             targetInfo.Text = $"本地 · {StatusNames.Display(c.Status)} · 累计 {Duration(c.TotalSeconds)}\n导入后进度：{StatusNames.Display(GameProgress.Higher(c.Status, source.Status))}"
                 + (c.NotesConflict || c.RatingConflict ? "\n笔记或评分有差异，保留本地值。" : "");
-            ((ComboBoxItem)history.Items[0]).IsEnabled = c.CanAddSourceTotal;
-            ((ComboBoxItem)history.Items[2]).IsEnabled = c.CanUseSourceTotal;
-            history.SelectedIndex = previous?.TargetKey == c.TargetKey
+            ((ComboBoxItem)history.Options[0]).IsEnabled = c.CanAddSourceTotal;
+            ((ComboBoxItem)history.Options[2]).IsEnabled = c.CanUseSourceTotal;
+            history.OptionIndex = previous?.TargetKey == c.TargetKey
                 ? previous.History switch { ImportHistoryChoice.AddSourceTotal when c.CanAddSourceTotal => 0, ImportHistoryChoice.UseSourceTotal when c.CanUseSourceTotal => 2, _ => 1 }
                 : c.TotalSeconds == 0 && c.CanUseSourceTotal ? 2 : c.CanAddSourceTotal ? 0 : 1;
             timeNote.Text = $"相加时本次新增累计 {Duration(c.AdditionalSourceSeconds)}，可补入有日期的记录 {Duration(c.NewlyDatedSeconds)}。保留可靠的逐日记录和会话，不推算日期或启动次数。"
@@ -136,13 +136,13 @@ public sealed partial class SettingsPage
                 + "\n\n确认只用于本条迁移，不改写在线作品对应。";
             if (previous?.TargetKey != c.TargetKey) confirm.IsChecked = false;
         };
-        targets.SelectedIndex = Math.Max(0, Array.FindIndex(row.ReviewCandidates.ToArray(), c => c.TargetKey == previous?.TargetKey));
+        targets.OptionIndex = Math.Max(0, Array.FindIndex(row.ReviewCandidates.ToArray(), c => c.TargetKey == previous?.TargetKey));
         migrationDialog = dialog;
-        var result = await dialog.ShowAsync(); migrationDialog = null;
+        var result = await dialog.ShowInShellAsync(); migrationDialog = null;
         if (result == ContentDialogResult.Secondary && row.HumanReviewed) return new(key, null);
-        return result == ContentDialogResult.Primary && confirm.IsChecked == true && targets.SelectedIndex >= 0
-            ? new(key, row.ReviewCandidates[targets.SelectedIndex].TargetKey, true,
-                history.SelectedIndex switch { 0 => ImportHistoryChoice.AddSourceTotal, 2 => ImportHistoryChoice.UseSourceTotal, _ => ImportHistoryChoice.KeepExisting }) : null;
+        return result == ContentDialogResult.Primary && confirm.IsChecked == true && targets.OptionIndex >= 0
+            ? new(key, row.ReviewCandidates[targets.OptionIndex].TargetKey, true,
+                history.OptionIndex switch { 0 => ImportHistoryChoice.AddSourceTotal, 2 => ImportHistoryChoice.UseSourceTotal, _ => ImportHistoryChoice.KeepExisting }) : null;
     }
     private static TextBlock Text(string text) => new() { Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
     private static string Duration(long seconds) => $"{seconds / 3600} 小时 {seconds % 3600 / 60} 分 {seconds % 60} 秒";

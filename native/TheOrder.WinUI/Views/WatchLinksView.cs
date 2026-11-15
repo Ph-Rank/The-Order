@@ -21,6 +21,7 @@ internal sealed class WatchLinksView : StackPanel
     private const WatchLinkSort sort = WatchLinkSort.BilibiliFirst; private bool disposed;
     public WatchLinksView()
     {
+        Visibility = Visibility.Collapsed;
         HorizontalAlignment = HorizontalAlignment.Stretch;
         AutomationProperties.SetAutomationId(section, "WatchLinks"); section.Content = body; Children.Add(section);
         sources.Content = sourceBody; body.Children.Add(caption); body.Children.Add(cards); body.Children.Add(dataStatus); body.Children.Add(warning); body.Children.Add(sources);
@@ -33,9 +34,12 @@ internal sealed class WatchLinksView : StackPanel
     public void Show(AnimeWatchIdentity? current, IEnumerable<WatchLink> data, WatchDataResult? result = null)
     {
         if (disposed) return;
+        var next = data.Where(x => x.Kind is WatchLinkKind.Playback or WatchLinkKind.Information).Take(128).ToArray();
+        if (identity == current && ReferenceEquals(mapping, result) && values.SequenceEqual(next)) return;
         if (identity is null || current is null || !identity.Matches(current)) section.IsExpanded = false;
-        values = data.Where(x => x.Kind is WatchLinkKind.Playback or WatchLinkKind.Information).Take(128).ToArray(); identity = current; mapping = result;
+        values = next; identity = current; mapping = result;
         Visibility = current is null ? Visibility.Collapsed : Visibility.Visible; Render();
+        if (cards.Children.Count > 0) InteractionMotion.RevealContent(cards, .72f);
     }
     private void Render()
     {
@@ -46,8 +50,8 @@ internal sealed class WatchLinksView : StackPanel
         dataStatus.Text = mapping?.Message ?? ""; dataStatus.Visibility = dataStatus.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         foreach (var item in watching)
         {
-            var content = new StackPanel { IsHitTestVisible = false, Spacing = 4, Children = { Text(15, item.Platform + " ↗"), Text(12, Region(item)) } };
-            var link = new Button { Content = content, CornerRadius = new(6), Padding = new(12, 8, 12, 8), HorizontalContentAlignment = HorizontalAlignment.Left, MaxWidth = cards.ActualWidth > 0 ? Math.Min(340, cards.ActualWidth) : 340 };
+            var content = new StackPanel { IsHitTestVisible = false, Spacing = 4, Children = { Text(15, item.Platform), Text(12, Region(item)) } };
+            var link = new ExternalLinkButton { Content = content, Padding = new(12, 8, 12, 8), MaxWidth = cards.ActualWidth > 0 ? Math.Min(340, cards.ActualWidth) : 340 };
             AutomationProperties.SetAutomationId(link, "WatchPlatform-" + WatchLinks.PlatformKey(item));
             var purpose = item.Kind == WatchLinkKind.Playback ? "播放入口" : "平台作品页，非直接播放链接";
             AutomationProperties.SetName(link, item.Platform + " · " + purpose + " · " + Region(item));
@@ -64,7 +68,7 @@ internal sealed class WatchLinksView : StackPanel
         }
         sources.Visibility = combined.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
-    private HyperlinkButton Link(string text, string url) { var link = new HyperlinkButton { Content = text, Padding = new(0), HorizontalAlignment = HorizontalAlignment.Left }; link.Click += async (_, _) => await OpenAsync(url); return link; }
+    private ExternalLinkButton Link(string text, string url) { var link = new ExternalLinkButton { Content = text }; link.Click += async (_, _) => await OpenAsync(url); return link; }
     private async Task OpenAsync(string url)
     {
         try { if (!WatchLinks.SafeUrl(url) || !await Windows.System.Launcher.LaunchUriAsync(new Uri(url))) throw new InvalidOperationException(); }
@@ -73,7 +77,7 @@ internal sealed class WatchLinksView : StackPanel
     internal object Evidence => new { identity, sort, links = identity is null ? [] : WatchLinks.Merge(identity, values, sort), expanded = section.IsExpanded, visibleCards = section.IsExpanded ? cards.Children.Count : 0, totalCards = cards.Children.Count,
         sortControls = body.Children.OfType<ComboBox>().Count(), subtitles = cards.Children.OfType<Button>().Select(x => (x.Content as StackPanel)?.Children.OfType<TextBlock>().LastOrDefault()?.Text).ToArray(),
         sourceDetailsExpanded = sources.IsExpanded, hitTargets = cards.Children.OfType<Button>().Select(InteractiveCardEvidence.Hit).ToArray(), mapping };
-    public void Expand() { section.IsExpanded = true; section.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = .05 }); }
+    public void Expand() { section.IsExpanded = true; section.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = InteractionMotion.Enabled, VerticalAlignmentRatio = .05 }); }
     internal void ShowForFixture() => Expand();
     internal void CollapseForFixture() { section.IsExpanded = false; section.StartBringIntoView(); }
     internal void SourcesForFixture() { section.IsExpanded = true; sources.IsExpanded = true; sources.StartBringIntoView(); }

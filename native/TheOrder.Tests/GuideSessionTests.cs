@@ -69,17 +69,25 @@ public sealed class GuideSessionTests
         using var secondMap = MemoryMappedFile.OpenExisting(next.Environment["THE_ORDER_GUIDE_SESSION"]); using var restored = secondMap.CreateViewAccessor();
         int length = restored.ReadInt32(12); Assert.True(length > 8); Assert.Equal(.625f, restored.ReadSingle(GuideOverlayWire.HeaderBytes + length - 8)); Assert.Equal(1.2f, restored.ReadSingle(GuideOverlayWire.HeaderBytes + length - 4));
     }
-    [Fact] public async Task FirstOpeningUsesGuideThenResumesLastOpenedNotesAndViewMode()
+    [Fact] public async Task GuideReopensAtCurrentPageDuringPlayAndStartsAtNetworkOverviewOnTheNextLaunch()
     {
         var local = new LocalReader(notes: true); await using var test = new Setup(local: local); var snapshot = await test.Snapshot();
         await test.Sessions.PrepareForGameAsync("g", default); var first = test.Sessions.Prepare(snapshot)!;
         using var map = MemoryMappedFile.OpenExisting(first.Environment["THE_ORDER_GUIDE_SESSION"]); using var view = map.CreateViewAccessor();
-        Assert.Equal(0, view.ReadInt32(176)); Assert.Null(test.Sessions.LastOverlayPage("g"));
-        view.Write(180, 1); view.Write(176, 2); view.Write(72, 0); test.Sessions.Tick();
+        Assert.Equal(0, view.ReadInt32(176)); Assert.Equal(1, view.ReadInt32(72));
+        Assert.Null(test.Sessions.LastOverlayPage("g"));
+        view.Write(180, 1); view.Write(16, 1); view.Write(176, 2); view.Write(72, 0);
+        view.Write(64, 3); view.Write(68, 5); test.Sessions.Tick();
+        view.Write(16, 0); test.Sessions.Tick(); view.Write(16, 1); test.Sessions.Tick();
+        Assert.Equal(2, view.ReadInt32(176)); Assert.Equal(0, view.ReadInt32(72));
+        Assert.Equal(3, view.ReadInt32(64)); Assert.Equal(5, view.ReadInt32(68));
         Assert.Equal(new OverlayPagePreference(2, false), test.Sessions.LastOverlayPage("g"));
+        first.FailedBeforeCreation();
         await test.Sessions.PrepareForGameAsync("g", default); var second = test.Sessions.Prepare(snapshot)!;
         using var restoredMap = MemoryMappedFile.OpenExisting(second.Environment["THE_ORDER_GUIDE_SESSION"]); using var restored = restoredMap.CreateViewAccessor();
-        Assert.Equal(2, restored.ReadInt32(176)); Assert.Equal(0, restored.ReadInt32(72)); Assert.Equal(0x4a, restored.ReadInt32(76));
+        Assert.Equal(0, restored.ReadInt32(176)); Assert.Equal(1, restored.ReadInt32(72));
+        Assert.Equal(0, restored.ReadInt32(64)); Assert.Equal(0, restored.ReadInt32(68));
+        Assert.Equal(0x4a, restored.ReadInt32(76));
     }
     private sealed class Factory(SessionTestRig rig) : ITransactionalLibraryFactory
     { public Task<TransactionalLibrary> OpenAsync(CancellationToken token) => Task.FromResult(rig.Open()); }
@@ -115,6 +123,9 @@ public sealed class GuideSessionTests
         await test.Sessions.PrepareForGameAsync("g", default);
         Assert.Null(test.Sessions.Prepare(snapshot)); Assert.Equal(0, test.Reader.Reads);
         Assert.True(test.Sessions.Notice!.Warning); Assert.Equal("g", test.Sessions.Notice.GameId);
+        Assert.Equal(GuideLaunchAction.OpenReading, test.Sessions.Notice.Action);
+        Assert.Same(test.Sessions.Notice, test.Sessions.NoticeFor("g"));
+        Assert.Null(test.Sessions.NoticeFor("other"));
         Assert.Contains(failure ? "失败" : "暂无", test.Sessions.Notice.Message);
         Assert.Empty(Directory.GetDirectories(test.Profile.Root, "guide-session-*"));
     }
@@ -135,6 +146,19 @@ public sealed class GuideSessionTests
         using var reader=new BinaryReader(new MemoryStream(data),System.Text.Encoding.UTF8);
         int titleBytes=reader.ReadInt32();Assert.True(titleBytes>0);Assert.Contains("等待游戏显示连接",test.Sessions.Notice!.Message);
         Assert.False(test.Sessions.Notice.Warning);
+        Assert.Equal(GuideLaunchAction.None, test.Sessions.Notice.Action);
+    }
+    [Fact] public async Task GameChatCanPrepareWithoutAnyGuideAndDoesNotLoadChatOrCredentialsAtLaunch()
+    {
+        await using var test = new Setup(false); var snapshot = await test.Snapshot(); int opened = 0;
+        test.Sessions.ChatFactory = _ => { opened++; throw new InvalidOperationException("Must remain lazy until the chat page is opened"); };
+        await test.Sessions.PrepareForGameAsync("g", default); var plan = test.Sessions.Prepare(snapshot);
+        Assert.NotNull(plan); Assert.Equal(0, opened); Assert.Equal(0, test.Reader.Lists);
+        using var map = MemoryMappedFile.OpenExisting(plan.Environment["THE_ORDER_GUIDE_SESSION"]);
+        using var view = map.CreateViewAccessor();
+        Assert.Equal(8, view.ReadInt32(148)); Assert.Equal(3, view.ReadInt32(176));
+        using var chatMap = MemoryMappedFile.OpenExisting(plan.Environment["THE_ORDER_GUIDE_SESSION"] + ".chat");
+        using var chat = chatMap.CreateViewAccessor(); Assert.Equal(GameChatWire.Magic, chat.ReadInt32(0)); Assert.Equal(0, chat.ReadInt32(96));
     }
     [Fact] public async Task UnlinkedGameExplainsWhyShortcutWasNotPrepared()
     {
@@ -243,6 +267,27 @@ public sealed class GuideSessionTests
         var current = new ProcessIdentity(self.Id, self.StartTime.ToFileTimeUtc(), self.MainModule!.FileName, null);
         test.Sessions.Tick(new(LaunchOutcome.Started, ProcessTrackingState.RunningConfirmed, snapshot, null, current, "synthetic observed child"));
         Assert.Equal(current.Pid, view.ReadInt32(40)); Assert.Equal(current.CreationFileTime, view.ReadInt64(48));
+    }
+    [Fact] public async Task ShortcutConflictRemainsVisibleWhileGameToolsHasFocus()
+    {
+        await using var test = new Setup(); var snapshot = await test.Snapshot();
+        await test.Sessions.PrepareForGameAsync("g", default); var plan = test.Sessions.Prepare(snapshot)!;
+        using var map = MemoryMappedFile.OpenExisting(plan.Environment["THE_ORDER_GUIDE_SESSION"]);
+        using var view = map.CreateViewAccessor();
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        var current = new ProcessIdentity(self.Id, self.StartTime.ToFileTimeUtc(), self.MainModule!.FileName, null);
+        test.Sessions.Tick(new(LaunchOutcome.Started, ProcessTrackingState.RunningConfirmed, snapshot, null, current, "synthetic observed child"));
+
+        view.Write(44, 2); test.Sessions.Tick();
+        var conflict = Assert.IsType<GuideLaunchNotice>(test.Sessions.NoticeFor("g"));
+        Assert.Equal(GuideLaunchAction.ChangeShortcut, conflict.Action);
+        view.Write(44, 0); test.Sessions.Tick();
+        Assert.Same(conflict, test.Sessions.NoticeFor("g"));
+
+        view.Write(44, 3); test.Sessions.Tick();
+        Assert.Equal(GuideLaunchAction.OpenReading, test.Sessions.NoticeFor("g")!.Action);
+        plan.FailedBeforeCreation();
+        Assert.False(test.Sessions.NoticeFor("g")!.Warning);
     }
     [Fact] public async Task LauncherExitBeforeHandoffPublicationDoesNotDestroyChildGuideSession()
     {

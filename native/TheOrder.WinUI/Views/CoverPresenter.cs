@@ -17,9 +17,9 @@ public sealed class CoverPresenter : Grid
     private readonly Canvas imageCanvas = new();
     private readonly FontIcon placeholder = new() { Glyph = "\uE8F1", FontSize = 32 };
     private readonly ImageRequestSlot request = new();
-    private bool loaded;
+    private bool loaded, imageRevealScheduled;
     private string? requestedKey;
-    private int requestedEdge;
+    private int requestedEdge, displayedEdge;
     private RasterPixels? displayedPixels;
     private RasterPixels? croppedPixels;
     private double croppedAspect;
@@ -30,6 +30,7 @@ public sealed class CoverPresenter : Grid
     public IImagePipeline? Pipeline {get;set;}
     internal string SourceStatus {get;private set;}="not-started";
     internal bool HasImage=>image.Source is not null;
+    internal bool RetainImageOnUnload { get; init; }
     internal event Action? SourceStateChanged;
     internal void RetryFailed()
     {
@@ -48,9 +49,30 @@ public sealed class CoverPresenter : Grid
     public CoverPresenter()
     {
         imageCanvas.Children.Add(image); Children.Add(placeholder); Children.Add(imageCanvas);
-        Loaded += (_, _) => { loaded = true; Start(); };
-        Unloaded += (_, _) => { loaded = false; Reset(); ReleaseImageClip(); };
+        Loaded += (_, _) =>
+        {
+            loaded = true;
+            if (displayedPixels is not null) ApplyImageClip();
+            Start();
+        };
+        Unloaded += OnUnloaded;
         SizeChanged += (_, _) => { if (loaded) { ApplyImageClip(); Start(); } };
+    }
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        loaded = false;
+        if (RetainImageOnUnload && HasImage)
+        {
+            // A detached continue card owns one thumbnail. Cancel any pending
+            // resize and remember the edge of the image that actually finished.
+            StopImageReveal();
+            request.Clear();
+            PendingImage = Task.CompletedTask;
+            requestedEdge = displayedEdge;
+            SourceStatus = "retained";
+        }
+        else Reset();
+        ReleaseImageClip();
     }
     private static void OnSourceChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {
@@ -106,27 +128,54 @@ public sealed class CoverPresenter : Grid
         imageClip.Dispose(); imageClip = null;
         imageGeometry?.Dispose(); imageGeometry = null;
     }
-    private void Reset() { requestedKey = null; requestedEdge = 0; request.Clear(); image.Source = null; displayedPixels = null; croppedPixels = null; ApplyImageClip(); placeholder.Visibility = Visibility.Visible; SourceStatus=SourceKey is null?"no-source":"not-started"; ToolTipService.SetToolTip(this, SourceKey is null ? "来源尚未提供封面" : "正在准备封面"); SourceStateChanged?.Invoke(); }
+    private void StopImageReveal()
+    {
+        if (!imageRevealScheduled) return;
+        InteractionMotion.StopReveal(image);
+        imageRevealScheduled = false;
+    }
+    private void Reset()
+    {
+        StopImageReveal();
+        requestedKey = null; requestedEdge = displayedEdge = 0; request.Clear(); image.Source = null; displayedPixels = null; croppedPixels = null;
+        ApplyImageClip(); placeholder.Visibility = Visibility.Visible;
+        SourceStatus = SourceKey is null ? "no-source" : "not-started";
+        ToolTipService.SetToolTip(this, SourceKey is null ? "来源尚未提供封面" : "正在准备封面"); SourceStateChanged?.Invoke();
+    }
     private void Start()
     {
-        if (!loaded || SourceKey is null) { Reset(); return; }
+        if (!loaded) return;
+        if (SourceKey is not { } key) { Reset(); return; }
         if (ActualWidth <= 0 || ActualHeight <= 0) return;
         DependencyObject? ancestor = this;
         while (ancestor is not null && ancestor is not IImageHost) ancestor = VisualTreeHelper.GetParent(ancestor);
         var pipeline=Pipeline??(ancestor as IImageHost)?.Images;
         if (pipeline is null) {SourceStatus="missing-pipeline";return;}
-        var key = SourceKey;
         var edge = ThumbnailSizing.Edge(ActualWidth, ActualHeight, XamlRoot?.RasterizationScale ?? 1, MinimumEdge);
         if (requestedKey == key && requestedEdge == edge) return;
         if (requestedKey == key && displayedPixels is not null) request.Clear();
         else Reset();
         requestedKey = key; requestedEdge = edge;
-        if(pipeline.TryGet(key,edge,out var pixels)&&pixels is not null)
-        {displayedPixels=pixels;image.Source=DisplayBitmaps.Get(pipeline,pixels);ApplyImageClip();placeholder.Visibility=Visibility.Collapsed;SourceStatus="memory"; ToolTipService.SetToolTip(this, null); SourceStateChanged?.Invoke(); return;}
+        if (pipeline.TryGet(key, edge, out var pixels) && pixels is not null)
+        {
+            ShowPixels(pipeline, pixels, edge);
+            SourceStatus = "memory";
+            ToolTipService.SetToolTip(this, null);
+            SourceStateChanged?.Invoke();
+            return;
+        }
         var lease = request.Begin(key);
         SourceStatus="loading";
         SourceStateChanged?.Invoke();
         PendingImage = LoadAsync(pipeline, key, edge, lease.Generation, lease.Cancellation);
+    }
+    private void ShowPixels(IImagePipeline pipeline, RasterPixels pixels, int edge)
+    {
+        image.Source = DisplayBitmaps.Get(pipeline, pixels);
+        displayedPixels = pixels;
+        displayedEdge = edge;
+        ApplyImageClip();
+        placeholder.Visibility = Visibility.Collapsed;
     }
     private async Task LoadAsync(IImagePipeline pipeline, string key, int edge, long version, CancellationToken cancellation)
     {
@@ -135,7 +184,13 @@ public sealed class CoverPresenter : Grid
             var result = await pipeline.LoadAsync(key, edge, cancellation);
             if(request.IsCurrent(key,version))SourceStatus=result.Status;
             if (!loaded || !request.IsCurrent(key, version) || cancellation.IsCancellationRequested || SourceKey != key || result.Pixels is not { } pixels) return;
-            displayedPixels = pixels; image.Source = DisplayBitmaps.Get(pipeline, pixels); ApplyImageClip(); placeholder.Visibility = Visibility.Collapsed;
+            var reveal = displayedPixels is null && result.Status != "memory";
+            ShowPixels(pipeline, pixels, edge);
+            if (reveal && InteractionMotion.Enabled)
+            {
+                imageRevealScheduled = true;
+                InteractionMotion.RevealContent(image, .42f);
+            }
         }
         catch (Exception e) { if (request.IsCurrent(key, version)) { SourceStatus=e.GetType().Name; if (displayedPixels is null) placeholder.Visibility = Visibility.Visible; } }
         finally

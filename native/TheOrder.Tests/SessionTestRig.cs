@@ -20,14 +20,17 @@ internal sealed class SessionTestRig : IAsyncDisposable
     public readonly SessionFakePositions Positions = new();
     public TransactionalLibrary Library { get; private set; }
     public SessionEngine Engine { get; private set; }
-    public SessionTestRig(byte[]? document = null)
+    private readonly bool requireRecordingMinimum;
+    public SessionTestRig(byte[]? document = null, bool requireRecordingMinimum = false)
     {
+        this.requireRecordingMinimum = requireRecordingMinimum;
         Disk = new() { Main = document ?? Codec.Encode([Entry()], Date) };
         Library = Open(); Engine = Create();
     }
     public TransactionalLibrary Open() => TransactionalLibrary.Open(Codec, new SessionMemoryPersistence(Disk));
     private SessionEngine Create() => new(Library, Files, Platform, Positions, Clock, Tokens, autoPoll: false,
-        launchOptions: new() { RunningPollInterval = TimeSpan.FromDays(1), PollInterval = TimeSpan.FromDays(1) });
+        launchOptions: new() { RunningPollInterval = TimeSpan.FromDays(1), PollInterval = TimeSpan.FromDays(1) },
+        requireRecordingMinimum: requireRecordingMinimum);
     public async Task<LaunchStatus> Start()
     {
         await Engine.InitializeAsync();

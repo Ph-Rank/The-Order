@@ -20,6 +20,10 @@ internal sealed class OpticalRenderer : IDisposable
     [DllImport("TheOrder.OpticalMaterial.dll", ExactSpelling = true)]
     private static extern int OpticalDrawEx(IntPtr handle, uint w, uint h, float[] parameters, uint count, int background);
     [DllImport("TheOrder.OpticalMaterial.dll", ExactSpelling = true)]
+    private static extern int OpticalDrawForCache(IntPtr handle, uint w, uint h, float[] parameters, uint count);
+    [DllImport("TheOrder.OpticalMaterial.dll", ExactSpelling = true)]
+    private static extern int OpticalReadCachedFrame(IntPtr handle, [Out] byte[]? pixels, uint length);
+    [DllImport("TheOrder.OpticalMaterial.dll", ExactSpelling = true)]
     private static extern int OpticalSceneFrost(IntPtr handle, float sigma);
     [DllImport("TheOrder.OpticalMaterial.dll", ExactSpelling = true)]
     private static extern int OpticalFrostDiagnostics(IntPtr handle, [Out] ulong[] values);
@@ -87,13 +91,15 @@ internal sealed class OpticalRenderer : IDisposable
         Marshal.ThrowExceptionForHR(OpticalUpload(handle, pixels, checked((uint)width), checked((uint)height), checked((uint)pixels.Length)));
         SourceBytes = pixels.LongLength; Uploads++;
     }
-    internal void Draw(int width, int height, float[] parameters, bool backgroundOnly = false)
+    internal void Draw(int width, int height, float[] parameters, bool backgroundOnly = false, bool cacheFrame = false)
     {
         ObjectDisposedException.ThrowIf(!Active, this);
         // 20 constants = accepted C1 layout; 24 adds rev1 frost (c[17], tint c[20..23]); 28 adds rev2 continuous glass (c[24..27]).
         if (parameters.Length is not (20 or 24 or 28) || parameters.Any(x => !float.IsFinite(x))) throw new ArgumentException("Finite optical constants required");
         var begin = Stopwatch.GetTimestamp();
-        Marshal.ThrowExceptionForHR(parameters.Length != 20
+        Marshal.ThrowExceptionForHR(cacheFrame
+            ? OpticalDrawForCache(handle, checked((uint)width), checked((uint)height), parameters, (uint)parameters.Length)
+            : parameters.Length != 20
             ? OpticalDrawEx(handle, checked((uint)width), checked((uint)height), parameters, (uint)parameters.Length, backgroundOnly ? 1 : 0)
             : backgroundOnly
                 ? OpticalDrawBackground(handle, checked((uint)width), checked((uint)height), parameters)
@@ -102,6 +108,9 @@ internal sealed class OpticalRenderer : IDisposable
         DrawCpuMilliseconds += milliseconds; MaxDrawCpuMilliseconds = Math.Max(MaxDrawCpuMilliseconds, milliseconds);
         Draws++; BufferBytes = (long)width * height * 8;
     }
+    // 0 = copied, 1 = GPU still busy, negative = frame unavailable.
+    internal int ReadCachedFrame(byte[] pixels) => OpticalReadCachedFrame(handle, pixels, checked((uint)pixels.Length));
+    internal void DiscardCachedFrame() => _ = OpticalReadCachedFrame(handle, null, 0);
     // Artwork stage: one revision per cover/size/theme change. The ambient band is the app's own decoded
     // cover pixels (never a capture), filled and blurred on the renderer's device, then a polarity scrim.
     internal void RenderArtwork(TheOrder.Application.RasterPixels art, double widthDip, double heightDip, double scale, float sigma, uint background, uint scrim, bool contain = false)

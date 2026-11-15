@@ -40,6 +40,7 @@ public sealed record PlaygroundConversationOptions
     public string? ReasoningEffort { get; init; } = "high";
     public bool UseSavedContext { get; init; } = true;
     public string SystemInstructions { get; init; } = "";
+    public string? GameOverlayKey { get; init; }
     public ImmutableDictionary<string, string> WorkProgress { get; init; } = ImmutableDictionary<string, string>.Empty;
 }
 public sealed record PlaygroundConversation(Guid Id, string Title, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
@@ -74,6 +75,7 @@ public sealed record PlaygroundSource(string Id, PlaygroundSourceKind Kind, stri
 // An explicit, read-only text snapshot. No path or filesystem capability crosses this boundary.
 public sealed record PlaygroundAttachment(string Name, string Text)
 {
+    public bool IsGameFrame { get; init; }
     public string? MediaType { get; init; }
     public string? ImageBase64 { get; init; }
     public int ImageWidth { get; init; }
@@ -139,6 +141,8 @@ public sealed record PlaygroundModel(string Id, string Name, PlaygroundCapabilit
     public ImmutableArray<string> GenerationMethods { get; init; } = [];
     public bool GenerationMethodsReported { get; init; }
     public string? Lifecycle { get; init; }
+    public string? CatalogFamily { get; init; }
+    public bool? CatalogTextOutput { get; init; }
 }
 public sealed record PlaygroundCapabilities(bool Verified = false, bool Streaming = true, bool Tools = false, bool Search = false)
 {

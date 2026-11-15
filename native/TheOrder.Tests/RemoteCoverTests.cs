@@ -14,6 +14,45 @@ public sealed class RemoteCoverTests
     public void SourcePolicyRejectsUnsafeUrls(string url) { using var http = new HttpClient(); Assert.Null(new RemoteCoverSource(http).Register(url, "r1")); }
     [Theory][InlineData("127.0.0.1")][InlineData("10.1.2.3")][InlineData("172.16.1.1")][InlineData("192.168.1.1")][InlineData("169.254.169.254")][InlineData("100.64.0.1")][InlineData("::1")][InlineData("fd00::1")][InlineData("fe80::1")][InlineData("::ffff:127.0.0.1")]
     public void ActualConnectionPolicyRejectsPrivateDnsAddresses(string ip) => Assert.False(RemoteCoverSource.IsPublic(IPAddress.Parse(ip)));
+
+    private const string KunGalCoverPath = "/ab/cd/abcd0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab";
+
+    [Theory]
+    [InlineData("image.kungal.iloveren.link", ".webp", true)]
+    [InlineData("image.kungal.iloveren.link", "_mini.webp", true)]
+    [InlineData("image.kungal.iloveren.link", "_128.webp", true)]
+    [InlineData("image.kungal.iloveren.link", ".webp?variant=full", false)]
+    [InlineData("image.kungal.iloveren.link", "/other.webp", false)]
+    [InlineData("image.kungal.iloveren.link.example.org", ".webp", false)]
+    public async Task OnlyCanonicalKunGalImagesUseThePublicRouteWithAnIdentifiedClient(string host, string suffix, bool publicRoute)
+    {
+        var url = $"https://{host}{KunGalCoverPath}{suffix}";
+        int publicRequests = 0, checkedRequests = 0;
+        using var checkedHttp = new HttpClient(new OnlineTransportTests.Handler((_, _) =>
+        {
+            checkedRequests++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
+        }));
+        using var publicHttp = new HttpClient(new OnlineTransportTests.Handler((request, _) =>
+        {
+            publicRequests++;
+            Assert.Equal(url, request.RequestUri!.AbsoluteUri);
+            Assert.Contains($"TheOrder/{AppReleaseIdentity.Version}", request.Headers.UserAgent.ToString());
+            Assert.Null(request.Headers.Authorization);
+            Assert.Null(request.Headers.Referrer);
+            Assert.False(request.Headers.Contains("Cookie"));
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent([1, 2, 3]) { Headers = { ContentType = new("image/webp") } }
+            });
+        }));
+        var source = new RemoteCoverSource(checkedHttp, originalArtwork: publicHttp);
+        var bytes = await source.ReadAsync(source.Register(url, "revision")!, default);
+        Assert.Equal(publicRoute, bytes is { Length: 3 });
+        Assert.Equal(publicRoute ? 1 : 0, publicRequests);
+        Assert.Equal(publicRoute ? 0 : 1, checkedRequests);
+    }
+
     [Theory][InlineData("png")][InlineData("jpeg")][InlineData("malformed")][InlineData("wrong-type")][InlineData("oversized")][InlineData("huge")][InlineData("redirect")]
     public async Task RemoteBytesUseExistingBoundedDecoderAndFallback(string kind)
     {

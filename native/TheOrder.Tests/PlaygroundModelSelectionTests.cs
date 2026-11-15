@@ -7,15 +7,45 @@ namespace TheOrder.Tests;
 public sealed class PlaygroundModelSelectionTests
 {
     [Fact]
-    public void OpenAiSelectsOnlyTheLatestVisibleModelInEachRequestedFamily()
+    public void OpenAiSelectsTheLatestVisibleModelInEachFamily()
     {
         var models = Catalog("gpt-5-luna", "gpt-6-luna", "gpt-6.1-terra-2026-10-20", "gpt-6.1-terra",
             "gpt-6.9-sol", "gpt-6.10-sol-preview", "gpt-6-astra", "gpt-99-astra-audio", "gpt-99-sol-codex", "gpt-5.5");
         var selected = PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.OpenAI, models);
-        Assert.Equal(new[] { "gpt-6-luna", "gpt-6.1-terra", "gpt-6.10-sol-preview", "gpt-6-astra" }, selected.Select(x => x.Id));
+        Assert.Equal(new[] { "gpt-6-luna", "gpt-6.1-terra", "gpt-6.10-sol-preview", "gpt-6-astra", "gpt-5.5" }, selected.Select(x => x.Id));
         Assert.All(selected, model => Assert.Contains(model, models));
         Assert.All(selected, model => Assert.False(model.Capabilities.Verified));
         Assert.Equal(selected.Select(x => x.Id), PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.OpenAI, models.Reverse()).Select(x => x.Id));
+    }
+
+    [Theory]
+    [InlineData(PlaygroundProviderKind.OpenAI, "gpt-6-bel", "gpt-6.2-bel", "gpt-6.2-bel-2026-11-14")]
+    [InlineData(PlaygroundProviderKind.OpenAI, "gpt-bel", "gpt-bel-7", "gpt-bel-7-20261114")]
+    [InlineData(PlaygroundProviderKind.OpenAI, "bel-1", "bel-2", "bel-2-20261114")]
+    [InlineData(PlaygroundProviderKind.Gemini, "gemini-5-helium-preview", "gemini-6-helium", "gemini-6-helium-001")]
+    [InlineData(PlaygroundProviderKind.Claude, "claude-new-line-5-6", "claude-new-line-5-10", "claude-new-line-5-10-20261114")]
+    [InlineData(PlaygroundProviderKind.DeepSeek, "deepseek-v4-new-line", "deepseek-v4.2-new-line", "deepseek-v4.2-new-line-20261114")]
+    [InlineData(PlaygroundProviderKind.Grok, "grok-4-new-line", "grok-4.1-new-line", "grok-4.1-new-line-20261114")]
+    public void ANewCatalogFamilyDoesNotRequireANameAllowlist(PlaygroundProviderKind provider, string older, string newer, string snapshot)
+    {
+        var models = Catalog(older, newer, snapshot, newer + "-realtime", newer + "-image", newer + "-computer-use");
+        var winner = Assert.Single(PlaygroundModelSelection.SelectLatest(provider, models));
+        Assert.Equal(newer, winner.Id);
+        Assert.Equal(winner, Assert.Single(PlaygroundModelSelection.SelectLatest(provider, models.Reverse())));
+        Assert.False(winner.Capabilities.Verified);
+    }
+
+    [Fact]
+    public void DirectoryMetadataCanKeepAnUnfamiliarFamilyOrExcludeNonText()
+    {
+        var candidates = new[] {
+            Model("claude-new-name-release-1") with { CatalogFamily = "new-line", Version = "1.0" },
+            Model("claude-another-name-release-2") with { CatalogFamily = "new-line", Version = "2.0" },
+            Model("claude-video") with { CatalogTextOutput = false },
+            Model("claude-mystery") with { CatalogTextOutput = false },
+            Model("claude-new-line-99") with { Lifecycle = "deprecated" }
+        };
+        Assert.Equal(candidates[1], Assert.Single(PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.Claude, candidates)));
     }
 
     [Fact]
@@ -35,6 +65,25 @@ public sealed class PlaygroundModelSelectionTests
             .Add(Model("gemini-4-flash-preview") with { GenerationMethodsReported = true, GenerationMethods = ["generate_content"], Version = "001" });
         var selected = PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.Gemini, models);
         Assert.Equal(new[] { "gemini-3.5-flash-lite", "gemini-4-flash-preview", "gemini-3.1-pro-preview", "gemini-4-argon" }, selected.Select(x => x.Id));
+    }
+
+    [Fact]
+    public void GoogleKeepsTheLatestVisibleGeneralTextFamilyAfterRenames()
+    {
+        static PlaygroundModel TextModel(string id) => Model(id) with
+        { GenerationMethodsReported = true, GenerationMethods = ["createInteraction"] };
+        var models = Catalog("gemini-3.8-flash", "gemini-3.1-pro-preview", "gemini-4-argon", "gemini-3.5-flash-lite")
+            .AddRange(new[] { TextModel("gemini-4-hydrogen"), TextModel("gemini-4-carbon"),
+                TextModel("gemini-5-nitrogen-preview"), TextModel("gemini-6-nitrogen"),
+                TextModel("gemini-9-carbon-cyber-permissive"), TextModel("gemini-9-hydrogen-live"),
+                TextModel("gemini-9-image"), TextModel("gemini-9-vision") with { CatalogTextOutput = false }, Model("gemini-9-unknown") });
+        var selected = PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.Gemini, models);
+        Assert.Equal(new[] { "gemini-3.5-flash-lite", "gemini-4-hydrogen", "gemini-4-carbon",
+            "gemini-4-argon", "gemini-6-nitrogen", "gemini-9-unknown" }, selected.Select(model => model.Id));
+        Assert.Equal(selected.Select(model => model.Id),
+            PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.Gemini, models.Reverse()).Select(model => model.Id));
+        Assert.Equal("gemini-3.8-flash", PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.Gemini, models.Take(4))[1].Id);
+        Assert.False(selected.Last().Capabilities.Verified);
     }
 
     [Fact]
@@ -100,7 +149,7 @@ public sealed class PlaygroundModelSelectionTests
     public void EmptyOrUnmatchedCatalogNeverInventsPermissionForDefaultModels()
     {
         Assert.Empty(PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.OpenAI, []));
-        Assert.Empty(PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.OpenAI, Catalog("gpt-5.5", "gpt-image-99", "gemini-4-argon")));
+        Assert.Empty(PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.OpenAI, Catalog("gpt-image-99", "gpt-4-instruct", "gemini-4-argon")));
         var selected = PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.Gemini,
             [Model("gemini-4-argon"), Model("gemini-99-argon") with { Lifecycle = "retired" }]);
         Assert.Equal("gemini-4-argon", Assert.Single(selected).Id);

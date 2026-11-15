@@ -38,7 +38,7 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
     private readonly ResourceDictionary templates = new() { Source = new Uri("ms-appx:///Views/PlaygroundTemplates.xaml") };
     private readonly CancellationTokenSource lifetime = new();
     private readonly Grid layout = new();
-    private readonly Border workbenchFrame = new() { Margin = new Thickness(12), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12) };
+    private readonly Border workbenchFrame = new() { Margin = new Thickness(12, 0, 12, 12), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12) };
     private readonly Border sessionsHost = new() { BorderThickness = new Thickness(0, 0, 1, 0) };
     private readonly Border settingsHost = new() { BorderThickness = new Thickness(1, 0, 0, 0) };
     private readonly Grid reader = new();
@@ -53,14 +53,13 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
     private readonly ObservableCollection<PlaygroundMessageItem> messageRows = [];
     private readonly TextBlock title = new() { Text = "对话", FontSize = 18, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
         TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock subtitle = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private readonly Button sessionToggle = new() { Content = "会话", Padding = new Thickness(10, 5, 10, 5) };
     private readonly Button settingsToggle = new() { Content = "运行设置", Padding = new Thickness(10, 5, 10, 5) };
     private readonly Button memoryButton = new() { Content = "记忆", Padding = new Thickness(10, 5, 10, 5) };
     private readonly Button conversationMenu = new() { Content = "···", Padding = new Thickness(10, 5, 10, 5) };
     private readonly TextBlock sessionNote = new() { FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(8, 0, 8, 0) };
     private readonly Border inputSurface = new() { CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Padding = new Thickness(14, 12, 10, 10) };
-    private readonly InfoBar notification = new() { IsOpen = false, IsClosable = true };
+    internal Action<string, InfoBarSeverity>? ReportNotice { get; set; }
     private readonly StackPanel empty = new() { Spacing = 10, MaxWidth = 440, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock emptyTitle = new() { FontSize = 21, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock emptyDescription = new() { FontSize = 14, LineHeight = 24, TextWrapping = TextWrapping.Wrap };
@@ -157,7 +156,7 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
         catch
         {
             ShowError("对话资料未能安全读取；原始资料已保留，不会自动重置。");
-            emptyTitle.Text = "对话资料需要恢复"; emptyDescription.Text = "可以重试读取，或在确认后恢复上一份有效版本。不会访问其他 Profile。";
+            emptyTitle.Text = "对话资料需要恢复"; emptyDescription.Text = "可以重试读取，或恢复上一份有效版本。"; emptyDescription.Visibility = Visibility.Visible;
             empty.Visibility = Visibility.Visible; emptyConfigure.Visibility = Visibility.Collapsed;
             retryInitialization.Visibility = Visibility.Visible; restoreState.Visibility = RestorePreviousState is null ? Visibility.Collapsed : Visibility.Visible;
             settingsScroll.IsHitTestVisible = sessions.IsHitTestVisible = false; memoryButton.IsEnabled = conversationMenu.IsEnabled = composer.IsEnabled = false;
@@ -194,7 +193,9 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
     }
     private void BuildReader()
     {
-        reader.RowDefinitions.Add(new() { Height = GridLength.Auto }); reader.RowDefinitions.Add(new() { Height = GridLength.Auto }); reader.RowDefinitions.Add(new()); reader.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        reader.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        reader.RowDefinitions.Add(new());
+        reader.RowDefinitions.Add(new() { Height = GridLength.Auto });
         var header = new Grid { MinHeight = 56, Padding = new Thickness(12, 8, 12, 8) }; header.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); header.ColumnDefinitions.Add(new()); header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         header.Children.Add(titleLead); Grid.SetColumn(title, 1); header.Children.Add(title); var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(8, 0, 0, 0) };
         sessionToggle.Content = PlaygroundAppearance.Icon("\uE700"); settingsToggle.Content = PlaygroundAppearance.Icon("\uE9E9"); conversationMenu.Content = PlaygroundAppearance.Icon("\uE712");
@@ -211,7 +212,6 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
         settingsToggle.Click += (_, _) => ToggleSettings();
         memoryButton.Click += async (_, _) => await RunAsync(ShowMemoriesAsync);
         conversationMenu.Click += (_, _) => { if (selected is { } id) ConversationActions(id).ShowAt(conversationMenu); else _ = RunAsync(() => CreateAsync(true)); };
-        Grid.SetRow(notification, 1); reader.Children.Add(notification);
         var reading = new Grid { MinWidth = 0, HorizontalAlignment = HorizontalAlignment.Stretch }; reading.Children.Add(messages);
         ScrollViewer.SetHorizontalScrollMode(messages, ScrollMode.Disabled); ScrollViewer.SetHorizontalScrollBarVisibility(messages, ScrollBarVisibility.Disabled);
         messages.MinWidth = composer.MinWidth = 0; messages.HorizontalContentAlignment = HorizontalAlignment.Stretch;
@@ -222,7 +222,7 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
         messages.ItemsSource = messageRows;
         messages.ItemContainerStyle = PlaygroundAppearance.Style("PGMessageListViewItem");
         messages.ItemTemplate = (DataTemplate)templates["PlaygroundMessageTemplate"];
-        AutomationProperties.SetAutomationId(messages, "PlaygroundMessages"); AutomationProperties.SetName(messages, "对话消息"); Grid.SetRow(reading, 2); reader.Children.Add(reading);
+        AutomationProperties.SetAutomationId(messages, "PlaygroundMessages"); AutomationProperties.SetName(messages, "对话消息"); Grid.SetRow(reading, 1); reader.Children.Add(reading);
         messages.Loaded += MessageListLoaded;
         messages.Unloaded += MessageListUnloaded;
         messages.LayoutUpdated += MessageListLayoutUpdated;
@@ -248,7 +248,7 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
         AutomationProperties.SetAutomationId(send, "PlaygroundSend"); send.Click += async (_, _) => { if (service.IsGenerating && service.ActiveConversationId == selected) service.Stop(); else await SendAsync(); };
         send.VerticalAlignment = VerticalAlignment.Bottom; Grid.SetColumn(send, 1); inputActions.Children.Add(send); Grid.SetRow(inputActions, 2); inputContent.Children.Add(inputActions);
         goActive.Click += async (_, _) => { if (service.ActiveConversationId is { } id) await RunAsync(() => SelectAsync(id)); };
-        Grid.SetRow(input, 3); reader.Children.Add(input);
+        Grid.SetRow(input, 2); reader.Children.Add(input);
         PlaygroundAppearance.Apply(emptyConfigure, "PGButton"); PlaygroundAppearance.Apply(retryInitialization, "PGButton"); PlaygroundAppearance.Apply(restoreState, "PGButton");
     }
     private void QueueThemePaint(string reason)
@@ -274,7 +274,7 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
         modelSurface.Background = PlaygroundAppearance.Brush(this, "PGSurfaceBrush"); modelSurface.BorderBrush = PlaygroundAppearance.Brush(this, "PGBorderBrush");
         sessionsHost.BorderBrush = settingsHost.BorderBrush = PlaygroundAppearance.Brush(this, "PGBorderBrush");
         foreach (var divider in visualDividers) divider.Background = PlaygroundAppearance.Brush(this, "PGBorderBrush");
-        foreach (var text in new[] { subtitle, activity, emptyDescription, sessionNote, connectionStatus, capabilitiesNotice, progressStatus })
+        foreach (var text in new[] { activity, emptyDescription, sessionNote, connectionStatus, capabilitiesNotice, progressStatus })
             text.Foreground = PlaygroundAppearance.Brush(this, "PGSecondaryBrush");
         foreach (var view in Descendants(this).OfType<PlaygroundMessageView>()) view.RefreshTheme();
         foreach (var view in Descendants(this).OfType<PlaygroundMarkdownView>()) view.RefreshTheme();
@@ -441,8 +441,8 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
         settingsScroll.IsHitTestVisible = sessions.IsHitTestVisible = true; memoryButton.IsEnabled = conversationMenu.IsEnabled = composer.IsEnabled = true;
         RefreshConversations(forceConversations);
         title.Text = current?.Title ?? "对话"; ToolTipService.SetToolTip(title, current?.Title ?? "对话");
-        sessionNote.Text = current?.Temporary == true ? "临时会话 · 关闭后不保留" : current is null ? "独立讨论空间" : "最近更新 " + current.UpdatedAt.ToLocalTime().ToString("MM-dd HH:mm");
-        subtitle.Text = current?.Temporary == true ? "临时会话 · 不写入长期聊天、检索或记忆" : "围绕作品、经历与观点展开讨论";
+        sessionNote.Text = "临时会话 · 关闭后不保留";
+        sessionNote.Visibility = current?.Temporary == true ? Visibility.Visible : Visibility.Collapsed;
         PlaygroundMessage[] desired = current is null ? [] : service.Snapshot.Messages.Where(x => x.ConversationId == current.Id).ToArray();
         var ids = desired.Select(x => x.Id).ToHashSet();
         bool rowsChanged = false;
@@ -458,10 +458,14 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
         if (rowsChanged || latestChanged || pendingLatestRealization) QueueFollowLatest(latestChanged || pendingLatestRealization);
         pendingLatestRealization = false;
         empty.Visibility = messageRows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (selectionChanged)
+        {
+            InteractionMotion.StopPage(messageRows.Count == 0 ? messages : empty);
+            InteractionMotion.EnterPage(messageRows.Count == 0 ? empty : messages);
+        }
         emptyTitle.Text = !credentialAvailable ? "先连接你的模型服务商"
-            : !PlaygroundAuthorizationPolicy.CanSend(service.Snapshot.Settings) ? "先完成发送授权" : "从一个真实的问题开始";
-        emptyDescription.Text = !credentialAvailable ? "API Key 仅保存在本机当前 Profile。记录、历史和记忆按你授权的范围使用。"
-            : "可以聊最近的游玩、找回过去的观点，或核实作品资料。没有记录时会明确说明。";
+            : !PlaygroundAuthorizationPolicy.CanSend(service.Snapshot.Settings) ? "先完成发送授权" : "开始对话";
+        emptyDescription.Visibility = Visibility.Collapsed;
         emptyConfigure.Visibility = !credentialAvailable || !PlaygroundAuthorizationPolicy.CanSend(service.Snapshot.Settings) ? Visibility.Visible : Visibility.Collapsed;
         if (forceOptions) SyncOptions();
         SyncGenerationSettings(); UpdateConnectionStatus(); UpdateActions(); ArrangeWorkspace();
@@ -561,7 +565,6 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
             activeSpoilers[current.Id] = options.Spoiler != PlaygroundSpoilerMode.Full;
             if (scrollIntent?.ConversationId != current.Id) scrollIntent = messageFollow.CaptureIntent();
             pendingSubmission = new(current.Id, text, files, service.Snapshot.Messages.Where(x => x.ConversationId == current.Id && x.Role == "user").Select(x => x.Id).ToHashSet(), scrollIntent);
-            notification.IsOpen = false;
             var pending = service.SendAsync(current.Id, text, files.Select(x => x.Snapshot).ToImmutableArray(), CancellationToken.None); Refresh();
             await pending;
         }
@@ -688,21 +691,21 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
         restoreState.IsEnabled = retryInitialization.IsEnabled = false;
         try
         {
-            await RestorePreviousState(); initialize = null; notification.IsOpen = false; await InitializeAsync();
+            await RestorePreviousState(); initialize = null; await InitializeAsync();
         }
         catch (FileNotFoundException) { ShowError("没有上一个有效版本可恢复。当前资料已保留，请保留该 Profile 并检查备份。"); }
         catch (InvalidOperationException error) when (error.Message is "没有上一个有效版本可恢复。" or "较新格式不能降级恢复。") { ShowError(error.Message); }
         catch { ShowError("恢复未能完成；当前资料和已有备份均保留。请检查备份是否有效，不能降级覆盖较新格式。"); }
         finally { restoreState.IsEnabled = retryInitialization.IsEnabled = true; }
     }
-    private void ShowError(string message) { if (disposed) return; notification.Message = message; notification.Severity = InfoBarSeverity.Warning; notification.IsOpen = true; }
+    private void ShowError(string message) { if (!disposed) ReportNotice?.Invoke(message, InfoBarSeverity.Warning); }
     private async Task<ContentDialogResult> DialogAsync(string heading, object content, string primary = "保存")
     {
         var dialog = new ContentDialog { XamlRoot = XamlRoot, Title = heading, Content = content, PrimaryButtonText = primary, CloseButtonText = "取消", DefaultButton = ContentDialogButton.None,
             RequestedTheme = PaletteTheme, HorizontalContentAlignment = HorizontalAlignment.Stretch };
         PlaygroundAppearance.Scope(dialog); dialog.Style = PlaygroundAppearance.Style("PGDialog"); dialog.PrimaryButtonStyle = PlaygroundAppearance.Style("PGDialogPrimaryAction"); dialog.CloseButtonStyle = PlaygroundAppearance.Style("PGDialogAction"); StyleContent(content);
         dialog.Resources["ContentDialogMaxWidth"] = 760d;
-        return await dialog.ShowAsync();
+        return await dialog.ShowInShellAsync();
     }
     private Brush Brush(string key) => PlaygroundAppearance.Brush(this, key switch { "TextSecondaryBrush" => "PGSecondaryBrush", "DividerBrush" => "PGBorderBrush", _ => key });
     private static void StyleContent(object? value)

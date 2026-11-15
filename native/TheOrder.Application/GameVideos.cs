@@ -22,8 +22,11 @@ public sealed record GameVideoSource(string GameId, string? WorkId, string Title
 {
     public string? InstallationSteamId { get; init; }
     public string Fingerprint => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { GameId, WorkId, ExplicitIds, SteamId })));
-    public MediaIdentityContext Context => new(new(new("Native", "LibraryEntry", GameId), MediaIdentityPurpose.GameVideo, "Game"), Fingerprint, "Work", "GAME");
-    public MediaIdentityContext VideoContext(int id) => new(new(new("Native", "LibraryEntry", GameId), MediaIdentityPurpose.GameVideoSelection, id > 0 ? "IGDB:" + id : "Manual"), Fingerprint, "WorkVideo", "YouTube");
+    public bool CatalogWork { get; init; }
+    private MediaIdentityReference DecisionSource => CatalogWork ? new("NextMoe", "Work", GameId) : new("Native", "LibraryEntry", GameId);
+    public MediaIdentityContext Context => new(new(DecisionSource, MediaIdentityPurpose.GameVideo, "Game"), Fingerprint, "Work", "GAME");
+    public MediaIdentityContext VideoContext(int id) => new(new(DecisionSource, MediaIdentityPurpose.GameVideoSelection, id > 0 ? "IGDB:" + id : "Manual"), Fingerprint, "WorkVideo", "YouTube");
+    public static GameVideoSource FromCatalog(WorkMetadata work) => From(work.Id, work) with { CatalogWork = true };
     public static GameVideoSource FromEntry(LibraryEntry entry, WorkMetadata? work)
     {
         var selected = entry.Installations.FirstOrDefault(x => x.Id == entry.PreferredInstallationId)
@@ -87,7 +90,7 @@ public static class GameVideos
     // A presentation shortlist, never an identity decision. Keep the complete
     // result available for manual review, including unknown platform/type data.
     public static bool PrimaryCandidate(GameVideoSource source, IgdbGame game) =>
-        game.Platforms.Any(x => x.Equals("PC (Microsoft Windows)", StringComparison.OrdinalIgnoreCase) || x.Equals("Windows", StringComparison.OrdinalIgnoreCase) || x is "PC-98" or "PC-8800 Series" or "DOS")
+        (source.CatalogWork || game.Platforms.Any(x => x.Equals("PC (Microsoft Windows)", StringComparison.OrdinalIgnoreCase) || x.Equals("Windows", StringComparison.OrdinalIgnoreCase) || x is "PC-98" or "PC-8800 Series" or "DOS"))
         && (SteamMatches(source, game) || game.Kind is "Main Game" or "Remake" or "Remaster" or "Expanded Game"
             && new[] { source.Title }.Concat(source.Aliases).Any(x => TitleKey(x) is { Length: > 0 } key
                 && (key == TitleKey(game.Name) || game.Aliases.Any(alias => key == TitleKey(alias)))));

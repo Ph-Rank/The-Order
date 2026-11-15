@@ -28,7 +28,7 @@ public sealed partial class PlaygroundView
         var history = new CheckBox { Content = "检索本资料库的历史对话", IsChecked = initial.Permissions.History };
         var memory = new CheckBox { Content = "使用已保存的偏好记忆", IsChecked = initial.Permissions.Memory };
         var automatic = new CheckBox { Content = "自动整理有证据的文娱偏好", IsChecked = initial.Permissions.AutoMemory };
-        var providerChoice = new ComboBox { Header = "连接", ItemsSource = ProviderNames, SelectedIndex = (int)options.Provider, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var providerChoice = new SelectedFirstComboBox { Header = "连接", OptionsSource = ProviderNames, OptionIndex = (int)options.Provider, HorizontalAlignment = HorizontalAlignment.Stretch };
         var key = new PasswordBox { Header = "API Key", MaxLength = 4096 };
         AutomationProperties.SetAutomationId(key, "PlaygroundApiKey"); AutomationProperties.SetAutomationId(providerChoice, "PlaygroundCredentialProvider");
         var endpoint = Label("", 12); endpoint.Style = PlaygroundAppearance.Style("PGMetadataTextStyle");
@@ -56,7 +56,7 @@ public sealed partial class PlaygroundView
             catch (OperationCanceledException) { }
             catch { if (open && check == checkGeneration) endpoint.Text = Host(edits[kind].Endpoint) + " · 凭据状态暂不可读"; }
         }
-        providerChoice.SelectionChanged += async (_, _) => { if (!syncing && providerChoice.SelectedIndex >= 0) await ShowProviderAsync((PlaygroundProviderKind)providerChoice.SelectedIndex); };
+        providerChoice.OptionChanged += async (_, _) => { if (!syncing && providerChoice.OptionIndex >= 0) await ShowProviderAsync((PlaygroundProviderKind)providerChoice.OptionIndex); };
         clear.Click += (_, _) => { edits[current].Remove = true; edits[current].Secret = ""; key.Password = ""; clear.Content = "保存时移除 Key"; clear.IsEnabled = false; };
         await ShowProviderAsync(current);
         try

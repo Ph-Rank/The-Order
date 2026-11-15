@@ -33,7 +33,7 @@ public sealed partial class MainWindow
                 var dialog = new CoverSelectionDialog(options, images, registry) { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme };
                 coverDialog = dialog;
                 using var cancel = stop.Token.Register(() => DispatcherQueue.TryEnqueue(dialog.Hide));
-                if (await dialog.ShowAsync() != ContentDialogResult.Primary) return new(ClientOutcome.Cancelled, UiText.Get("封面选择已取消，原封面保留。"));
+                if (await dialog.ShowInShellAsync() != ContentDialogResult.Primary) return new(ClientOutcome.Cancelled, UiText.Get("封面选择已取消，原封面保留。"));
                 stop.Token.ThrowIfCancellationRequested();
                 return await client.SaveAsync(options, dialog.SelectedCoverId, stop.Token);
             }

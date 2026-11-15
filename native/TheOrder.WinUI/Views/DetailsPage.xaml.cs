@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using TheOrder.Presentation;
 using TheOrder.Application;
+using TheOrder.Platform.Windows;
 
 namespace TheOrder.WinUI.Views;
 
@@ -14,12 +15,20 @@ public sealed partial class DetailsPage : Page, IImageHost
     public IImagePipeline Images { get; }
     public LaunchViewModel Launch { get; }
     public RecognitionViewModel Recognition { get; }
-    private string? displayedGame;
+    private string? displayedGame, launchGame;
     private GameDetails? displayedDetail;
     private BannerChoice? heroArtwork;
-    private readonly BannerPresentation heroPresentation;
+    private readonly DetailsBannerPresentation heroPresentation;
     private bool synchronizingReview;
     public Func<Task>? ManageInstallations { get; set; }
+    private int StatusOptionIndex(string status) => TheOrder.Domain.GameProgress.Ordered.IndexOf(status);
+    private void SetStatusOptionIndex(int index)
+    {
+        var statuses = TheOrder.Domain.GameProgress.Ordered;
+        if ((uint)index < (uint)statuses.Length && ViewModel.Draft is { } draft)
+            draft.Status = statuses[index];
+    }
+
     public Func<Task>? OpenLaunchSettings { get; set; }
     private async void OnLaunchSettings(object sender, RoutedEventArgs e) { try { if (OpenLaunchSettings is not null) await OpenLaunchSettings(); } catch { ViewModel.ReportUnexpected(); } }
     public Func<Task>? OpenGameTools { get; set; }
@@ -46,7 +55,7 @@ public sealed partial class DetailsPage : Page, IImageHost
         LaunchInstallationsMenu.Items.Clear(); LaunchInstallationsMenu.IsEnabled = Launch.CanActivate;
         LaunchInstallationsMenu.Visibility = Launch.Installations.Length > 1 ? Visibility.Visible : Visibility.Collapsed;
         var game = Launch.GameId;
-        foreach (var installation in Launch.Installations)
+        foreach (var installation in Launch.Installations.OrderByDescending(item => item.Id == Launch.SelectedInstallationId))
         {
             var item = new ToggleMenuFlyoutItem { Text = installation.Label, IsChecked = installation.Id == Launch.SelectedInstallationId };
             item.Click += async (_, _) => { try { if (game == Launch.GameId) await Launch.SelectAsync(installation.Id); } catch { ViewModel.ReportUnexpected(); } };
@@ -61,73 +70,96 @@ public sealed partial class DetailsPage : Page, IImageHost
         catch (Exception) { ViewModel.ReportUnexpected(); }
     }
     public Func<Task>? GoBack { get; set; }
-    public DetailsPage(WorkspaceViewModel viewModel, IImagePipeline images, LaunchViewModel launch, RecognitionViewModel recognition)
+    public DetailsPage(WorkspaceViewModel viewModel, IImagePipeline images, LaunchViewModel launch, RecognitionViewModel recognition, IsolatedHeroFrameCache heroFrames)
     {
         ViewModel = viewModel; Images = images; Launch = launch; Recognition = recognition; InitializeComponent();
-        InteractionMotion.WatchVisibility(CatalogHost); InteractionMotion.WatchVisibility(RelatedMediaHost);
-        InteractionMotion.WatchVisibility(DetailsRoot); InteractionMotion.WatchVisibility(EditorCard);
-        RichCatalog.Sources = SourcesInfo; RichCatalog.BeforeTags = GameVideosHost;
+        RichCatalog.Sources = SourcesInfo;
+        RichCatalog.BeforeTags = GameVideosHost;
+        RichCatalog.SupplementalHost = CatalogSupplementalHost;
         HeroTitle.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => UpdateHeroFrame(HeroFrame.ActualWidth));
         ReviewHost.Content = new RecognitionReview(recognition, images);
         // Current banner preference: no refraction; a lightly blurred, readable overlay.
-        HeroStage.Variant = StageVariant.Unrefracted; HeroStage.AmbientSigma = 18; HeroStage.StageCornerRadius = 8;
+        HeroStage.Variant = StageVariant.Unrefracted; HeroStage.AmbientSigma = 0; HeroStage.StageCornerRadius = 8;
         HeroStage.DecodeEdge = 1200; HeroStage.Images = images; HeroStage.Plate = HeroPlate;
         HeroFallbackCover.Pipeline = images;
         HeroFallbackCover.SourceStateChanged += UpdateArtworkAvailability;
         HeroStage.NaturalLandscape = true;
-        heroPresentation = new(HeroFrame, HeroStage);
+        HeroStage.CacheRenderedFrame = true;
+        HeroStage.FrameDiskCache = heroFrames;
+        heroPresentation = new(HeroHost, HeroFrame, HeroStage, HeroPreview, HeroPreviewContent);
         heroPresentation.SetPending(true);
         HeroStage.SourceChanged += () => UpdateHeroFrame(HeroFrame.ActualWidth);
-        // The plate can be light over bright artwork while the app is dark. Shared text styles alone
-        // do not guarantee that polarity, so use the stage foreground while art is visible and return
-        // to normal Fluent/HighContrast styles when it is not.
+        // Artwork polarity belongs to the plate's paint. Retheming the subtree would also
+        // re-resolve inherited brushes shared with the rest of the window.
         HeroStage.ForegroundChanged += brush =>
         {
-            HeroPlate.RequestedTheme = brush is null ? ElementTheme.Default
-                : HeroStage.Polarity == StagePolarity.Deepen ? ElementTheme.Dark : ElementTheme.Light;
             HeroFacts.SetTextForeground(brush);
-            if (brush is null) HeroPersonalDivider.ClearValue(Border.BackgroundProperty);
-            else HeroPersonalDivider.Background = brush;
+            if (brush is null)
+            {
+                HeroPersonalDivider.ClearValue(Border.BackgroundProperty);
+                HeroFavoriteIcon.ClearValue(FontIcon.ForegroundProperty);
+            }
+            else
+            {
+                HeroPersonalDivider.Background = brush;
+                HeroFavoriteIcon.Foreground = brush;
+            }
             foreach (var text in new[] { HeroTitle, HeroStatusText, HeroRatingText, HeroPlayText, LastPlayedText })
                 if (brush is null) text.ClearValue(TextBlock.ForegroundProperty); else text.Foreground = brush;
         };
-        Loaded += async (_, _) =>
+        Loaded += (_, _) =>
         {
             ViewModel.PropertyChanged += OnState; Recognition.PropertyChanged += OnRecognitionState; displayedDetail = null; SynchronizeHero();
-            try { if (ViewModel.SelectedId is { } id) await Launch.OpenAsync(id); } catch { ViewModel.ReportUnexpected(); }
+            _ = SynchronizeLaunchAsync();
         };
-        Unloaded += (_, _) => { ViewModel.PropertyChanged -= OnState; Recognition.PropertyChanged -= OnRecognitionState; Recognition.SelectForGame(null); Launch.Leave(); CancelCatalog(); };
+        Unloaded += (_, _) => { ViewModel.PropertyChanged -= OnState; Recognition.PropertyChanged -= OnRecognitionState; Recognition.SelectForGame(null); launchGame = null; Launch.Leave(); CancelCatalog(); };
     }
     private void OnState(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(WorkspaceViewModel.Draft) or nameof(WorkspaceViewModel.SelectedId) or nameof(WorkspaceViewModel.IsDetailsLoading)) SynchronizeHero();
+        if (e.PropertyName == nameof(WorkspaceViewModel.SelectedId)) _ = SynchronizeLaunchAsync();
+    }
+    private async Task SynchronizeLaunchAsync()
+    {
+        var selected = ViewModel.SelectedId;
+        if (selected == launchGame) return;
+        launchGame = selected;
+        try
+        {
+            if (selected is null) Launch.Leave();
+            else await Launch.OpenAsync(selected);
+        }
+        catch { ViewModel.ReportUnexpected(); }
     }
     private void SynchronizeHero()
     {
         var detail = ViewModel.Draft?.Source;
         // Cancel as soon as navigation starts, before another local detail is ready.
         if (ViewModel.IsDetailsLoading) BangumiRelated.Deactivate();
-        HeroStage.AmbientSigma = 0;
-        if (displayedGame != detail?.Id) { displayedGame = detail?.Id; SetEditing(false); }
+        if (displayedGame != detail?.Id)
+        {
+            displayedGame = detail?.Id;
+            DetailsScroll.ChangeView(null, 0, null, disableAnimation: true);
+            SetEditing(false);
+        }
         EditDetailsButton.IsEnabled = EditorCard.Visibility != Visibility.Visible && ViewModel.CanEditDetails;
         if (!ReferenceEquals(displayedDetail, detail)) {
         displayedDetail = detail;
         HeroFallbackCover.SourceKey = detail?.CoverKey;
         _ = RefreshPersonalFactsAsync();
         var work = detail?.Metadata;
-        HeroFacts.SetWork(work, detail?.Personal.Name);
         SynchronizeCatalog(detail);
         PersonalNotesText.Text = detail?.Personal.Notes ?? "";
         NotesSection.Visibility = ActionVisible(!string.IsNullOrWhiteSpace(PersonalNotesText.Text));
         LastPlayedText.Text = UiText.Get("最近游玩 · ") + LastPlayedNames.Display(detail?.LastPlayedAt, detail?.HasPlayHistory ?? false, DateTimeOffset.Now);
         ArtworkSourceText.Text = string.Join("\n", new[] { detail?.Relationship, detail?.CoverDescription, detail?.BackdropDescription });
         SourceLinks.ItemsSource = work is null ? null : CandidateDetailLinks.From(work).Select(l => new DetailSourceLink(l.Title, l.Url)).ToArray();
+        var title = detail?.Personal.Name ?? "";
+        Breadcrumb.ItemsSource = new[] { UiText.Get("书架"), title.Length > 40 ? title[..40] + "…" : title };
         }
         SynchronizeGameVideos(detail);
         if (!ViewModel.IsDetailsLoading) SynchronizeBangumi();
         SynchronizeReview();
-        var title = ViewModel.Draft?.Source.Personal.Name ?? "";
-        Breadcrumb.ItemsSource = new[] { UiText.Get("书架"), title.Length > 40 ? title[..40] + "…" : title };
     }
     private void OnRecognitionState(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     { if (e.PropertyName == nameof(RecognitionViewModel.Reviews)) SynchronizeReview(); }
@@ -139,7 +171,15 @@ public sealed partial class DetailsPage : Page, IImageHost
         finally { synchronizingReview = false; }
     }
     private void SetEditing(bool value)
-    { EditorCard.Visibility = ActionVisible(value); ReadOnlyDetails.Visibility = ActionVisible(!value); EditDetailsButton.IsEnabled = !value && ViewModel.CanEditDetails; }
+    {
+        var changing = (EditorCard.Visibility == Visibility.Visible) != value;
+        EditorCard.Visibility = ActionVisible(value);
+        ReadOnlyDetails.Visibility = ActionVisible(!value);
+        EditDetailsButton.IsEnabled = !value && ViewModel.CanEditDetails;
+        if (!changing || !IsLoaded) return;
+        InteractionMotion.StopPage(value ? ReadOnlyDetails : EditorCard);
+        InteractionMotion.EnterPage(value ? EditorCard : ReadOnlyDetails);
+    }
     private void OnEdit(object sender, RoutedEventArgs e) { SetEditing(true); NameEditor.Focus(FocusState.Programmatic); }
     internal void BeginEditing() => SetEditing(true);
     private async void OnSourceLink(object sender, RoutedEventArgs e)
@@ -150,13 +190,29 @@ public sealed partial class DetailsPage : Page, IImageHost
     private async void OnBreadcrumb(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
     { try { if (args.Index == 0 && GoBack is not null) await GoBack(); } catch { ViewModel.ReportUnexpected(); } }
     private async void OnLaunch(object sender, RoutedEventArgs e) { try { if (ActivateLaunch is not null) await ActivateLaunch(); else await Launch.LaunchAsync(); } catch { ViewModel.ReportUnexpected(); } }
-    private async void OnConfirmPosition(object sender, RoutedEventArgs e) { try { await Launch.ConfirmAsync(); } catch { ViewModel.ReportUnexpected(); } }
+    internal Func<Task>? ConfirmLaunchPosition { get; set; }
+    private async void OnConfirmPosition(object sender, RoutedEventArgs e)
+    {
+        try { if (ConfirmLaunchPosition is not null) await ConfirmLaunchPosition(); }
+        catch { ViewModel.ReportUnexpected(); }
+    }
     private void OnCancelLaunch(object sender, RoutedEventArgs e) => Launch.Cancel();
     // 完全清透 hero stage: the window routes policy (effects allowed and visible) and early release here.
-    internal void SetStagePolicy(bool effectsAllowed, bool highContrast, MaterialMode mode) { HeroStage.SetPolicy(effectsAllowed, highContrast, mode); browser?.SetStagePolicy(effectsAllowed, highContrast, mode); }
+    internal void SetStagePolicy(bool effectsAllowed, bool highContrast, MaterialMode mode)
+    {
+        heroPresentation.ApplyMotionPolicy();
+        HeroStage.SetPolicy(effectsAllowed, highContrast, mode);
+        browser?.SetStagePolicy(effectsAllowed, highContrast, mode);
+    }
     internal void ReleaseStageBeforeLeave() => HeroStage.ReleaseBeforeLeave();
     internal Task<object> AuditStageAsync() => HeroStage.AuditLifecycleAsync();
     internal object FramePresentationEvidence => new { game = ViewModel.Draft?.Source.Id, frameOpacity = HeroFrame.Opacity,
+        preview = HeroPreview.Visibility == Visibility.Visible && HeroPreview.ActualHeight > 0,
+        previewTitle = HeroPreviewTitle.Text, finalTitle = HeroTitle.Text, hostHeight = HeroHost.ActualHeight,
+        frameHeight = HeroFrame.ActualHeight, previewOpacity = HeroPreview.Opacity,
+        previewTextOpacity = HeroPreviewContent.Opacity, previewBorder = HeroPreview.BorderThickness,
+        previewLayerHeight = HeroPreview.ActualHeight,
+        revealing = heroPresentation.IsRevealing, revealCount = heroPresentation.RevealCount,
         catalogPending = heroPresentation.Pending, revealQueued = heroPresentation.Queued,
         artwork = HeroStage.CoverKey is not null, ready = HeroStage.HasCurrentPresentation,
         effective = HeroStage.Effective, stageWidth = HeroStage.ActualWidth, stageHeight = HeroStage.ActualHeight,
@@ -166,7 +222,7 @@ public sealed partial class DetailsPage : Page, IImageHost
     {
         // Reflow the existing controls; drafts, launch state and image ownership stay in place.
         var narrow = e.NewSize.Width < 720;
-        DetailsColumn.Padding = narrow ? new Thickness(16, 8, 16, 16) : new Thickness(32, 12, 32, 28);
+        DetailsColumn.Padding = narrow ? new Thickness(16, 0, 16, 16) : new Thickness(32, 0, 32, 28);
         TopHeaderBar.ColumnDefinitions[1].Width = narrow ? new GridLength(0) : GridLength.Auto;
         Grid.SetColumn(HeroActions, narrow ? 0 : 1);
         Grid.SetRow(HeroActions, narrow ? 1 : 0);
@@ -193,9 +249,19 @@ public sealed partial class DetailsPage : Page, IImageHost
     {
         UpdateHeroFrame(e.NewSize.Width);
     }
-    private void SetHeroArtwork(BannerChoice? choice) { heroArtwork = choice; HeroStage.CoverKey = choice?.Key; UpdateHeroFrame(HeroFrame.ActualWidth); }
+    private void SetHeroArtwork(BannerChoice? choice)
+    {
+        if (HeroStage.CoverKey != choice?.Key) heroPresentation.Reset();
+        heroArtwork = choice;
+        HeroStage.CoverKey = choice?.Key;
+        UpdateHeroFrame(HeroFrame.ActualWidth);
+    }
     private void OnRetryHeroArtwork(object sender, RoutedEventArgs e)
-    { HeroStage.RetryFailedImage(); HeroFallbackCover.RetryFailed(); }
+    {
+        if (HeroStage.ImageUnavailable) heroPresentation.Reset();
+        HeroStage.RetryFailedImage();
+        HeroFallbackCover.RetryFailed();
+    }
     private void UpdateArtworkAvailability()
     {
         var failedPoster = HeroFallbackCover.Visibility == Visibility.Visible && HeroFallbackCover.SourceKey is not null &&
@@ -226,6 +292,7 @@ public sealed partial class DetailsPage : Page, IImageHost
     public Visibility NoInstallations(int count) => count == 0 ? Visibility.Visible : Visibility.Collapsed;
     public Visibility ActionVisible(bool enabled) => enabled ? Visibility.Visible : Visibility.Collapsed;
     public Visibility TextVisible(string? text) => !string.IsNullOrWhiteSpace(text) ? Visibility.Visible : Visibility.Collapsed;
+    public string? LaunchHint(string? text) => string.IsNullOrWhiteSpace(text) ? null : text;
     // The accent slot shows 启动游戏 unless the existing launch state asks for confirmation (then 确认启动位置).
     public Visibility LaunchVisible(int installations, bool confirm) => installations > 0 && !confirm ? Visibility.Visible : Visibility.Collapsed;
     // Saved rating only; the editor's in-progress text never reaches the hero.

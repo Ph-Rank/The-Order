@@ -79,12 +79,18 @@ public sealed partial class SteamArtworkSource(HttpClient http, IImagePipeline i
 
 public sealed class PublicArtworkSources(params IPublicArtworkSource[] sources) : IPublicArtworkSource
 {
-    public async Task<ArtworkSupplement> ReadAsync(WorkMetadata work, CancellationToken cancellation)
+    public Task<ArtworkSupplement> ReadAsync(WorkMetadata work, CancellationToken cancellation)
+        => ReadAsync(work, cancellation, promoOnly: false);
+
+    public Task<ArtworkSupplement> ReadPromoAsync(WorkMetadata work, CancellationToken cancellation)
+        => ReadAsync(work, cancellation, promoOnly: true);
+
+    private async Task<ArtworkSupplement> ReadAsync(WorkMetadata work, CancellationToken cancellation, bool promoOnly)
     {
         var art = new List<CatalogArt>(); var covers = new List<WorkCover>(); bool complete = true;
         foreach (var source in sources)
         {
-            var result = await source.ReadAsync(work, cancellation).ConfigureAwait(false);
+            var result = await (promoOnly ? source.ReadPromoAsync(work, cancellation) : source.ReadAsync(work, cancellation)).ConfigureAwait(false);
             complete &= result.Complete; art.AddRange(result.Art); if (!result.Covers.IsDefault) covers.AddRange(result.Covers);
         }
         return new([.. art.DistinctBy(a => a.Url).Take(24)], complete, [.. covers.DistinctBy(c => c.Url).Take(24)]);

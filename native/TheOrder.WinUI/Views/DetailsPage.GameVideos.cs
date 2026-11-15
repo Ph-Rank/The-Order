@@ -6,7 +6,10 @@ public sealed partial class DetailsPage
 {
     private GameVideoView? gameVideos;
     public void ConfigureGameVideos(GameVideoReader reader, IMediaIdentityDecisions decisions)
-    { gameVideos = new(); gameVideos.Configure(reader, decisions); GameVideosHost.Content = gameVideos; }
+    {
+        gameVideos = new(); gameVideos.Configure(reader, decisions); GameVideosHost.Content = gameVideos;
+        browser?.ConfigureGameVideos(reader, decisions);
+    }
     private void SynchronizeGameVideos(GameDetails? detail)
     {
         var entry = bangumiLibrary?.Invoke()?.Entries.FirstOrDefault(x => x.Id == detail?.Id);
@@ -17,5 +20,9 @@ public sealed partial class DetailsPage
     }
     internal Task ProbeGameVideoForFixtureAsync() => gameVideos?.ProbeForFixtureAsync() ?? Task.CompletedTask;
     internal object? GameVideoEvidence => gameVideos?.Evidence;
-    internal void SuspendGameVideos() => gameVideos?.Suspend();
+    internal void SuspendGameVideos()
+    {
+        gameVideos?.Suspend();
+        browser?.SuspendGameVideos();
+    }
 }

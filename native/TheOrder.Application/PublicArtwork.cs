@@ -8,4 +8,6 @@ public interface IPublicArtworkSource
 {
     // Exact independent work IDs only. No title search, credentials or recursive relations.
     Task<ArtworkSupplement> ReadAsync(WorkMetadata work, CancellationToken cancellation);
+    Task<ArtworkSupplement> ReadPromoAsync(WorkMetadata work, CancellationToken cancellation)
+        => Task.FromResult(new ArtworkSupplement([], true));
 }

@@ -125,11 +125,11 @@ public sealed partial class InstallationsPage : Page
         for (int i = 0; i < 20 && LaunchHelpersSection.ActualHeight == 0; i++) await Task.Delay(25);
         if (!IsLoaded || ViewModel.Draft is null) return;
         InstallationList.SelectedItem = ViewModel.Installations?.Rows.FirstOrDefault(r => r.Installation.Id == ViewModel.Draft.Id);
-        LaunchHelpersSection.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = 0, AnimationDesired = false });
+        LaunchHelpersSection.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = 0, AnimationDesired = InteractionMotion.Enabled });
     }
     private InstallationRow? Selected => InstallationList.SelectedItem as InstallationRow;
     private void ShowEditor()
-    { UpdateLayout(); DraftHeading.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = 0, AnimationDesired = false }); }
+    { UpdateLayout(); DraftHeading.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = 0, AnimationDesired = InteractionMotion.Enabled }); }
     private void OnAdd(object sender, RoutedEventArgs e) { ViewModel.Edit(null); ShowEditor(); }
     private void OnEdit(object sender, RoutedEventArgs e) { if (Selected is { } row) { ViewModel.Edit(row); ShowEditor(); } }
     private void OnCancel(object sender, RoutedEventArgs e) => ViewModel.CancelDraft();
@@ -184,7 +184,7 @@ public sealed partial class InstallationsPage : Page
         {
             if (Selected is not { } row) return;
             var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "解除此游戏文件夹的关联？", Content = "游戏文件和书架中的作品、游玩记录都会保留。解除后，这部作品不再从以下文件夹启动：\n\n" + row.Installation.Folder, PrimaryButtonText = "解除关联", CloseButtonText = "保留关联", DefaultButton = ContentDialogButton.Close };
-            if (await dialog.ShowAsync() == ContentDialogResult.Primary) await ViewModel.RemoveAsync(row);
+            if (await dialog.ShowInShellAsync() == ContentDialogResult.Primary) await ViewModel.RemoveAsync(row);
         }
         catch (Exception) { Workspace.ReportUnexpected(); }
     }

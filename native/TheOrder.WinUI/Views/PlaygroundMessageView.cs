@@ -43,7 +43,8 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
     private readonly TextBlock usage = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap };
     private readonly Button copy = new() { Content = "复制", FontSize = 12, Padding = new Thickness(8, 4, 8, 4) };
     private readonly Button retry = new() { Content = "重试", FontSize = 12, Padding = new Thickness(8, 4, 8, 4), Visibility = Visibility.Collapsed };
-    private readonly StackPanel sources = new() { HorizontalAlignment = HorizontalAlignment.Stretch, Visibility = Visibility.Collapsed, Spacing = 10, Margin = new Thickness(0, 2, 0, 6) };
+    private readonly StackPanel sources = new() { HorizontalAlignment = HorizontalAlignment.Stretch, Spacing = 10, Margin = new Thickness(0, 2, 0, 6) };
+    private readonly DisclosureBody sourceSection = new();
     private readonly Button sourceToggle = new() { FontSize = 12, Padding = new Thickness(7, 3, 7, 3), Visibility = Visibility.Collapsed };
     private readonly StackPanel actions = new() { Orientation = Orientation.Horizontal, Spacing = 2 };
     private PlaygroundMessageItem? item;
@@ -73,8 +74,9 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
         copy.Content = PlaygroundAppearance.Icon("\uE8C8", 14); copy.Width = copy.Height = copy.MinWidth = copy.MinHeight = 28; copy.Padding = new Thickness(0);
         retry.Content = PlaygroundAppearance.IconLabel("\uE72C", "重试", 12);
         PlaygroundAppearance.Apply(copy, "PGIconButton"); PlaygroundAppearance.Apply(retry); PlaygroundAppearance.Apply(sourceToggle);
-        actions.Children.Add(copy); actions.Children.Add(retry); actions.Children.Add(sourceToggle); root.Children.Add(actions); root.Children.Add(usage); root.Children.Add(sources);
-        sourceToggle.Click += (_, _) => { sourcesOpen = !sourcesOpen; sources.Visibility = sourcesOpen ? Visibility.Visible : Visibility.Collapsed; UpdateSourceToggle(); };
+        sourceSection.Children.Add(sources);
+        actions.Children.Add(copy); actions.Children.Add(retry); actions.Children.Add(sourceToggle); root.Children.Add(actions); root.Children.Add(usage); root.Children.Add(sourceSection);
+        sourceToggle.Click += (_, _) => { sourceSection.IsExpanded = sourcesOpen = !sourcesOpen; UpdateSourceToggle(); };
         AutomationProperties.SetName(copy, "复制这条消息"); AutomationProperties.SetName(retry, "手动重试这轮回复");
         copy.Click += (_, _) => { if (item is not null) PlaygroundMarkdownView.Copy(item.Message.Text); };
         retry.Click += async (_, _) => { if (item is not null) { try { await item.Retry(item.Message.ConversationId); } catch { } } };
@@ -86,7 +88,7 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
     private void Bind(PlaygroundMessageItem? value)
     {
         if (item is not null) item.PropertyChanged -= ItemChanged;
-        item = value; previous = null; streamed = ""; committed = 0; sourcesOpen = false; sources.Visibility = Visibility.Collapsed; body.Children.Clear(); stream.Children.Clear();
+        item = value; previous = null; streamed = ""; committed = 0; sourceSection.IsExpanded = sourcesOpen = false; body.Children.Clear(); stream.Children.Clear();
         ClearSuggestions();
         if (item is not null) { item.PropertyChanged += ItemChanged; Update(); }
     }
@@ -152,6 +154,10 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
             if (message.Text.Length > 0) body.Children.Add(Markdown(message.Text));
             StaticRenders++;
         }
+        if (!user && !changedMessage && previous?.Status == PlaygroundMessageStatus.Generating
+            && (previous.Text.Length == 0 || item.Strict && !generating)
+            && message.Text.Length > 0 && (!item.Strict || !generating))
+            InteractionMotion.RevealContent(body, .74f);
         if (!generating && !string.IsNullOrWhiteSpace(message.SearchSuggestionsHtml) && message.Retention == PlaygroundRetention.SessionOnly)
         {
             if (suggestions is null || previous?.SearchSuggestionsHtml != message.SearchSuggestionsHtml)
@@ -174,12 +180,12 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
         if (user || changedMessage || sourcesChanged || previous?.Status != message.Status || previous?.Text != message.Text)
         {
             if (user)
-            { sourcesOpen = false; sources.Children.Clear(); sources.Visibility = sourceToggle.Visibility = Visibility.Collapsed; }
-            else if (message.Sources.IsEmpty || generating) { sources.Visibility = sourceToggle.Visibility = Visibility.Collapsed; }
+            { sourceSection.IsExpanded = sourcesOpen = false; sources.Children.Clear(); sourceToggle.Visibility = Visibility.Collapsed; }
+            else if (message.Sources.IsEmpty || generating) { sourceSection.IsExpanded = false; sourceToggle.Visibility = Visibility.Collapsed; }
             else
             {
                 sourceToggle.Visibility = Visibility.Visible; UpdateSourceToggle();
-                sources.Visibility = sourcesOpen ? Visibility.Visible : Visibility.Collapsed;
+                sourceSection.IsExpanded = sourcesOpen;
                 var list = new StackPanel { Spacing = 10 };
                 foreach (var group in citations.Entries.GroupBy(x => x.Source.Kind))
                 {

@@ -14,6 +14,51 @@ public sealed class PresentationRemediationTests
     private static LibraryQueryResult Rows(string id = "a") => new([new(id, id, "planned", null, false, "", 0, 0)], 1, [], []);
     private static WorkspaceViewModel Vm(Client client, Preferences? preferences = null, IClientTextRules? text = null, ICachedCoverRecommendationSource? covers = null) => new(client, preferences ?? new(), new("synthetic"), text ?? new LegacyClientTextRules(), covers);
 
+    [Fact] public async Task SingleEditorDraftLeavesTheShelfAndSelectionUntouchedAndCancelDoesNotWrite()
+    {
+        var client = new Client(); await using var vm = Vm(client); await vm.InitializeAsync();
+        await vm.SetQueryAsync(new(Text: "a", Sort: "name"));
+        var query = vm.Query; var selection = vm.SelectionVersion;
+        var edit = Assert.IsType<PersonalDraft>(await vm.LoadPersonalEditAsync("a"));
+        edit.Name = "cancelled name"; edit.Notes = "cancelled notes";
+        Assert.Equal(WorkspacePage.Library, vm.Page); Assert.Null(vm.SelectedId); Assert.Null(vm.Draft);
+        Assert.False(vm.IsDirty); Assert.Equal(query, vm.Query); Assert.Equal(selection, vm.SelectionVersion);
+        Assert.Equal(0, client.Saves); Assert.Equal("a", vm.Items.Single().Name);
+    }
+
+    [Fact] public async Task SingleEditorSavesTheOriginalEntryTokenWithoutNavigating()
+    {
+        var client = new Client(); await using var vm = Vm(client); await vm.InitializeAsync();
+        var edit = Assert.IsType<PersonalDraft>(await vm.LoadPersonalEditAsync("a"));
+        edit.Name = "saved name"; edit.Categories = "分类";
+        Assert.True((await vm.SavePersonalEditAsync(edit)).IsCommitted);
+        Assert.Same(edit.Source, client.SavedSource); Assert.Equal(edit.Input, client.SavedInput);
+        Assert.Equal(1, client.Saves); Assert.Equal(WorkspacePage.Library, vm.Page); Assert.Null(vm.Draft);
+    }
+
+    [Fact] public async Task LateSingleEditorReadAndSaveCannotFollowNavigationToAnotherPage()
+    {
+        var client = new Client(); await using var vm = Vm(client); await vm.InitializeAsync();
+        var edit = Assert.IsType<PersonalDraft>(await vm.LoadPersonalEditAsync("a"));
+        var waiting = Gate<GameDetails>(); client.Detail = (_, _) => waiting.Task;
+        var pending = vm.LoadPersonalEditAsync("a");
+        await vm.NavigateAsync(WorkspacePage.Settings, null, Stay);
+        waiting.SetResult(Detail("a")); Assert.Null(await pending);
+        Assert.Equal(ClientOutcome.Conflict, (await vm.SavePersonalEditAsync(edit)).Outcome);
+        Assert.Equal(0, client.Saves);
+    }
+
+    [Fact] public async Task SingleEditorConflictKeepsTheLocalDraftAndDoesNotRefreshTheShelf()
+    {
+        var client = new Client { SaveResult = new(ClientOutcome.Conflict, "changed elsewhere") };
+        await using var vm = Vm(client); await vm.InitializeAsync();
+        var edit = Assert.IsType<PersonalDraft>(await vm.LoadPersonalEditAsync("a")); edit.Name = "my changes";
+        var rows = vm.Items;
+        Assert.Equal(ClientOutcome.Conflict, (await vm.SavePersonalEditAsync(edit)).Outcome);
+        Assert.True(edit.IsDirty); Assert.Equal("my changes", edit.Name); Assert.Same(rows, vm.Items);
+        Assert.Null(vm.Draft); Assert.False(vm.IsSaving); Assert.Equal(WorkspacePage.Library, vm.Page);
+    }
+
     private static GameSummary Automatic(string id = "a", string workId = "200") => new(id, id, "planned", null, false, "", 0, 0)
         { CatalogWorkId = workId, AutomaticCover = true, CoverKey = "old-" + workId };
     private sealed class CachedCovers : ICachedCoverRecommendationSource
@@ -124,6 +169,42 @@ public sealed class PresentationRemediationTests
         client.Detail = (id, _) => Task.FromResult(Detail(id, "new input")); await vm.SaveAsync();
         delayed.SetResult(Detail("a", "stale")); await cancel;
         Assert.Equal("new input", vm.Draft!.Notes); Assert.False(vm.IsDirty);
+    }
+    [Fact]
+    public async Task StartupAppliesSavedThemeBeforeOpeningLibraryAndReadsPreferencesOnce()
+    {
+        var saved = new ClientPreferences(NativeTheme.Light, "list", "rating");
+        var preferenceReads = 0;
+        var libraryReads = 0;
+        var store = new Preferences { Load = _ => { preferenceReads++; return Task.FromResult(saved); } };
+        var client = new Client { Load = _ => { libraryReads++; return Task.FromResult(new ClientResult(ClientOutcome.Success, "")); } };
+        await using var vm = Vm(client, store);
+        await vm.PrepareStartupThemeAsync();
+        Assert.Equal(NativeTheme.Light, vm.Theme);
+        Assert.Equal(0, libraryReads);
+
+        await vm.InitializeAsync();
+        Assert.Equal(1, preferenceReads);
+        Assert.Equal(1, libraryReads);
+        Assert.Equal(saved, vm.Preferences);
+        Assert.Equal("rating", vm.Query.Sort);
+        Assert.Empty(store.Writes);
+    }
+    [Fact]
+    public async Task FailedStartupPreferenceReadIsReportedWithoutOverwritingPreferences()
+    {
+        var reads = 0;
+        var store = new Preferences { Load = _ => { reads++; throw new InvalidDataException("corrupt"); } };
+        await using var vm = Vm(new(), store);
+        await vm.PrepareStartupThemeAsync();
+        Assert.Equal(NativeTheme.System, vm.Theme);
+
+        await vm.InitializeAsync();
+        Assert.Equal(1, reads);
+        Assert.Equal(PreferenceInitialization.LoadFailed, vm.PreferenceState);
+        Assert.Equal(ClientOutcome.ValidationFailure, vm.Notice.Outcome);
+        await vm.ChangeAppearanceAsync(NativeTheme.Light, vm.Layout);
+        Assert.Empty(store.Writes);
     }
     [Theory]
     [InlineData("theme")]
@@ -290,10 +371,11 @@ public sealed class PresentationRemediationTests
         public Func<string, CancellationToken, Task<GameDetails>> Detail = (id, _) => Task.FromResult(PresentationRemediationTests.Detail(id));
         public Func<ImmutableArray<string>, BulkPersonalPatch, CancellationToken, Task<ClientResult>>? Batch;
         public ClientResult SaveResult = new(ClientOutcome.Committed, "已经保存"); public int Saves, Batches;
+        public GameDetails? SavedSource; public PersonalInput? SavedInput;
         public Task<ClientResult> LoadAsync(CancellationToken t) => Load(t);
         public Task<LibraryQueryResult> QueryAsync(LibraryQuery q, CancellationToken t) => Search(q, t);
         public Task<GameDetails> DetailsAsync(string id, CancellationToken t) => Detail(id, t);
-        public Task<ClientResult> SaveAsync(GameDetails d, PersonalInput p, CancellationToken t) { Saves++; return Task.FromResult(SaveResult); }
+        public Task<ClientResult> SaveAsync(GameDetails d, PersonalInput p, CancellationToken t) { Saves++; SavedSource = d; SavedInput = p; return Task.FromResult(SaveResult); }
         public Task<ClientResult> BatchAsync(ImmutableArray<string> ids, BulkPersonalPatch patch, CancellationToken t) { Batches++; return Batch?.Invoke(ids, patch, t) ?? Task.FromResult(SaveResult); }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

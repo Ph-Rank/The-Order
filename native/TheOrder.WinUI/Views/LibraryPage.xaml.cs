@@ -28,33 +28,7 @@ public sealed partial class LibraryPage : Page, IImageHost
     public Func<GameSummary, Task>? QuickLaunch { get; set; }
     public Func<ImmutableArray<string>, Task>? RecognizeSelected { get; set; }
     public Func<ImmutableArray<string>, Task>? RemoveSelected { get; set; }
-    public Func<Task>? OpenSettings { get; set; }
     public Func<string, Task>? OpenLaunchSettings { get; set; }
-    private RecognitionViewModel? recognition;
-    internal void ShowRecognition(RecognitionViewModel model)
-    {
-        recognition = model;
-        var p = model.Progress;
-        RecognitionStatus.Visibility = model.HasRecognitionWork ? Visibility.Visible : Visibility.Collapsed;
-        RecognitionCounts.Text = model.ProgressText; RecognitionMessage.Text = model.Message;
-        RecognitionBar.Maximum = Math.Max(1, p.Total); RecognitionBar.Value = p.Processed;
-        CancelRecognition.Visibility = model.HasRecognitionWork ? Visibility.Visible : Visibility.Collapsed;
-        UpdateNoticeRegion();
-    }
-    private void OnCancelRecognition(object sender, RoutedEventArgs e) => recognition?.CancelAll();
-    internal void ShowCatalogReminder(CatalogAccessNotice? notice)
-    { ApiReminder.Title = notice?.Title ?? ""; ApiReminder.Message = notice?.Message ?? ""; ApiReminder.IsOpen = notice is not null; UpdateNoticeRegion(); }
-    private async void OnApiSettings(object sender, RoutedEventArgs e) { if (OpenSettings is { } open) await open(); }
-    private void UpdateNoticeRegion()
-    {
-        if (NoticePanel is null) return;
-        DiscoveryNotice.Visibility = Visible(DiscoveryNotice.IsOpen);
-        ApiReminder.Visibility = Visible(ApiReminder.IsOpen);
-        var any = DiscoveryNotice.IsOpen || ApiReminder.IsOpen || RecognitionStatus.Visibility == Visibility.Visible;
-        NoticePanel.Visibility = Visible(any);
-        var narrow = ActualWidth is > 0 and < 641;
-        NoticePanel.Margin = any ? (narrow ? new Thickness(16, 12, 16, 0) : new Thickness(24, 12, 24, 0)) : new Thickness(0);
-    }
     private bool synchronizing = true, selectionMode, keyboardOpen, restorePending;
     private string? scrollKey, lastOpenedId;
     private long returnRestorationVersion;
@@ -66,15 +40,13 @@ public sealed partial class LibraryPage : Page, IImageHost
     private int maxRealized;
     private string measuredLayout = "";
     private double modeStarted;
+    private LibraryQuery? displayedQuery;
     private ListViewBase Active => ViewModel.Layout == "grid" ? GameGrid : GameList;
 
     public LibraryPage(WorkspaceViewModel viewModel, bool diagnostics, IImagePipeline images)
     {
         ViewModel = viewModel; Images = images; this.diagnostics = diagnostics; InitializeComponent();
         BuildContinueBanner();
-        DiscoveryNotice.RegisterPropertyChangedCallback(InfoBar.IsOpenProperty, (_, _) => UpdateNoticeRegion());
-        ApiReminder.RegisterPropertyChangedCallback(InfoBar.IsOpenProperty, (_, _) => UpdateNoticeRegion());
-        UpdateNoticeRegion();
         foreach (var list in new ListViewBase[] { GameGrid, GameList })
         {
             list.AddHandler(PointerPressedEvent, new PointerEventHandler(OnListPointerPressed), true);
@@ -87,7 +59,7 @@ public sealed partial class LibraryPage : Page, IImageHost
     private void OnFilterKey(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter) { e.Handled = true; FilterFlyout.Hide(); FocusResults(); } }
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        ViewModel.PropertyChanged += OnState; Synchronize();
+        ViewModel.PropertyChanged += OnState; Synchronize(); displayedQuery = ViewModel.Query;
         if (diagnostics) { DiagnosticsText.Visibility = Visibility.Visible; LayoutUpdated += OnLayout; }
         if (restorePending) _ = RestoreReturnAsync();
     }
@@ -105,6 +77,11 @@ public sealed partial class LibraryPage : Page, IImageHost
             if (selectionMode && selected.Count > 0)
                 foreach (var item in ViewModel.Items.Where(i => selected.Contains(i.Id)))
                     if (!Active.SelectedItems.Contains(item)) Active.SelectedItems.Add(item);
+            if (e.PropertyName == nameof(WorkspaceViewModel.Items) && displayedQuery != ViewModel.Query)
+            {
+                displayedQuery = ViewModel.Query;
+                if (ViewModel.Items.Count > 0) InteractionMotion.RevealContent(Active, .72f);
+            }
         }
         if (e.PropertyName is nameof(WorkspaceViewModel.IsEmpty) or nameof(WorkspaceViewModel.EmptyText) or nameof(WorkspaceViewModel.Items)) UpdateEmptyActions();
         UpdateSelectionChrome();
@@ -124,9 +101,24 @@ public sealed partial class LibraryPage : Page, IImageHost
     private void OnSearchSubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
     { SearchFlyout.Hide(); FocusResults(); }
     // ---- Query chrome ----------------------------------------------------------------------------------
-    private static string Value(ComboBox box, string fallback = "all") => (box.SelectedItem as ComboBoxItem)?.Tag as string ?? fallback;
-    private static void Select(ComboBox box, string value) => box.SelectedItem = box.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (i.Tag as string ?? "") == value);
+    private static string Value(SelectedFirstComboBox box, string fallback = "all") => (box.SelectedOption as ComboBoxItem)?.Tag as string ?? fallback;
+    private static void Select(SelectedFirstComboBox box, string value) => box.SelectedOption = box.Options.OfType<ComboBoxItem>().FirstOrDefault(i => (i.Tag as string ?? "") == value);
     private static readonly Dictionary<string, string> sortNames = new() { ["added"] = UiText.Get("最近添加"), ["recent"] = UiText.Get("最近游玩"), ["name"] = UiText.Get("名称"), ["rating"] = UiText.Get("我的评分"), ["playtime"] = UiText.Get("游玩时长") };
+    private RadioMenuFlyoutItem[]? primarySortItems;
+
+    private void OnSortMenuOpening(object sender, object args)
+    {
+        primarySortItems ??= SortMenu.Items.OfType<RadioMenuFlyoutItem>().ToArray();
+        var sort = ViewModel.Query.Sort;
+        var items = primarySortItems.OrderByDescending(item => (item.Tag as string) == sort).ToArray();
+        if (!SortMenu.Items.SequenceEqual(items))
+        {
+            SortMenu.Items.Clear();
+            foreach (var item in items) SortMenu.Items.Add(item);
+        }
+        foreach (var item in items) item.IsChecked = (item.Tag as string) == sort;
+    }
+
     private void Synchronize()
     {
         synchronizing = true;
@@ -157,12 +149,12 @@ public sealed partial class LibraryPage : Page, IImageHost
         ListModeButton.IsChecked = ViewModel.Layout == "list";
         var query = ViewModel.Query;
         var chips = new List<(string Label, Func<LibraryQuery, LibraryQuery> Remove)>();
-        if (query.View != "all") chips.Add(((ViewChoice.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? query.View, q => q with { View = "all" }));
+        if (query.View != "all") chips.Add(((ViewChoice.SelectedOption as ComboBoxItem)?.Content?.ToString() ?? query.View, q => q with { View = "all" }));
         if (query.Status != "all") chips.Add((StatusNames.Display(query.Status), q => q with { Status = "all" }));
         if (query.Favorites) chips.Add((UiText.Get("只看收藏"), q => q with { Favorites = false }));
         if (!string.IsNullOrWhiteSpace(query.Category)) chips.Add((UiText.Get("分类：") + query.Category, q => q with { Category = "" }));
         if (!string.IsNullOrWhiteSpace(query.Tag)) chips.Add((UiText.Get("标签：") + query.Tag, q => q with { Tag = "" }));
-        if (!string.IsNullOrWhiteSpace(query.MinRating)) chips.Add(((MinimumChoice.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? query.MinRating, q => q with { MinRating = "" }));
+        if (!string.IsNullOrWhiteSpace(query.MinRating)) chips.Add(((MinimumChoice.SelectedOption as ComboBoxItem)?.Content?.ToString() ?? query.MinRating, q => q with { MinRating = "" }));
         FilterChips.Children.Clear();
         foreach (var (label, remove) in chips)
         {
@@ -204,15 +196,15 @@ public sealed partial class LibraryPage : Page, IImageHost
     private async void OnList(object sender, RoutedEventArgs e) { await ViewModel.ChangeAppearanceAsync(ViewModel.Theme, "list"); UpdateBrowsingChrome(); }
     private async void OnReload(object sender, RoutedEventArgs e) { if (ResolveUnsaved is null || await ResolveUnsaved()) await ViewModel.ReloadAsync(); }
     private async void OnImport(object sender, RoutedEventArgs e) { try { if (OpenImport is not null) await OpenImport(); } catch (Exception) { ViewModel.ReportUnexpected(); } }
-    private async void OnClear(object sender, RoutedEventArgs e) { SavedChoice.SelectedItem = null; await ViewModel.SetQueryAsync(new(Sort: ViewModel.Query.Sort)); }
-    private async void OnSavedFilter(object sender, SelectionChangedEventArgs e) { if (SavedChoice.SelectedItem is SavedFilter saved) await ViewModel.SetQueryAsync(saved.Query); }
+    private async void OnClear(object sender, RoutedEventArgs e) { SavedChoice.SelectedOption = null; await ViewModel.SetQueryAsync(new(Sort: ViewModel.Query.Sort)); }
+    private async void OnSavedFilter(object sender, SelectionChangedEventArgs e) { if (SavedChoice.SelectedOption is SavedFilter saved) await ViewModel.SetQueryAsync(saved.Query); }
     private void OnFinishFilter(object sender, RoutedEventArgs e) => FilterFlyout.Hide();
     private async void OnSaveFilter(object sender, RoutedEventArgs e)
     {
         FilterFlyout.Hide();
         var name = new TextBox { Header = UiText.Get("名称"), PlaceholderText = UiText.Get("例如：周末想玩的作品"), MaxLength = 80 };
         var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = UiText.Get("保存当前筛选"), Content = name, PrimaryButtonText = UiText.Get("保存"), CloseButtonText = UiText.Get("取消"), DefaultButton = ContentDialogButton.Primary };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary) await ViewModel.SaveFilterAsync(name.Text);
+        if (await dialog.ShowInShellAsync() == ContentDialogResult.Primary) await ViewModel.SaveFilterAsync(name.Text);
     }
     private void OnFilterOpening(object? sender, object e) => ConstrainFilterHeight();
     private void ConstrainFilterHeight()
@@ -242,7 +234,7 @@ public sealed partial class LibraryPage : Page, IImageHost
     private void OnLibrarySizeChanged(object sender, SizeChangedEventArgs e)
     {
         var compact = e.NewSize.Width < 900; var narrow = e.NewSize.Width < 641;
-        HeaderRow.Padding = narrow ? new Thickness(16, 12, 12, 8) : new Thickness(32, 16, 24, 8);
+        HeaderRow.Padding = narrow ? new Thickness(16, 0, 12, 8) : new Thickness(32, 0, 24, 8);
         // Keep the page title whole when the compact command row consumes the available width.
         // The second Auto row is empty at desktop widths, preserving the normal layout.
         HeaderRow.RowSpacing = narrow ? 8 : 0;
@@ -266,7 +258,6 @@ public sealed partial class LibraryPage : Page, IImageHost
         GameGrid.Padding = narrow ? new Thickness(6, 0, 6, 16) : new Thickness(18, 0, 18, 24);
         GameList.Padding = narrow ? new Thickness(8, 0, 8, 16) : new Thickness(24, 0, 24, 24);
         ListHeader.Margin = new Thickness(GameList.Padding.Left, 0, GameList.Padding.Right, 0);
-        UpdateNoticeRegion();
         UpdateListHeaderColumns(ListHeader.ActualWidth);
         if (FilterFlyout.IsOpen) ConstrainFilterHeight();
     }
@@ -494,6 +485,7 @@ public sealed partial class LibraryPage : Page, IImageHost
         if (!selectionMode)
         {
             menu.Items.Add(Entry(UiText.Get("打开详情"), "", () => OpenItem(item), accelerator: "Enter"));
+            menu.Items.Add(Entry(UiText.Get("编辑"), "", () => EditItemAsync(item), ViewModel.CanEdit));
             menu.Items.Add(Entry(UiText.Get("启动游戏"), "", () => QuickLaunch?.Invoke(item) ?? Task.CompletedTask, item.InstallationCount > 0, "Ctrl+Enter"));
             menu.Items.Add(Entry("启动设置（LE / Magpie）", "", () => OpenLaunchSettings?.Invoke(item.Id) ?? Task.CompletedTask, item.InstallationCount > 0 && ViewModel.CanEdit));
             menu.Items.Add(new MenuFlyoutSeparator());
@@ -530,21 +522,37 @@ public sealed partial class LibraryPage : Page, IImageHost
         catch (Exception) { ViewModel.ReportUnexpected(); }
     }
     private async void OnBatch(object sender, RoutedEventArgs e) => await BatchEdit();
+    private bool editingItem;
+    private async Task EditItemAsync(GameSummary item)
+    {
+        if (editingItem || !ViewModel.CanEdit) return;
+        editingItem = true;
+        try
+        {
+            if (ResolveUnsaved is not null && !await ResolveUnsaved()) return;
+            if (await ViewModel.LoadPersonalEditAsync(item.Id) is not { } draft || !IsLoaded) return;
+            await new PersonalEditDialog(draft, ViewModel.SavePersonalEditAsync)
+            {
+                XamlRoot = XamlRoot, RequestedTheme = ActualTheme
+            }.ShowInShellAsync();
+        }
+        finally { editingItem = false; }
+    }
     private async Task BatchEdit()
     {
         try
         {
             var ids = Active.SelectedItems.Cast<GameSummary>().Select(i => i.Id).ToImmutableArray();
             if (ids.Length is < 1 or > 1000)
-            { await new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = UiText.Get("请选择作品"), Content = UiText.Get("批量修改支持 1 至 1000 个条目。"), CloseButtonText = UiText.Get("知道了") }.ShowAsync(); return; }
-            var status = new ComboBox { Header = UiText.Get("游玩状态"), ItemsSource = new[] { UiText.Get("保持不变") }.Concat(TheOrder.Domain.GameProgress.Ordered.Select(StatusNames.Display)).ToArray(), SelectedIndex = 0 };
-            var favorite = new ComboBox { Header = UiText.Get("收藏"), ItemsSource = new[] { UiText.Get("保持不变"), UiText.Get("收藏"), UiText.Get("取消收藏") }, SelectedIndex = 0 };
+            { await new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = UiText.Get("请选择作品"), Content = UiText.Get("批量修改支持 1 至 1000 个条目。"), CloseButtonText = UiText.Get("知道了") }.ShowInShellAsync(); return; }
+            var status = new SelectedFirstComboBox { Header = UiText.Get("游玩状态"), OptionsSource = new[] { UiText.Get("保持不变") }.Concat(TheOrder.Domain.GameProgress.Ordered.Select(StatusNames.Display)).ToArray(), OptionIndex = 0 };
+            var favorite = new SelectedFirstComboBox { Header = UiText.Get("收藏"), OptionsSource = new[] { UiText.Get("保持不变"), UiText.Get("收藏"), UiText.Get("取消收藏") }, OptionIndex = 0 };
             var categories = new TextBox { Header = UiText.Get("分类（逗号或换行分隔）") }; var tags = new TextBox { Header = UiText.Get("个人标签（逗号或换行分隔）") };
             var remove = new CheckBox { Content = UiText.Get("移除这些分类和标签（默认追加）") };
             var panel = new StackPanel { Spacing = 12 }; foreach (var element in new UIElement[] { status, favorite, categories, tags, remove }) panel.Children.Add(element);
             var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = UiText.Format($"批量修改 {ids.Length} 部作品"), Content = panel, PrimaryButtonText = UiText.Get("保存一次修改"), CloseButtonText = UiText.Get("取消"), DefaultButton = ContentDialogButton.Primary };
-            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-                await ViewModel.ApplyBatchAsync(ids, PreferenceValidation.Statuses[status.SelectedIndex], new[] { "keep", "yes", "no" }[favorite.SelectedIndex], categories.Text, tags.Text, remove.IsChecked == true);
+            if (await dialog.ShowInShellAsync() == ContentDialogResult.Primary)
+                await ViewModel.ApplyBatchAsync(ids, PreferenceValidation.Statuses[status.OptionIndex], new[] { "keep", "yes", "no" }[favorite.OptionIndex], categories.Text, tags.Text, remove.IsChecked == true);
         }
         catch (Exception) { ViewModel.ReportUnexpected(); }
     }
@@ -555,7 +563,11 @@ public sealed partial class LibraryPage : Page, IImageHost
     }
 
     // A small portrait cover preserves the selected artwork instead of magnifying it into a banner.
-    private readonly CoverPresenter continueCover = new() { Width = 84, Height = 112, ImageCornerRadius = 6, VerticalAlignment = VerticalAlignment.Center };
+    private readonly CoverPresenter continueCover = new()
+    {
+        Width = 84, Height = 112, ImageCornerRadius = 6, VerticalAlignment = VerticalAlignment.Center,
+        RetainImageOnUnload = true
+    };
     private readonly Border continueHost = new() { Margin = new Thickness(6, 4, 6, 14) };
     private readonly TextBlock continueTitle = new() { TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.Wrap, MaxLines = 2 };
     private readonly TextBlock continueMeta = new() { TextWrapping = TextWrapping.Wrap };
@@ -589,7 +601,7 @@ public sealed partial class LibraryPage : Page, IImageHost
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(continueHost, UiText.Get("继续游玩"));
     }
     // Shown only for the unfiltered library outside selection mode; the game is the most recently played local
-    // entry (existing LastPlayedAt). The banner is detached when hidden so its renderer is released.
+    // entry (existing LastPlayedAt). Filtering or selection clears the banner's cover.
     private void UpdateContinue()
     {
         var q = ViewModel.Query;
@@ -604,19 +616,18 @@ public sealed partial class LibraryPage : Page, IImageHost
         continueGame = candidate;
         var grid = ViewModel.Layout == "grid";
         object? gridHeader = candidate is not null && grid ? continueHost : null, listHeader = candidate is not null && !grid ? continueHost : null;
-        if (candidate is null) continueCover.SourceKey = null;
         if (!ReferenceEquals(GameGrid.Header, gridHeader)) { if (gridHeader is null) GameGrid.Header = null; }
         if (!ReferenceEquals(GameList.Header, listHeader)) { if (listHeader is null) GameList.Header = null; }
-        if (gridHeader is not null && !ReferenceEquals(GameGrid.Header, gridHeader)) GameGrid.Header = gridHeader;
-        if (listHeader is not null && !ReferenceEquals(GameList.Header, listHeader)) GameList.Header = listHeader;
+        continueCover.SourceKey = candidate?.CoverKey;
         if (candidate is null) return;
         continueTitle.Text = candidate.Name;
         continueMeta.Text = UiText.Format($"上次游玩 {candidate.LastPlayedText} · 共 {LibraryFormat.PlayTime(candidate.PlaySeconds)}");
         continueHost.Margin = grid ? new Thickness(6, 4, 6, 14) : new Thickness(0, 4, 0, 14);
-        continueCover.SourceKey = candidate.CoverKey;
+        if (gridHeader is not null && !ReferenceEquals(GameGrid.Header, gridHeader)) GameGrid.Header = gridHeader;
+        if (listHeader is not null && !ReferenceEquals(GameList.Header, listHeader)) GameList.Header = listHeader;
     }
     internal void SetStagePolicy(bool effectsAllowed, bool highContrast, MaterialMode mode) { } // Theme resources handle the ordinary card.
-    internal void ReleaseStageBeforeLeave() => continueCover.SourceKey = null;
+    internal void ReleaseContinueCover() => continueCover.SourceKey = null;
     internal object StageEvidence => new { placement = UiText.Get("Library 继续游玩"), visible = continueGame is not null, game = continueGame?.Id, selectionMode, layout = "cover-and-text", material = "none", cover = continueCover.SourceStatus };
     internal Task<object> AuditStageAsync() => Task.FromResult(StageEvidence);
 

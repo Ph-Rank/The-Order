@@ -174,7 +174,7 @@ public sealed partial class AniListDetailsViewModel(IBangumiSubjectDetailsReader
     {
         var result = await reader.LoadAsync(Media.Id, Media.Kind, false, PeoplePages.Last().Details.PeoplePage + 1, token); Require(token);
         PeoplePages = PeoplePages.Append(result).ToArray(); State = resumeState; Message = result.Warning ?? "";
-    });
+    }, preserveDisplayedOnFailure: true);
     public Task RefreshAsync() => !CanLoad ? Task.CompletedTask : Media is not { } media
         ? Item is { } item ? OpenAsync(item) : Task.CompletedTask : RunAsync(async token =>
         {
@@ -191,7 +191,7 @@ public sealed partial class AniListDetailsViewModel(IBangumiSubjectDetailsReader
             State = unconfirmedPreview ? AniListDetailState.Preview : AniListDetailState.Ready; Message = result.Warning ?? "";
         });
     private void Display(AniListResult result) { Displayed = result; Media = result.Details.Media; PeoplePages = [result]; }
-    private async Task RunAsync(Func<CancellationToken, Task> action, CancellationToken cancellation = default)
+    private async Task RunAsync(Func<CancellationToken, Task> action, CancellationToken cancellation = default, bool preserveDisplayedOnFailure = false)
     {
         if (disposed || !active || IsBusy) return;
         Stop(); var version = generation; using var pending = CancellationTokenSource.CreateLinkedTokenSource(cancellation); request = pending;
@@ -199,11 +199,11 @@ public sealed partial class AniListDetailsViewModel(IBangumiSubjectDetailsReader
         Message = Bridge is null ? "正在读取作品基础资料…" : "正在读取 AniList 资料…"; Notify();
         bool Owns() => active && !disposed && generation == version;
         try { await action(pending.Token); if (!Owns() || pending.IsCancellationRequested) return; }
-        catch (OperationCanceledException) { if (Owns()) { State = AniListDetailState.Cancelled; Message = "已取消读取，已有资料保留。"; } }
+        catch (OperationCanceledException) { if (Owns()) { State = preserveDisplayedOnFailure ? oldState : AniListDetailState.Cancelled; Message = "已取消读取，已有资料保留。"; } }
         catch (Exception e)
         {
             if (!Owns() || pending.IsCancellationRequested) return;
-            if (e is AniListException { Failure: AniListFailure.Unavailable or AniListFailure.InvalidResponse or AniListFailure.ResponseTooLarge })
+            if (!preserveDisplayedOnFailure && e is AniListException { Failure: AniListFailure.Unavailable or AniListFailure.InvalidResponse or AniListFailure.ResponseTooLarge })
             {
                 Displayed = null; Media = null; PeoplePages = []; trustedBridge = false;
                 SelectionReason = unconfirmedPreview ? "条目预览 · 资料暂不可用" : "";

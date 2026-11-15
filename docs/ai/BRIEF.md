@@ -1,5 +1,11 @@
 # The Order：1.3.0-beta.2 源码与功能基线
 
+## 1.3.1-beta.1 发布范围
+
+此测试版包含后续日用版的游戏内助手、动态模型目录、离线使用帮助、状态页以及发现和书架的显示改进。
+
+[版本说明](../release/1.3.1-beta.1/CHANGELOG.md)随源码提供。
+
 本发布分支使用 WinUI 3、.NET 10、C# 和原生 Windows 组件。根目录旧 Electron/Vue 内容作为历史参考保留；当前应用入口是 `native/TheOrder.WinUI`，构建以 DEVELOPMENT.md 和锁文件为准。
 
 ## 当前功能

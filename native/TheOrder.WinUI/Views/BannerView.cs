@@ -17,6 +17,7 @@ public sealed class BannerView : UserControl
     private readonly Border plate = new() { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom };
     private readonly TextBlock title = new() { TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis,
         FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, MaxLines = 1 };
+    private readonly TextBlock previewTitle = new() { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Bottom };
     private readonly CatalogFactsView facts = new();
     public BannerChoice? Choice { get; private set; }
     public Func<CatalogEntityRef, Task>? Browse { get => facts.Browse; set => facts.Browse = value; }
@@ -25,15 +26,20 @@ public sealed class BannerView : UserControl
         this.images = images; this.registry = registry;
         stage = new() { Images = images, Plate = plate, AdaptiveLandscape = true, NaturalLandscape = true, AmbientSigma = 0,
             DecodeEdge = 1200, StageCornerRadius = 8, Variant = StageVariant.Unrefracted };
-        presentation = new(frame, stage);
+        previewTitle.Style = (Style)Microsoft.UI.Xaml.Application.Current.Resources["WorkTitleStyle"];
+        var preview = new Border { Style = (Style)Microsoft.UI.Xaml.Application.Current.Resources["SurfaceStyle"],
+            Child = previewTitle, Padding = new Thickness(24, 18, 24, 18), IsHitTestVisible = false };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetAccessibilityView(preview, Microsoft.UI.Xaml.Automation.Peers.AccessibilityView.Raw);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetAccessibilityView(previewTitle, Microsoft.UI.Xaml.Automation.Peers.AccessibilityView.Raw);
+        presentation = new(frame, stage, preview);
         var text = new StackPanel { Spacing = 6 }; text.Children.Add(title); text.Children.Add(facts); plate.Child = text;
         frame.RowDefinitions.Add(new() { Height = GridLength.Auto }); frame.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        frame.Children.Add(stage); layout.Children.Add(plate); Canvas.SetZIndex(layout, 10); frame.Children.Add(layout); Content = frame;
+        frame.Children.Add(stage); layout.Children.Add(plate); Canvas.SetZIndex(layout, 10); frame.Children.Add(layout);
+        Content = new Grid { Children = { preview, frame } };
         stage.SourceChanged += () => UpdateFrame(ActualWidth);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(this, "CatalogHero");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetHeadingLevel(title, Microsoft.UI.Xaml.Automation.Peers.AutomationHeadingLevel.Level1);
         stage.ForegroundChanged += brush => {
-            plate.RequestedTheme = brush is null ? ElementTheme.Default : stage.Polarity == StagePolarity.Deepen ? ElementTheme.Dark : ElementTheme.Light;
             facts.SetTextForeground(brush);
             if (brush is null) title.ClearValue(TextBlock.ForegroundProperty); else title.Foreground = brush;
         };
@@ -41,7 +47,7 @@ public sealed class BannerView : UserControl
         Unloaded += (_, _) => { if (!IsLoaded) ReleaseBeforeLeave(); };
         SizeChanged += (_, e) => UpdateFrame(e.NewSize.Width);
     }
-    public void SetContent(WorkMetadata work) { Choice = null; stage.CoverKey = null; title.Text = CatalogLanguage.Title(work); facts.SetWork(work, title.Text); UpdateFrame(ActualWidth); }
+    public void SetContent(WorkMetadata work) { Choice = null; stage.CoverKey = null; previewTitle.Text = title.Text = CatalogLanguage.Title(work); facts.SetWork(work, title.Text); UpdateFrame(ActualWidth); }
     public void SetPolicy(bool allowed, bool highContrast, MaterialMode mode) => stage.SetPolicy(allowed, highContrast, mode);
     public void ReleaseBeforeLeave() { stage.ReleaseBeforeLeave(); }
     public void SetPresentation(CatalogPresentationEntry cached)

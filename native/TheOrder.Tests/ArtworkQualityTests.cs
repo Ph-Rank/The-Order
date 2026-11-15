@@ -83,6 +83,47 @@ public sealed class ArtworkQualityTests
         Assert.True((await source.ReadAsync(work, default)).Complete); Assert.Equal(1, calls);
         Assert.Empty((await source.ReadAsync(work with { References = work.References.Add(new("vndb", "v1", null)) }, default)).Art); Assert.Equal(1, calls);
     }
+    [Fact]
+    public async Task ReleasePromosRequireOfficialDigitalArtForTheExactVn()
+    {
+        int calls = 0;
+        using var http = new HttpClient(new OnlineTransportTests.Handler(async (request, token) =>
+        {
+            calls++;
+            Assert.Equal("https://api.vndb.org/kana/release", request.RequestUri!.AbsoluteUri);
+            Assert.Null(request.Headers.Authorization);
+            using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(token));
+            var filters = body.RootElement.GetProperty("filters");
+            Assert.Equal("v26523", filters[1][2][2].GetString());
+            Assert.Equal("dig", filters[5][2].GetString());
+            return OnlineTransportTests.Json("""
+                {"results":[
+                  {"id":"r101","official":true,"patch":false,"vns":[{"id":"v26523","rtype":"complete"}],"images":[
+                    {"id":"cv1","url":"https://t.vndb.org/cv/01/1.jpg","dims":[1200,675],"sexual":0,"violence":0,"type":"dig","vn":null,"photo":false},
+                    {"id":"cv2","url":"https://t.vndb.org/cv/02/2.jpg","dims":[1200,675],"sexual":0,"violence":0,"type":"pkgback","vn":null,"photo":false},
+                    {"id":"cv3","url":"https://t.vndb.org/cv/03/3.jpg","dims":[1200,675],"sexual":0,"violence":0,"type":"dig","vn":null,"photo":true},
+                    {"id":"cv4","url":"https://t.vndb.org/cv/04/4.jpg","dims":[1200,675],"sexual":1,"violence":0,"type":"dig","vn":null,"photo":false},
+                    {"id":"cv5","url":"https://t.vndb.org/cv/05/5.jpg","dims":[675,1200],"sexual":0,"violence":0,"type":"dig","vn":null,"photo":false}
+                  ]},
+                  {"id":"r102","official":true,"patch":false,"vns":[{"id":"v26523","rtype":"complete"},{"id":"v2","rtype":"complete"}],"images":[
+                    {"id":"cv6","url":"https://t.vndb.org/cv/06/6.jpg","dims":[1200,675],"sexual":0,"violence":0,"type":"dig","vn":null,"photo":false},
+                    {"id":"cv7","url":"https://t.vndb.org/cv/07/7.jpg","dims":[1200,675],"sexual":0,"violence":0,"type":"dig","vn":"v2","photo":false}
+                  ]},
+                  {"id":"r103","official":false,"patch":false,"vns":[{"id":"v26523","rtype":"complete"}],"images":[
+                    {"id":"cv8","url":"https://t.vndb.org/cv/08/8.jpg","dims":[1200,675],"sexual":0,"violence":0,"type":"dig","vn":"v26523","photo":false}
+                  ]}
+                ]}
+                """);
+        }));
+        var source = new VndbArtworkSource(http);
+        var work = Work() with { References = [new("vndb", "v26523", null), new("vndb", "r101", null)] };
+        var result = await source.ReadPromoAsync(work, default);
+        Assert.True(result.Complete);
+        Assert.Equal(new CatalogArt("https://t.vndb.org/cv/01/1.jpg", 1200, 675, ArtworkSources.VndbPromoKind, "VNDB r101"), Assert.Single(result.Art));
+        Assert.True(result.Covers.IsDefaultOrEmpty);
+        Assert.Empty((await source.ReadPromoAsync(work with { References = work.References.Add(new("vndb", "v2", null)) }, default)).Art);
+        Assert.Equal(1, calls);
+    }
     [Fact] public async Task PublicFailureCannotBecomeSuccessfulEmptyArtwork()
     {
         using var http = new HttpClient(new OnlineTransportTests.Handler((_, _) => throw new HttpRequestException("synthetic offline")));

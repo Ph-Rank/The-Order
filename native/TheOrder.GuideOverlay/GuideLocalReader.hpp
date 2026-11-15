@@ -14,7 +14,7 @@ struct State {
     Point previous{};Rect canvas{};std::vector<Hit> hits;
     void changed(LONG value,const Reading& r){if(revision!=value){revision=value;scrollX=scrollY=0;zoom=r.zoom;filesOpen=pagesOpen=dragging=false;restorePending=true;}}
     bool wheel(Point p,float delta,Connection* c=nullptr){if(!canvas.has(p))return false;if(filesOpen)fileFirst=std::max(0,fileFirst-int(delta*3));else if(pagesOpen)pageFirst=std::max(0,pageFirst-int(delta*12));else if(c&&!pdfPage(c->document.reading)&&delta<0&&scrollY>=maximumY-.5f&&c->document.reading.page+1<c->document.reading.pages)c->request(5,1);else if(c&&!pdfPage(c->document.reading)&&delta>0&&scrollY<=.5f&&c->document.reading.page>0)c->request(5,-1);else scrollY=std::clamp(scrollY-delta*90*scale,0.f,maximumY);return true;}
-    bool navigate(int key,Connection& c){const auto& r=c.document.reading;if(r.pages<1||!c.action(3))return false;
+    bool navigate(int key,Connection& c){const auto& r=c.document.reading;if(r.pages<1||!c.navigate())return false;
         if(key==VK_RIGHT)return r.page+1<r.pages&&c.request(4,r.page+1);if(key==VK_LEFT)return r.page>0&&c.request(4,r.page-1);
         if(key==VK_HOME){scrollY=0;return true;}if(key==VK_END){scrollY=maximumY;return true;}
         if(key==VK_NEXT||key==VK_SPACE){if(scrollY>=maximumY-.5f&&r.page+1<r.pages)return c.request(5,1);scrollY=std::min(maximumY,scrollY+canvas.h*.85f);return true;}
@@ -28,26 +28,42 @@ template<class P> void control(P& p,State& state,std::string label,Rect box,int 
     p.box(box,light?Color{241,242,243,255}:Color{43,46,53,255},active?Color{72,194,245,255}:light?Color{80,90,110,35}:Color{210,220,235,28},3*state.scale,active?1.5f:1.f);
     p.text(label,box,size,light?Color{32,34,39,255}:Color{235,238,243,255},true,active);state.hits.push_back({box,command,argument});
 }
-template<class P> void sourceBar(P& p,State& state,const Document& d,Header* h,Rect area,float scale,bool light){
-    state.scale=scale;state.hits.clear();const float gap=6*scale,height=24*scale;
-    const char* names[]={"网络攻略","本地攻略","说明文件"};const float width=std::min(78*scale,(area.w-2*gap)/3);
-    for(int i=0;i<3;++i)control(p,state,names[i],{area.x+i*(width+gap),area.y,width,height},2,i,h->channel==i,light,12*scale);
-    (void)d;
+inline int sourceCount(const Document& document,const Header& header) {
+    return document.reading.present?((header.sourceFlags&8)?4:3):0;
+}
+template<class P> void sourceBar(P& p,State& state,Header* h,Rect area,int count,float scale,bool light){
+    state.scale=scale;state.hits.clear();
+    if(!count)return;
+    const float gap=4*scale,width=(area.w-(count-1)*gap)/count;
+    const char* names[]={"网络攻略","本地攻略","说明文件","对话"};
+    for(int i=0;i<count;++i)
+        control(p,state,names[i],{area.x+i*(width+gap),area.y,width,area.h},2,i,h->channel==i,light,12*scale);
 }
 template<class P> void render(P& p,State& state,const Document& d,Header* h,Rect area,float scale,bool light){
     const auto& r=d.reading;state.changed(h->sequence,r);state.scale=scale;
+    const auto firstHit=state.hits.size();
     const Color readingInk=light?Color{37,40,46,255}:Color{233,237,244,255},readingMuted=light?Color{91,99,111,255}:Color{164,174,190,255},line=light?Color{80,90,110,36}:Color{200,213,235,30};
-    const float height=24*scale,gap=6*scale;float fileWidth=std::max(70*scale,area.w-282*scale);bool narrow=area.w<370*scale;
-    if(narrow)fileWidth=area.w;
-    control(p,state,r.files.empty()?"选择文件":r.files[std::clamp(r.file,0,int(r.files.size())-1)]+"  v",{area.x,area.y,fileWidth,height},10,0,false,light,13*scale);
-    float toolsY=area.y+(narrow?30*scale:0),x=narrow?area.x:area.x+fileWidth+gap;
-    control(p,state,"‹",{x,toolsY,30*scale,height},4,std::max(0,r.page-1),false,light,17*scale);x+=34*scale;
-    control(p,state,std::to_string(r.pages?r.page+1:0)+" / "+std::to_string(r.pages),{x,toolsY,66*scale,height},14,0,false,light,12*scale);x+=70*scale;
-    control(p,state,"›",{x,toolsY,30*scale,height},4,std::min(std::max(0,r.pages-1),r.page+1),false,light,17*scale);x+=38*scale;
-    control(p,state,"−",{x,toolsY,30*scale,height},11,0,false,light,15*scale);x+=34*scale;
-    control(p,state,"+",{x,toolsY,30*scale,height},12,0,false,light,15*scale);x+=34*scale;
-    control(p,state,"适应",{x,toolsY,46*scale,height},13,0,false,light,12*scale);
-    const float top=toolsY+30*scale;state.canvas={area.x,top,area.w,std::max(1.f,area.y+area.h-top)};
+    const bool compact=area.w<640*scale||area.h<440*scale;
+    const float height=(compact?23.f:26.f)*scale,gap=(compact?4.f:6.f)*scale;
+    const float compactButton=(compact?24.f:30.f)*scale,page=(compact?63.f:72.f)*scale,fit=44*scale;
+    const float tools=4*compactButton+page+fit+5*gap;
+    const bool twoRows=area.w<tools+gap+100*scale;
+    const float fileWidth=twoRows?area.w:std::min(440*scale,area.w-tools-gap);
+    control(p,state,r.files.empty()?"选择文件":r.files[std::clamp(r.file,0,int(r.files.size())-1)]+"  ▾",
+        {area.x,area.y,fileWidth,height},10,0,false,light,13*scale);
+    const float toolsY=area.y+(twoRows?height+gap:0);
+    float x=area.x+(twoRows?0:fileWidth+gap);
+    auto tool=[&](std::string label,float width,int command,int argument,float font){
+        control(p,state,label,{x,toolsY,width,height},command,argument,false,light,font*scale);
+        x+=width+gap;
+    };
+    tool("‹",compactButton,4,std::max(0,r.page-1),17);
+    tool(std::to_string(r.pages?r.page+1:0)+" / "+std::to_string(r.pages),page,14,0,12);
+    tool("›",compactButton,4,std::min(std::max(0,r.pages-1),r.page+1),17);
+    tool("−",compactButton,11,0,15);
+    tool("+",compactButton,12,0,15);
+    tool("适应",fit,13,0,12);
+    const float top=toolsY+height+gap;state.canvas={area.x,top,area.w,std::max(1.f,area.y+area.h-top)};
     p.clip(state.canvas);
     p.box(state.canvas,light?Color{248,247,244,255}:Color{21,23,27,255},Color{0,0,0,0},1);
     if(state.pagesOpen){
@@ -67,7 +83,7 @@ template<class P> void render(P& p,State& state,const Document& d,Header* h,Rect
     if(!r.notice.empty()&&r.blocks.empty()&&r.rgba.empty()){float size=12*scale;float measured=p.paragraph(r.notice,left,y,width,size,readingMuted,false,true);y+=measured+12*scale;}
     if(r.width>0&&r.height>0){
         const float baseWidth=std::max(1.f,area.w-24*scale);
-        const float fittedWidth=pdfPage(r)?std::min(baseWidth,std::max(1.f,state.canvas.h-40*scale)*r.width/r.height):baseWidth;
+        const float fittedWidth=pdfPage(r)?std::min(baseWidth,std::max(1.f,state.canvas.h-20*scale)*r.width/r.height):baseWidth;
         float w=fittedWidth*state.zoom,hImage=w*r.height/r.width;
         p.image({area.x+std::max(12*scale,(area.w-w)/2)-state.scrollX,y,w,hImage},r);y+=hImage+12*scale;state.maximumX=std::max(0.f,w-area.w+24*scale);
     }else state.maximumX=0;
@@ -90,7 +106,7 @@ template<class P> void render(P& p,State& state,const Document& d,Header* h,Rect
         }else{bool heading=block.kind=="heading";y+=p.paragraph(block.text,left,y,width,heading?font*1.18f:font,readingInk,heading,true)+(heading?14.f:9.f)*scale;}
     }
     state.maximumY=std::max(0.f,y+state.scrollY-top-state.canvas.h+18*scale);state.scrollY=std::min(state.scrollY,state.maximumY);state.scrollX=std::min(state.scrollX,state.maximumX);
-    if(state.restorePending){state.restorePending=false;state.scrollY=state.maximumY*r.progress;if(r.progress>0){p.unclip();render(p,state,d,h,area,scale,light);return;}}
+    if(state.restorePending){state.restorePending=false;state.scrollY=state.maximumY*r.progress;if(r.progress>0){p.unclip();state.hits.resize(firstHit);render(p,state,d,h,area,scale,light);return;}}
     if(state.maximumY>0){float track=state.canvas.h,thumb=std::max(24*scale,track*track/(track+state.maximumY)),position=state.scrollY/state.maximumY*(track-thumb);p.box({area.x+area.w-4*scale,top+position,3*scale,thumb},readingMuted,readingMuted,1);}
     p.unclip();
 }

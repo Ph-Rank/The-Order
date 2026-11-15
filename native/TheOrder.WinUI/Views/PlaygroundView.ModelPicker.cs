@@ -23,6 +23,7 @@ public sealed partial class PlaygroundView
         PlaygroundAppearance.Apply(filter, "PGTextBox"); AutomationProperties.SetName(filter, "搜索可用模型");
         var rows = new StackPanel { Spacing = 6 };
         var rowCache = new Dictionary<string, Button>(StringComparer.Ordinal); int createdRows = 0, refreshes = 0;
+        string? loadingRowsFor = null;
         var status = Label("", 13); status.Style = PlaygroundAppearance.Style("PGMetadataTextStyle"); status.MinHeight = 20;
         var refresh = new Button { Content = PlaygroundAppearance.IconLabel("\uE72C", "刷新模型", 12), HorizontalAlignment = HorizontalAlignment.Left };
         PlaygroundAppearance.Apply(refresh);
@@ -92,6 +93,8 @@ public sealed partial class PlaygroundView
                 ToolTipService.SetToolTip(button, new TextBlock { Text = details, TextWrapping = TextWrapping.Wrap, MaxWidth = 440 });
                 button.Click += (_, _) => Choose(item.Id); rowCache.Add(key, button); wantedRows.Add(button); createdRows++;
             }
+            var newCatalogue = !modelsLoading && loadingRowsFor == ModelBinding && !rows.Children.SequenceEqual(wantedRows);
+            loadingRowsFor = modelsLoading ? ModelBinding : null;
             for (int i = 0; i < wantedRows.Count; i++)
             {
                 var button = wantedRows[i];
@@ -100,6 +103,7 @@ public sealed partial class PlaygroundView
                 rows.Children.Insert(i, button);
             }
             while (rows.Children.Count > wantedRows.Count) rows.Children.RemoveAt(rows.Children.Count - 1);
+            if (newCatalogue && wantedRows.Count > 0) InteractionMotion.RevealContent(rows, .66f);
             status.Text = ModelCatalogueStatus;
             if (status.Text.Length == 0 && rows.Children.Count == 0) status.Text = "没有匹配的型号。";
             status.Opacity = status.Text.Length == 0 ? 0 : 1;
@@ -137,7 +141,7 @@ public sealed partial class PlaygroundView
         readModelPickerEvidence = () => new { provider = modelPickerOptions?.Provider.ToString(), width = body.ActualWidth, height = body.ActualHeight,
             viewportWidth = listScroll.ActualWidth, viewportHeight = listScroll.ActualHeight, visibleRows = rows.Children.Count, createdRows, refreshes, frameSizes = frameSizes.ToArray(), status = status.Text };
         refreshModelPicker = Populate; dismissModelPicker = () => dialog.Hide(); StyleContent(body); Populate();
-        try { _ = CheckPickerCredentialAsync(); await dialog.ShowAsync(); }
+        try { _ = CheckPickerCredentialAsync(); await dialog.ShowInShellAsync(); }
         finally
         {
             lastModelPickerEvidence = readModelPickerEvidence?.Invoke(); readModelPickerEvidence = null;
@@ -153,7 +157,7 @@ public sealed partial class PlaygroundView
         var owner = CaptureOptionsOwner();
         var editor = new TextBox { Text = OptionsFor(owner.ConversationId).SystemInstructions, MaxLength = 8000, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 220, MaxHeight = Math.Max(220, Math.Min(480, (XamlRoot?.Size.Height ?? 760) - 300)), PlaceholderText = "例如：像熟悉视觉小说的朋友一样交流，语气自然直接，回答简洁；避免反复概括我的偏好。" };
         AutomationProperties.SetName(editor, "编辑对话预设");
-        var body = new StackPanel { Spacing = 12, MinWidth = 280, MaxWidth = 620, Children = { editor, Label("用于当前会话的回复方式。它不会扩大授权、开启联网或解除剧透限制。", 12) } };
+        var body = new StackPanel { MinWidth = 280, MaxWidth = 620, Children = { editor } };
         if (await DialogAsync("对话预设", body, "保存") != ContentDialogResult.Primary || !IsCurrentOptionsOwner(owner)) return;
         var options = OptionsFor(owner.ConversationId) with { SystemInstructions = editor.Text.Trim() };
         StoreOptions(owner.ConversationId, options); SyncOptions(); await SaveOptionsAsync(owner.ConversationId, options);

@@ -16,9 +16,12 @@ public sealed class BangumiSettingsViewModel(BangumiAuthorization authorization)
     public bool CanQuickLogin => CanOperate && QuickLoginAvailable;
     public string ConnectionAction => HasAuthorization ? "重新连接 Bangumi" : "连接 Bangumi";
     public string QuickLoginNotice => QuickLoginAvailable ? "" : "快捷登录尚未开通，可先使用手动令牌授权。";
-    public string Status => authorization.UsesQuickLogin && authorization.QuickLoginAvailable && !authorization.ReauthorizationRequired
-        && (Access.Rejected || authorization.RequiresLogin) ? "等待自动续期 · 暂时使用匿名访问"
-        : Access.Rejected || authorization.RequiresLogin ? "授权已失效，请重新连接 Bangumi。" : !HasAuthorization ? "未连接 · 使用匿名访问"
+    private bool AuthorizationExpired => Access.Rejected || authorization.RequiresLogin;
+    private bool AwaitingRenewal => AuthorizationExpired && authorization.UsesQuickLogin
+        && authorization.QuickLoginAvailable && !authorization.ReauthorizationRequired;
+    public bool NeedsReauthorization => AuthorizationExpired && !AwaitingRenewal;
+    public string Status => AwaitingRenewal ? "等待自动续期 · 暂时使用匿名访问"
+        : NeedsReauthorization ? "授权已失效，请重新连接 Bangumi。" : !HasAuthorization ? "未连接 · 使用匿名访问"
         : authorization.Account is { } account ? "已连接 · " + account.Name + "（@" + account.Username + "）" : "已保存授权";
     public string Message { get; private set; } = "";
     public Task InitializeAsync() => Run(token => authorization.InitializeAsync(token), "", "正在读取本机授权…");
@@ -46,5 +49,5 @@ public sealed class BangumiSettingsViewModel(BangumiAuthorization authorization)
     public void Cancel() => operation?.Cancel();
     public void Dispose() { if (disposed) return; disposed = true; operation?.Cancel(); }
     private void Notify()
-    { foreach (var name in new[] { nameof(Busy), nameof(CanOperate), nameof(HasAuthorization), nameof(CanTest), nameof(CanQuickLogin), nameof(ConnectionAction), nameof(Status), nameof(Message) }) Changed(name); }
+    { foreach (var name in new[] { nameof(Busy), nameof(CanOperate), nameof(HasAuthorization), nameof(CanTest), nameof(CanQuickLogin), nameof(ConnectionAction), nameof(Status), nameof(NeedsReauthorization), nameof(Message) }) Changed(name); }
 }

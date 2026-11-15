@@ -4,7 +4,10 @@ using TheOrder.Domain;
 namespace TheOrder.Presentation;
 
 public enum OnlineState { Idle, Loading, Loaded, Empty, Offline, Unauthorized, RateLimited, Error, Refreshing, CredentialCorrupt }
-public sealed record OnlineCard(string Id, string Title, string? CoverKey, string Subtitle);
+public sealed record OnlineCard(string Id, string Title, string? CoverKey, string Subtitle)
+{
+    public string CatalogNumber => "#" + Id;
+}
 public sealed record CatalogAccessNotice(string Title, string Message);
 public sealed class OnlineViewModel(IOnlineCatalog catalog, ICredentialSettings credentials, IRemoteCoverRegistry covers, OnlineLibraryClient library, WorkspaceViewModel workspace) : ObservableState, IAsyncDisposable
 {
@@ -18,11 +21,22 @@ public sealed class OnlineViewModel(IOnlineCatalog catalog, ICredentialSettings 
     private bool disposed;
     private int credentialOperations;
     private long credentialGeneration, connectionGeneration;
-    public string Query { get => query; set { if (!Set(ref query, value)) return; CancelSearch(); Items = []; cursor = null; usedCursors.Clear(); SearchState = OnlineState.Idle; SearchMessage = UiText.Get("输入作品名后搜索。"); Notify(); } }
+    public string Query
+    {
+        get => query;
+        set
+        {
+            if (!Set(ref query, value)) return;
+            InvalidateSearch();
+            Items = []; cursor = null; usedCursors.Clear();
+            SearchState = OnlineState.Idle; SearchMessage = "";
+            Notify();
+        }
+    }
     public OnlineState SearchState { get; private set; }
     public OnlineState DetailState { get; private set; }
     public OnlineState ConnectionState { get; private set; }
-    public string SearchMessage { get; private set; } = UiText.Get("输入作品名后搜索。");
+    public string SearchMessage { get; private set; } = "";
     public string DetailMessage { get; private set; } = UiText.Get("选择作品查看详情。");
     public string CredentialMessage { get; private set; } = UiText.Get("仅用于隔离开发资料；尚未检查密钥。");
     public string ConnectionMessage { get; private set; } = UiText.Get("尚未测试连接。");
@@ -31,7 +45,9 @@ public sealed class OnlineViewModel(IOnlineCatalog catalog, ICredentialSettings 
     public string? DetailCoverKey { get; private set; }
     public bool SearchBusy => SearchState is OnlineState.Loading or OnlineState.Refreshing;
     public bool DetailBusy => DetailState is OnlineState.Loading or OnlineState.Refreshing;
-    public bool CanLoadMore => !SearchBusy && cursor is not null && Items.Count < 2000;
+    public bool SearchLoading => SearchState == OnlineState.Loading;
+    public string? PaginationCursor => Items.Count < 2000 ? cursor : null;
+    public bool CanLoadMore => !SearchBusy && PaginationCursor is not null;
     public bool HasCredential { get; private set; }
     private bool credentialChecked;
     public bool CanAccessCatalog => credentials is NextMoeAuthentication next
@@ -82,18 +98,30 @@ public sealed class OnlineViewModel(IOnlineCatalog catalog, ICredentialSettings 
         searchStop?.Cancel(); searchStop?.Dispose(); searchStop = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         var cancellation = searchStop.Token; var generation = ++searchGeneration;
         var authGeneration = AuthGeneration;
-        if (!more) { Items = []; cursor = null; usedCursors.Clear(); }
-        SearchState = more ? OnlineState.Refreshing : OnlineState.Loading; SearchMessage = UiText.Get("正在搜索在线目录…"); Notify();
+        if (!more) { Items = []; cursor = null; usedCursors.Clear(); SearchMessage = UiText.Get("正在搜索在线目录…"); }
+        SearchState = more ? OnlineState.Refreshing : OnlineState.Loading; Notify();
         try
         {
-            var page = await catalog.SearchAsync(requested, next, cancellation);
+            // Explicit references are looked up only at the configured catalog endpoint.
+            // Bare numeric names (for example "1984") remain ordinary title searches.
+            OnlinePage page;
+            if (requested.Length > 1 && requested[0] == '#' && char.IsAsciiDigit(requested[1])
+                || requested.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                || requested.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!CatalogWorkReference.TryParse(requested, out var id)) throw new OnlineException(OnlineFailure.InvalidRequest);
+                page = new([await catalog.DetailsAsync(id, false, cancellation)], null);
+            }
+            else page = await catalog.SearchAsync(requested, next, cancellation);
             if (disposed || generation != searchGeneration || authGeneration != AuthGeneration || cancellation.IsCancellationRequested) return;
             var seen = Items.Select(i => i.Id).ToHashSet();
             Items = Items.Concat(page.Items.Where(w => seen.Add(w.Id)).Select(w => new OnlineCard(w.Id, CatalogLanguage.Title(w), covers.Register(w.CoverUrl, w.FetchedAt), string.Join(" · ", w.Developers)))).Take(2000).ToArray();
             if (next is not null) usedCursors.Add(next);
             cursor = page.NextCursor is { } candidate && !usedCursors.Contains(candidate) ? candidate : null;
             SearchState = Items.Count == 0 ? OnlineState.Empty : OnlineState.Loaded;
-            SearchMessage = Items.Count == 0 ? UiText.Get("本次搜索没有结果。") : UiText.Format($"已加载 {Items.Count} 部作品。");
+            SearchMessage = Items.Count == 0
+                ? UiText.Get(cursor is null ? "本次搜索没有结果。" : "本页暂无可显示的作品。")
+                : UiText.Format($"已加载 {Items.Count} 部作品。");
             if (page.NextCursor is not null && cursor is null) SearchMessage += UiText.Get(" 分页标记重复，已停止加载。");
             if (Items.Count >= 2000) { cursor = null; SearchMessage += UiText.Get(" 已达到结果上限，请缩小搜索范围。"); }
         }
@@ -102,13 +130,27 @@ public sealed class OnlineViewModel(IOnlineCatalog catalog, ICredentialSettings 
         catch (Exception) { if (generation == searchGeneration && authGeneration == AuthGeneration) { SearchState = OnlineState.Error; SearchMessage = UiText.Get("在线搜索未完成，请重试。"); } }
         finally { if (generation == searchGeneration) { if (authGeneration != AuthGeneration) { Items = []; cursor = null; usedCursors.Clear(); SearchState = OnlineState.Idle; SearchMessage = UiText.Get("凭据已改变，请重新搜索。"); } Notify(); } }
     }
-    public void CancelSearch() { searchGeneration++; searchStop?.Cancel(); SearchState = Items.Count > 0 ? OnlineState.Loaded : OnlineState.Idle; SearchMessage = UiText.Get("搜索已取消。"); Notify(); }
+    private void InvalidateSearch() { searchGeneration++; searchStop?.Cancel(); }
+    public void CancelSearch()
+    {
+        InvalidateSearch();
+        SearchState = Items.Count > 0 ? OnlineState.Loaded : OnlineState.Idle;
+        SearchMessage = UiText.Get("搜索已取消。");
+        Notify();
+    }
+    public void ReportNumberCopied(bool success)
+    {
+        SearchMessage = UiText.Get(success ? "已复制目录编号，可用于手动关联。" : "未能复制编号，请重试。");
+        Changed(nameof(SearchMessage));
+    }
     public void ResetBrowsing()
     {
-        CancelSearch(); detailGeneration++; detailStop?.Cancel();
+        var hadSearch = SearchState != OnlineState.Idle || !string.IsNullOrWhiteSpace(Query);
+        InvalidateSearch(); detailGeneration++; detailStop?.Cancel();
         Items = []; cursor = null; usedCursors.Clear(); Details = null; DetailCoverKey = null;
         SearchState = DetailState = OnlineState.Idle;
-        SearchMessage = UiText.Get("内容设置已改变，请重新搜索。"); DetailMessage = UiText.Get("选择作品查看详情。"); Notify();
+        SearchMessage = hadSearch ? UiText.Get("内容设置已改变，请重新搜索。") : "";
+        DetailMessage = UiText.Get("选择作品查看详情。"); Notify();
     }
     public Task OpenDetailsAsync(string id, bool refresh = false) => Track(() => DetailsCore(id, refresh));
     private async Task DetailsCore(string id, bool refresh)
@@ -128,7 +170,7 @@ public sealed class OnlineViewModel(IOnlineCatalog catalog, ICredentialSettings 
         catch (Exception) { if (generation == detailGeneration && authGeneration == AuthGeneration) { DetailState = OnlineState.Error; DetailMessage = UiText.Get("作品详情未能读取，请重试。"); } }
         finally { if (generation == detailGeneration) { if (authGeneration != AuthGeneration) { Details = null; DetailCoverKey = null; DetailState = OnlineState.Idle; DetailMessage = UiText.Get("凭据已改变，请重新读取详情。"); } Notify(); } }
     }
-    public void Leave() { CancelSearch(); detailGeneration++; detailStop?.Cancel(); mutationStop?.Cancel(); connectionGeneration++; connectionStop?.Cancel(); if (ConnectionState == OnlineState.Loading) { ConnectionState = OnlineState.Idle; ConnectionMessage = UiText.Get("连接测试已取消。"); } if (DetailBusy) { DetailState = OnlineState.Idle; DetailMessage = UiText.Get("详情读取已取消。"); } Notify(); }
+    public void Leave() { if (SearchBusy) CancelSearch(); detailGeneration++; detailStop?.Cancel(); mutationStop?.Cancel(); connectionGeneration++; connectionStop?.Cancel(); if (ConnectionState == OnlineState.Loading) { ConnectionState = OnlineState.Idle; ConnectionMessage = UiText.Get("连接测试已取消。"); } if (DetailBusy) { DetailState = OnlineState.Idle; DetailMessage = UiText.Get("详情读取已取消。"); } Notify(); }
     public Task AddWishlistAsync() => Details is { } work ? Track(() => Mutate(c => library.AddAsync(work.Id, c))) : Task.CompletedTask;
     public Task AddWishlistAsync(string workId) => Track(() => Mutate(c => library.AddAsync(workId, c)));
     public Task RefreshEntryAsync(string id) => Track(() => Mutate(c => library.RefreshAsync(id, c), id));
@@ -171,7 +213,7 @@ public sealed class OnlineViewModel(IOnlineCatalog catalog, ICredentialSettings 
         var generation = ++credentialGeneration; credentialOperations++;
         Leave();
         Details = null; DetailCoverKey = null; DetailState = OnlineState.Idle; DetailMessage = UiText.Get("选择作品查看详情。");
-        Items = []; cursor = null; usedCursors.Clear(); SearchState = OnlineState.Idle; SearchMessage = UiText.Get("输入作品名后搜索。");
+        Items = []; cursor = null; usedCursors.Clear(); SearchState = OnlineState.Idle; SearchMessage = "";
         ConnectionState = OnlineState.Idle; ConnectionMessage = UiText.Get("凭据正在更新，旧连接测试已作废。");
         CredentialMessage = secret is null ? UiText.Get("正在移除隔离开发密钥…") : UiText.Get("正在保存隔离开发密钥…"); Notify();
         try
@@ -214,7 +256,7 @@ public sealed class OnlineViewModel(IOnlineCatalog catalog, ICredentialSettings 
     private static OnlineState State(OnlineException e) => e.Failure switch { OnlineFailure.Offline => OnlineState.Offline,
         OnlineFailure.NoCredential or OnlineFailure.InvalidCredential or OnlineFailure.Unauthorized or OnlineFailure.Forbidden or OnlineFailure.LoginRequired => OnlineState.Unauthorized,
         OnlineFailure.RateLimited => OnlineState.RateLimited, OnlineFailure.CredentialStorageCorrupt => OnlineState.CredentialCorrupt, _ => OnlineState.Error };
-    private void Notify() { foreach (var property in new[] { nameof(Items), nameof(SearchState), nameof(SearchMessage), nameof(SearchBusy), nameof(CanLoadMore), nameof(Details), nameof(DetailCoverKey), nameof(DetailState), nameof(DetailMessage), nameof(DetailTitle), nameof(DetailDescription), nameof(DetailFacts), nameof(DetailBusy), nameof(CredentialMessage), nameof(HasCredential), nameof(CanAccessCatalog), nameof(CatalogReminder), nameof(ConnectionMessage), nameof(ConnectionState), nameof(SettingsBusy) }) Changed(property); }
+    private void Notify() { foreach (var property in new[] { nameof(Items), nameof(SearchState), nameof(SearchMessage), nameof(SearchBusy), nameof(SearchLoading), nameof(CanLoadMore), nameof(Details), nameof(DetailCoverKey), nameof(DetailState), nameof(DetailMessage), nameof(DetailTitle), nameof(DetailDescription), nameof(DetailFacts), nameof(DetailBusy), nameof(CredentialMessage), nameof(HasCredential), nameof(CanAccessCatalog), nameof(CatalogReminder), nameof(ConnectionMessage), nameof(ConnectionState), nameof(SettingsBusy) }) Changed(property); }
     public async ValueTask DisposeAsync()
     {
         if (disposed) return; disposed = true; Leave(); lifetime.Cancel(); workspace.CancelPendingOperation();

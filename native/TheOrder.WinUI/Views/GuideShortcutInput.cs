@@ -1,6 +1,7 @@
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using TheOrder.Platform.Windows;
 using Windows.System;
@@ -10,22 +11,29 @@ namespace TheOrder.WinUI.Views;
 
 public sealed class GuideShortcutInput : UserControl
 {
-    private readonly StackPanel root = new() { Spacing = 8 };
-    private readonly Button record = new() { MinWidth = 148, HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
-    private bool recording;
+    private readonly Button record = new() { MinWidth = 72, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly Button reset = new() { Content = "恢复默认" };
+    private readonly TextBlock status = new() { FontSize = 13, TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
+    private readonly Func<int, Task> apply;
+    private bool recording, applying;
     public int Value { get; private set; }
-    public GuideShortcutInput(int value)
+    public GuideShortcutInput(int value, Func<int, Task> apply)
     {
-        Value = value; Content = root;
+        this.apply = apply;
+        Value = value;
+        var root = new Grid { ColumnSpacing = 12, RowSpacing = 6 };
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Content = root;
         AutomationProperties.SetAutomationId(this, "GuideShortcutInput");
-        root.Children.Add(new TextBlock { Text = "显示与隐藏快捷键" });
-        var row = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6 };
+        root.Children.Add(new TextBlock { Text = "显示与隐藏快捷键", TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center });
+        var row = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6, MaxWidth = 224, VerticalAlignment = VerticalAlignment.Center };
         AutomationProperties.SetAutomationId(record, "RecordGuideShortcut");
-        AutomationProperties.SetName(record, "录入攻略快捷键");
         ToolTipService.SetToolTip(record, "点击后按下单键或组合键；Esc 取消。默认 J。");
         record.Click += (_, _) => BeginRecording();
-        record.PreviewKeyDown += (_, e) =>
+        record.PreviewKeyDown += async (_, e) =>
         {
             if (!recording) return;
             if (e.Key is VirtualKey.Escape or VirtualKey.Tab) { Cancel(); e.Handled = e.Key == VirtualKey.Escape; return; }
@@ -34,26 +42,74 @@ public sealed class GuideShortcutInput : UserControl
                 or VirtualKey.LeftControl or VirtualKey.RightControl or VirtualKey.LeftShift or VirtualKey.RightShift
                 or VirtualKey.LeftMenu or VirtualKey.RightMenu or VirtualKey.LeftWindows or VirtualKey.RightWindows) return;
             if (Down(VirtualKey.LeftWindows) || Down(VirtualKey.RightWindows)) { Reject(); return; }
-            Record((int)e.Key, (Down(VirtualKey.Menu) ? 1 : 0) | (Down(VirtualKey.Control) ? 2 : 0) | (Down(VirtualKey.Shift) ? 4 : 0));
+            await RecordAsync((int)e.Key, (Down(VirtualKey.Menu) ? 1 : 0) | (Down(VirtualKey.Control) ? 2 : 0) | (Down(VirtualKey.Shift) ? 4 : 0));
         };
         record.ProcessKeyboardAccelerators += (_, e) => { if (recording) e.Handled = true; };
         record.LostFocus += (_, _) => Cancel();
         row.Children.Add(record);
-        var reset = new Button { Content = "恢复 J 默认" };
+        reset.Style = (Style)Microsoft.UI.Xaml.Application.Current.Resources["SubtleButtonStyle"];
         AutomationProperties.SetAutomationId(reset, "ResetGuideShortcut");
-        reset.Click += (_, _) => { Value = WindowsGuideHotkeys.DefaultKey; Cancel(); };
-        row.Children.Add(reset); root.Children.Add(row); root.Children.Add(status); Refresh();
+        reset.Click += async (_, _) => await ApplyAsync(WindowsGuideHotkeys.DefaultKey);
+        row.Children.Add(reset);
+        Grid.SetColumn(row, 1);
+        root.Children.Add(row);
+        Grid.SetRow(status, 1);
+        Grid.SetColumnSpan(status, 2);
+        AutomationProperties.SetAutomationId(status, "GuideShortcutStatus");
+        AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite);
+        root.Children.Add(status);
+        Refresh();
     }
     private static bool Down(VirtualKey key) => InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down);
-    private void Refresh() => record.Content = recording ? "请按快捷键…" : WindowsGuideHotkeys.Label(Value);
-    private void Cancel() { recording = false; status.Visibility = Visibility.Collapsed; Refresh(); }
-    private void Reject() { status.Text = "请选择字母、数字、F1–F11 或符号键，可搭配 Ctrl、Shift、Alt。"; status.Visibility = Visibility.Visible; }
-    internal void BeginRecording() { recording = true; status.Visibility = Visibility.Collapsed; record.Focus(FocusState.Programmatic); Refresh(); }
-    internal bool Record(int key, int modifiers)
+    private void Refresh()
     {
-        int next = key | (modifiers << 16);
-        if (!WindowsGuideHotkeys.IsSupported(next)) { Reject(); return false; }
-        Value = next; Cancel(); return true;
+        var label = WindowsGuideHotkeys.Label(Value);
+        record.Content = recording ? "请按快捷键…" : label;
+        AutomationProperties.SetName(record, recording ? "请按快捷键" : $"录入攻略快捷键，当前 {label}");
+        if (Value == WindowsGuideHotkeys.DefaultKey && reset.FocusState != FocusState.Unfocused)
+            record.Focus(FocusState.Programmatic);
+        reset.Visibility = Value == WindowsGuideHotkeys.DefaultKey ? Visibility.Collapsed : Visibility.Visible;
     }
-    internal object Evidence => new { value = Value, label = WindowsGuideHotkeys.Label(Value), recording, error = status.Visibility == Visibility.Visible };
+    private void Cancel()
+    {
+        if (!recording) return;
+        recording = false;
+        ShowStatus("");
+        Refresh();
+    }
+    private void Reject() => ShowStatus("请选择字母、数字、F1–F11 或符号键，可搭配 Ctrl、Shift、Alt。");
+    internal void BeginRecording()
+    {
+        if (!IsEnabled || applying) return;
+        recording = true;
+        ShowStatus("");
+        record.Focus(FocusState.Programmatic);
+        Refresh();
+    }
+    internal Task RecordAsync(int key, int modifiers)
+    {
+        if (!recording) return Task.CompletedTask;
+        int next = key | (modifiers << 16);
+        if (WindowsGuideHotkeys.IsSupported(next)) return ApplyAsync(next);
+        Reject();
+        return Task.CompletedTask;
+    }
+    private async Task ApplyAsync(int next)
+    {
+        if (!IsEnabled || applying) return;
+        Cancel();
+        ShowStatus("");
+        if (next == Value) return;
+        applying = true;
+        try { await apply(next); }
+        finally { applying = false; }
+    }
+    internal void ShowValue(int value) { Value = value; Refresh(); }
+    internal void ShowStatus(string message)
+    {
+        status.Text = message;
+        status.Visibility = message.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+    internal object Evidence => new { value = Value, label = WindowsGuideHotkeys.Label(Value), recording,
+        error = status.Visibility == Visibility.Visible, status = status.Text, reset = reset.Visibility == Visibility.Visible };
 }

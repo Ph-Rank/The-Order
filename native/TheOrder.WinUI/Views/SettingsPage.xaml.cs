@@ -12,7 +12,8 @@ public sealed partial class SettingsPage : Page
     internal void ShowPlaygroundVisibility(bool visible, string? notice = null)
     {
         PlaygroundEntryChoice.IsChecked = visible;
-        PlaygroundEntryNotice.Text = notice ?? "对话为可选功能；连接、授权和关闭功能均在对话页内设置。";
+        PlaygroundEntryNotice.Text = notice ?? "";
+        PlaygroundEntryNotice.Visibility = VisibleText(notice);
     }
     private async void OnPlaygroundEntry(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
@@ -47,7 +48,7 @@ public sealed partial class SettingsPage : Page
         bool controlledAdvanced, bool readOnly, string? notice)
     {
         synchronizing = true;
-        MaterialChoice.SelectedIndex = mode == MaterialMode.Opaque ? (int)MaterialMode.Standard : (int)mode;
+        MaterialChoice.OptionIndex = mode == MaterialMode.Opaque ? (int)MaterialMode.Standard : (int)mode;
         synchronizing = false;
         MaterialChoice.IsEnabled = !readOnly;
         MaterialError.Text = notice ?? "";
@@ -56,12 +57,18 @@ public sealed partial class SettingsPage : Page
     internal void SetMaterialSaving(bool saving) => MaterialChoice.IsEnabled = !saving;
     private async void OnMaterialMode(object sender, SelectionChangedEventArgs e)
     {
-        if (synchronizing || MaterialChoice.SelectedIndex < 0) return;
-        if (ChangeMaterialMode is { } change) await change((MaterialMode)MaterialChoice.SelectedIndex);
+        if (synchronizing || MaterialChoice.OptionIndex < 0) return;
+        if (ChangeMaterialMode is { } change) await change((MaterialMode)MaterialChoice.OptionIndex);
     }
     public SettingsPage(WorkspaceViewModel viewModel, OnlineViewModel online, RecognitionViewModel recognition, CatalogBrowseSettings browsing, LanguageSettings languages, ContentLanguageSettings contentLanguages, AppUpdateViewModel updates, NextMoeSettingsViewModel nextMoe, LibraryBackupViewModel backups, BangumiSettingsViewModel bangumi, GlobalLaunchSettings launchDefaults, LibraryMigrationViewModel migration)
     {
         ViewModel = viewModel; Online = online; Recognition = recognition; Browsing = browsing; Languages = languages; ContentLanguages = contentLanguages; Updates = updates; NextMoe = nextMoe; Backups = backups; Bangumi = bangumi; LaunchDefaults = launchDefaults; Migration = migration; InitializeComponent();
+        categories = [
+            new(AppearanceCategory, AppearancePanel), new(LaunchCategory, LaunchPanel),
+            new(LibraryCategory, LibraryPanel), new(SourcesCategory, SourcesPanel),
+            new(BackupCategory, BackupPanel), new(UpdatesCategory, UpdatesPanel),
+            new(HelpCategory, HelpPanel)
+        ];
         Loaded += (_, _) => { Migration.PropertyChanged += OnMigrationState; ViewModel.PropertyChanged += OnMigrationState; SynchronizeMigration(); };
         Unloaded += (_, _) => { Migration.PropertyChanged -= OnMigrationState; ViewModel.PropertyChanged -= OnMigrationState; CancelMigrationDialog(); Migration.Clear(); };
         Loaded += (_, _) => Bangumi.RefreshState();
@@ -82,11 +89,20 @@ public sealed partial class SettingsPage : Page
         Unloaded += (_, _) => Browsing.PropertyChanged -= OnBrowseState;
         Unloaded += (_, _) => { ViewModel.PropertyChanged -= OnState; Online.PropertyChanged -= OnCredentialState; ApiCredential.Password = ""; editingCredential = false; };
     }
-    private void OnUpdateState(object? sender, PropertyChangedEventArgs e) => SynchronizeUpdate();
+    private void OnUpdateState(object? sender, PropertyChangedEventArgs e)
+    {
+        var wasVisible = UpdateHighlights.Visibility == Microsoft.UI.Xaml.Visibility.Visible;
+        SynchronizeUpdate();
+        if (!wasVisible && Updates.HasUpdate)
+        {
+            InteractionMotion.RevealContent(UpdateHighlights, .7f);
+            if (Updates.Notes.Length > 0) InteractionMotion.RevealContent(UpdateNotes, .7f);
+        }
+    }
     private void SynchronizeUpdate()
     {
         synchronizingUpdateChannel = true;
-        UpdateChannelChoice.SelectedIndex = (int)Updates.SelectedChannel;
+        UpdateChannelChoice.OptionIndex = (int)Updates.SelectedChannel;
         synchronizingUpdateChannel = false;
         var visible = Microsoft.UI.Xaml.Visibility.Visible; var collapsed = Microsoft.UI.Xaml.Visibility.Collapsed;
         UpdateNotes.Visibility = Updates.HasUpdate && Updates.Notes.Length != 0 ? visible : collapsed;
@@ -97,8 +113,13 @@ public sealed partial class SettingsPage : Page
         CancelUpdateButton.Visibility = Updates.CanCancel ? visible : collapsed;
     }
     private async void OnCheckUpdate(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) => await Updates.CheckAsync();
+    internal Func<Task>? OpenFeedback { get; set; }
+    private async void OnOpenFeedback(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (OpenFeedback is { } open) await open();
+    }
     private async void OnUpdateChannel(object sender, SelectionChangedEventArgs e)
-    { if (!synchronizingUpdateChannel && UpdateChannelChoice.SelectedIndex >= 0) await Updates.ChangeChannelAsync((AppUpdateChannel)UpdateChannelChoice.SelectedIndex); }
+    { if (!synchronizingUpdateChannel && UpdateChannelChoice.OptionIndex >= 0) await Updates.ChangeChannelAsync((AppUpdateChannel)UpdateChannelChoice.OptionIndex); }
     private async void OnInstallUpdate(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
         if (InstallUpdate is not { } install || !Updates.CanInstall) return;
@@ -107,30 +128,29 @@ public sealed partial class SettingsPage : Page
             var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = Updates.InstallText,
                 Content = "将切换到 " + Updates.Latest!.Version + "。退出保存后会先备份当前资料，再替换程序。当前书架、游玩记录和个人资料保留。正式版可能不提供 Beta 的跨媒体与辅助启动功能，但其资料和配置会保留。",
                 PrimaryButtonText = "确认切换", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            if (await dialog.ShowInShellAsync() != ContentDialogResult.Primary) return;
         }
         await Updates.InstallAsync(install);
     }
     private void OnCancelUpdate(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) => Updates.Cancel();
-    internal void ChooseUpdateChannelTest(int index) => UpdateChannelChoice.SelectedIndex = index;
-    internal void ShowUpdatesTest() => RevealSettingsGroup(UpdatesGroup);
+    internal void ChooseUpdateChannelTest(int index) => UpdateChannelChoice.OptionIndex = index;
     private void OnBrowseState(object? sender, PropertyChangedEventArgs e) => SynchronizeBrowsing();
     private void OnLanguageState(object? sender, PropertyChangedEventArgs e) => SynchronizeLanguage();
     private void OnContentLanguageState(object? sender, PropertyChangedEventArgs e) => SynchronizeContentLanguage();
     private void SynchronizeContentLanguage()
     {
         synchronizing = true;
-        ContentLanguageChoice.SelectedIndex = Array.IndexOf(ContentLanguage.Choices, ContentLanguages.Preference.Preferred);
-        ContentFallbackChoice.SelectedIndex = Array.IndexOf(ContentLanguage.Choices, ContentLanguages.Preference.Fallback);
+        ContentLanguageChoice.OptionIndex = Array.IndexOf(ContentLanguage.Choices, ContentLanguages.Preference.Preferred);
+        ContentFallbackChoice.OptionIndex = Array.IndexOf(ContentLanguage.Choices, ContentLanguages.Preference.Fallback);
         synchronizing = false;
     }
     private async void OnContentLanguage(object sender, SelectionChangedEventArgs e)
     {
-        if (!synchronizing && ContentLanguageChoice.SelectedIndex >= 0 && ContentFallbackChoice.SelectedIndex >= 0)
-            await ContentLanguages.ChangeAsync(new(ContentLanguage.Choices[ContentLanguageChoice.SelectedIndex], ContentLanguage.Choices[ContentFallbackChoice.SelectedIndex]));
+        if (!synchronizing && ContentLanguageChoice.OptionIndex >= 0 && ContentFallbackChoice.OptionIndex >= 0)
+            await ContentLanguages.ChangeAsync(new(ContentLanguage.Choices[ContentLanguageChoice.OptionIndex], ContentLanguage.Choices[ContentFallbackChoice.OptionIndex]));
     }
-    private void SynchronizeLanguage() { synchronizing = true; LanguageOptions.Visibility = Languages.SelectionAvailable ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed; LanguageChoice.SelectedIndex = Array.IndexOf(UiText.Choices, Languages.Selected); LanguageChoice.IsEnabled = Languages.CanChange; synchronizing = false; }
-    private async void OnLanguage(object sender, SelectionChangedEventArgs e) { if (!synchronizing && LanguageChoice.SelectedIndex >= 0) await Languages.ChangeAsync(UiText.Choices[LanguageChoice.SelectedIndex]); }
+    private void SynchronizeLanguage() { synchronizing = true; LanguageOptions.Visibility = Languages.SelectionAvailable ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed; LanguageChoice.OptionIndex = Array.IndexOf(UiText.Choices, Languages.Selected); LanguageChoice.IsEnabled = Languages.CanChange; synchronizing = false; }
+    private async void OnLanguage(object sender, SelectionChangedEventArgs e) { if (!synchronizing && LanguageChoice.OptionIndex >= 0) await Languages.ChangeAsync(UiText.Choices[LanguageChoice.OptionIndex]); }
     private void SynchronizeBrowsing() { synchronizing = true; NsfwSwitch.IsOn = Browsing.ShowNsfw; NsfwSwitch.IsEnabled = Browsing.CanChange; synchronizing = false; }
     private async void OnNsfw(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) { if (!synchronizing) await Browsing.ChangeAsync(NsfwSwitch.IsOn); }
     private async void OnSaveCredential(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
@@ -160,13 +180,13 @@ public sealed partial class SettingsPage : Page
     private async void OnClearCredential(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) { ApiCredential.Password = ""; await Online.ClearCredentialAsync(); await NextMoe.InitializeAsync(); }
     private async void OnTestConnection(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) => await Online.TestConnectionAsync();
     private void OnState(object? sender, PropertyChangedEventArgs e) { if (e.PropertyName == nameof(ViewModel.Theme)) Synchronize(); }
-    private void Synchronize() { synchronizing = true; ThemeChoice.SelectedIndex = (int)ViewModel.Theme; synchronizing = false; }
+    private void Synchronize() { synchronizing = true; ThemeChoice.OptionIndex = (int)ViewModel.Theme; synchronizing = false; }
     private async void OnAppearance(object sender, SelectionChangedEventArgs e)
     {
-        if (synchronizing || ThemeChoice.SelectedIndex < 0) return;
-        await ViewModel.ChangeAppearanceAsync((NativeTheme)ThemeChoice.SelectedIndex, ViewModel.Layout);
+        if (synchronizing || ThemeChoice.OptionIndex < 0) return;
+        await ViewModel.ChangeAppearanceAsync((NativeTheme)ThemeChoice.OptionIndex, ViewModel.Layout);
     }
-    private void OnApiKeyPanelExpanding(Expander sender, ExpanderExpandingEventArgs args)
+    private void OnSettingsDisclosureExpanding(Expander sender, ExpanderExpandingEventArgs args)
     {
         ResizeSettingsControls();
         DispatcherQueue.TryEnqueue(ResizeSettingsControls);
@@ -175,16 +195,21 @@ public sealed partial class SettingsPage : Page
     private void OnSettingsControlLoaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) => ResizeSettingsControls();
     private void OnSettingsSizeChanged(object sender, Microsoft.UI.Xaml.SizeChangedEventArgs e)
     {
-        var narrow = e.NewSize.Width < 641;
-        SettingsColumn.Padding = narrow ? new Microsoft.UI.Xaml.Thickness(16, 12, 16, 28) : new Microsoft.UI.Xaml.Thickness(24, 12, 24, 32);
-        // Leave a scroll-bar gutter; a bounded centered column keeps settings legible
-        // on wide windows without forcing narrower windows to scroll horizontally.
-        SettingsColumn.Width = Math.Min(880, Math.Max(0, e.NewSize.Width - 12));
-        Grid.SetRow(SettingsVersion, narrow ? 1 : 0);
-        Grid.SetColumn(SettingsVersion, narrow ? 0 : 1);
-        SettingsVersion.Margin = new Microsoft.UI.Xaml.Thickness(0, narrow ? 6 : 0, 0, 0);
-        foreach (var group in TopSettingsGroups)
-            group.Padding = narrow ? new Microsoft.UI.Xaml.Thickness(16) : new Microsoft.UI.Xaml.Thickness(24, 20, 24, 20);
+        bool narrow = e.NewSize.Width < 520;
+        double side = narrow ? 16 : 24;
+        // The detail heading and its scrollable controls share the same column.
+        double available = Math.Max(0, e.NewSize.Width - 12);
+        SettingsOverviewColumn.Width = Math.Min(SettingsOverviewColumn.MaxWidth, available);
+        SettingsColumn.Width = Math.Min(SettingsColumn.MaxWidth, available);
+        HelpPanel.Width = Math.Min(HelpPanel.MaxWidth, available);
+        ResizeDetailHeading();
+        SettingsOverviewColumn.Padding = new Microsoft.UI.Xaml.Thickness(side, 0, side, 32);
+        SettingsColumn.Padding = new Microsoft.UI.Xaml.Thickness(side, 8, side, 32);
+        bool stackVersion = available < 460;
+        Grid.SetRow(SettingsVersion, stackVersion ? 1 : 0);
+        Grid.SetColumn(SettingsVersion, stackVersion ? 0 : 1);
+        Grid.SetColumnSpan(SettingsVersion, stackVersion ? 2 : 1);
+        SettingsVersion.Margin = new Microsoft.UI.Xaml.Thickness(0, stackVersion ? 4 : 0, 0, 0);
         ResizeSettingsControls();
     }
     private void ResizeSettingsControls()
@@ -194,11 +219,12 @@ public sealed partial class SettingsPage : Page
             : SettingsColumn.ActualWidth > 0
                 ? SettingsColumn.ActualWidth
                 : SettingsRoot.ActualWidth > 0
-                    ? Math.Min(880, SettingsRoot.ActualWidth - 12)
+                    ? Math.Min(SettingsColumn.MaxWidth, SettingsRoot.ActualWidth - 12)
                     : 0;
         if (columnWidth <= 0) return;
         foreach (var control in SettingsControls().Distinct())
         {
+            if (Grid.GetColumn(control) == 1) continue;
             var width = Math.Min(control.MaxWidth, Math.Max(0, columnWidth - HorizontalInset(control, SettingsColumn)));
             if (double.IsNaN(control.Width) || Math.Abs(control.Width - width) > .1)
                 control.Width = width;
@@ -251,24 +277,35 @@ public sealed partial class SettingsPage : Page
     public Microsoft.UI.Xaml.Visibility VisibleOperationalMessage(string message) => VisibleText(OperationalMessage(message));
     public Microsoft.UI.Xaml.Visibility VisibleConnectionMessage(string message)
         => message == UiText.Get("尚未测试连接。") ? Microsoft.UI.Xaml.Visibility.Collapsed : VisibleText(message);
-    internal object LayoutEvidence() => new { active = IsLoaded, columnWidth = SettingsColumn.ActualWidth, rootWidth = SettingsRoot.ActualWidth,
-        columnTop = SettingsColumn.TransformToVisual(SettingsRoot).TransformPoint(new Windows.Foundation.Point()).Y,
-        versionRow = Grid.GetRow(SettingsVersion),
-        headers = TopSettingsGroups.Select(g => {
-            var header = (Microsoft.UI.Xaml.FrameworkElement)g.Header;
-            return new { name = g.Name, height = header.ActualHeight, width = header.ActualWidth,
-                texts = Descendants(header).OfType<TextBlock>().Select(t => {
-                    var point = t.TransformToVisual(header).TransformPoint(new Windows.Foundation.Point());
-                    return new { text = t.Text, x = point.X, y = point.Y, width = t.ActualWidth, height = t.ActualHeight,
-                        fits = point.X >= -.5 && point.Y >= -.5 && point.X + t.ActualWidth <= header.ActualWidth + .5 && point.Y + t.ActualHeight <= header.ActualHeight + .5 };
-                }).ToArray() };
-        }).ToArray(),
-        groups = TopSettingsGroups.Select(g => new { name = g.Name, expanded = g.IsExpanded, width = g.ActualWidth, height = g.ActualHeight,
-            x = g.TransformToVisual(SettingsColumn).TransformPoint(new Windows.Foundation.Point()).X,
-            y = g.TransformToVisual(SettingsColumn).TransformPoint(new Windows.Foundation.Point()).Y }).ToArray(),
-        actionCaptions = Descendants(SettingsColumn).OfType<Button>().Where(IsVisible).Select(b => b.Content as string).Where(s => s is not null).ToArray(),
-        controls = Descendants(SettingsColumn).Where(x => x is ComboBox or PasswordBox).Select(x => {
-            var point = x.TransformToVisual(SettingsColumn).TransformPoint(new Windows.Foundation.Point());
-            return new { name = x.Name, visible = IsLoaded && IsVisible(x), alignment = x.HorizontalAlignment.ToString(), x = point.X, width = x.ActualWidth, fits = point.X + x.ActualWidth <= SettingsColumn.ActualWidth + .5 }; }).ToArray(),
-        headings = Descendants(SettingsColumn).OfType<TextBlock>().Where(x => x.Text.Length > 0 && IsVisible(x)).Select(x => x.Text).ToArray() };
+    internal object LayoutEvidence()
+    {
+        Microsoft.UI.Xaml.FrameworkElement column = currentCategory is null ? SettingsOverviewColumn : SettingsColumn;
+        return new
+        {
+            active = IsLoaded,
+            category = currentCategory?.Entry.Name,
+            title = currentCategory is null ? UiText.Get("设置") : SettingsCategoryTitle.Text,
+            groups = SettingsCategories.Children.Count,
+            columnWidth = column.ActualWidth,
+            rootWidth = SettingsRoot.ActualWidth,
+            versionRow = Grid.GetRow(SettingsVersion),
+            entries = categories.Select(category =>
+            {
+                var entry = category.Entry;
+                var origin = entry.TransformToVisual(SettingsCategories).TransformPoint(new Windows.Foundation.Point());
+                return new { entry.Name, visible = IsVisible(entry), x = origin.X, y = origin.Y,
+                    width = entry.ActualWidth, height = entry.ActualHeight };
+            }).ToArray(),
+            actionCaptions = Descendants(column).OfType<Button>().Where(IsVisible)
+                .Select(button => button.Content as string).Where(caption => caption is not null).ToArray(),
+            controls = Descendants(SettingsColumn).Where(element => element is ComboBox or PasswordBox).Select(control =>
+            {
+                var point = control.TransformToVisual(SettingsColumn).TransformPoint(new Windows.Foundation.Point());
+                return new { control.Name, visible = IsLoaded && IsVisible(control), alignment = control.HorizontalAlignment.ToString(),
+                    x = point.X, width = control.ActualWidth, fits = point.X + control.ActualWidth <= SettingsColumn.ActualWidth + .5 };
+            }).ToArray(),
+            headings = Descendants(column).OfType<TextBlock>().Where(text => text.Text.Length > 0 && IsVisible(text))
+                .Select(text => text.Text).ToArray()
+        };
+    }
 }

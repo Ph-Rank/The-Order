@@ -17,11 +17,11 @@ public sealed class BangumiRelatedView : StackPanel, IDisposable
     private const int PageSize = 24;
     private readonly TextBlock heading = new() { FontSize = 22, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Text = "关联作品" };
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, FontSize = 13 };
-    private readonly ProgressRing progress = new() { Width = 18, Height = 18 };
+    private readonly LoadingMark progress = new() { Width = 18, Height = 18 };
     private readonly Button reload = new() { Content = "刷新关联", MinHeight = 32 };
     private readonly Button cancel = new() { Content = "取消读取", MinHeight = 32 };
     private readonly Button all = new() { Content = "查看全部关联作品", HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new(6) };
-    private readonly Button more = new() { Content = "显示更多", HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new(6) };
+    private readonly ScrollPageFooter more = new();
     private readonly Button overview = new() { Content = "概览", MinHeight = 32, CornerRadius = new(6) };
     private readonly TagFlowPanel actions = new() { HorizontalSpacing = 8, VerticalSpacing = 6 };
     private readonly TagFlowPanel filters = new() { HorizontalSpacing = 8, VerticalSpacing = 6 };
@@ -30,6 +30,8 @@ public sealed class BangumiRelatedView : StackPanel, IDisposable
     private readonly Expander sources = new SmoothExpander() { Header = "关联来源与关系说明", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly Expander rawSources = new SmoothExpander() { Header = "详细证据", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly Dictionary<BangumiRelationKind, Button> choices = [];
+    private readonly Dictionary<BangumiRelationKind, StackPanel> visibleGroups = [];
+    private readonly Dictionary<(BangumiRelationKind Kind, string Group), TagFlowPanel> visibleFlows = [];
     private readonly List<(RelatedWorkCard Item, Button Button, CoverPresenter Picture)> displayed = [];
     private static readonly BangumiRelationKind[] Kinds = [BangumiRelationKind.Anime, BangumiRelationKind.Music, BangumiRelationKind.Book, BangumiRelationKind.Game];
     private BangumiRelatedViewModel? model;
@@ -72,7 +74,6 @@ public sealed class BangumiRelatedView : StackPanel, IDisposable
     }
     public BangumiRelatedView()
     {
-        SecondaryDisclosure.Apply(sources); SecondaryDisclosure.Apply(rawSources);
         Spacing = 12;
         AutomationProperties.SetAutomationId(this, "RelatedWorks");
         AutomationProperties.SetAutomationId(heading, "BangumiRelatedExpander");
@@ -100,11 +101,11 @@ public sealed class BangumiRelatedView : StackPanel, IDisposable
         reload.Click += async (_, _) => { StopGameIdentities(); gameIdentitySnapshot = null; gameIdentityWarning = null; RefreshContext?.Invoke(); if (model is not null) await model.RefreshAsync(); };
         cancel.Click += (_, _) => model?.Cancel();
         all.Click += (_, _) => { complete = true; selected = null; limit = PageSize; Render(); FocusFirst(); };
-        more.Click += (_, _) =>
+        more.LoadNext = () =>
         {
-            var previousKeys = displayed.Select(x => x.Item.Key).ToHashSet(StringComparer.Ordinal);
-            limit += PageSize; Render();
-            if (displayed.FirstOrDefault(x => !previousKeys.Contains(x.Item.Key)).Item is { } firstNew) FocusKey(firstNew.Key);
+            limit += PageSize;
+            Render(append: true);
+            return Task.CompletedTask;
         };
         Unloaded += (_, _) => { if (!IsLoaded) Deactivate(); };
     }
@@ -155,7 +156,7 @@ public sealed class BangumiRelatedView : StackPanel, IDisposable
         if (changed) { StopSemantics(); semanticSnapshot = null; semanticEvidence = []; Reproject(); }
         progress.IsActive = model.IsBusy; progress.Visibility = V(model.IsBusy);
         cancel.Visibility = V(model.CanCancel);
-        status.Text = model.IsBusy || model.State is BangumiRelatedState.Failed or BangumiRelatedState.Cancelled or BangumiRelatedState.NoIdentity
+        status.Text = model.IsBusy || model.State is BangumiRelatedState.Failed or BangumiRelatedState.Cancelled
             ? model.Message : model.Result?.Warning ?? (model.State == BangumiRelatedState.Empty && catalogRows.IsEmpty ? "暂无公开关联作品。" : "");
         status.Visibility = V(status.Text.Length > 0); actions.Visibility = V(model.IsBusy || status.Text.Length > 0);
         reload.IsEnabled = model.CanLoad; Render(); StartGameIdentities();
@@ -210,56 +211,64 @@ public sealed class BangumiRelatedView : StackPanel, IDisposable
     }
     private void Reproject() => rows = RelatedWorksProjection.Build(catalogRows, model?.Items ?? [], semanticEvidence, gameIdentities);
     private void Select(BangumiRelationKind kind) { complete = true; selected = kind; limit = PageSize; Render(); }
-    private void Render()
+    private void Render(bool append = false)
     {
         if (disposed) return;
         var key = (complete, selected, limit, catalogWork?.Id, catalogWork?.FetchedAt, shown?.FetchedAtUtc);
         if (renderedKey == key && !renderedRows.IsDefault && renderedRows.SequenceEqual(rows)
             && (rows.IsEmpty || displayed.Count > 0)) { if (sources.IsExpanded) RenderSources(); return; }
+        var retainRows = append && renderedKey is { Complete: true } prior && complete && prior.Kind == selected
+            && !renderedRows.IsDefault && renderedRows.SequenceEqual(rows);
         renderedKey = key; renderedRows = rows;
         var focus = XamlRoot is null ? null : Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot);
-        var focusedKey = displayed.FirstOrDefault(x => ReferenceEquals(x.Button, focus)).Item?.Key;
-        groups.Children.Clear(); displayed.Clear();
+        var focusedKey = retainRows ? null : displayed.FirstOrDefault(x => ReferenceEquals(x.Button, focus)).Item?.Key;
+        if (!retainRows) { groups.Children.Clear(); displayed.Clear(); visibleGroups.Clear(); visibleFlows.Clear(); }
         heading.Text = complete ? selected is { } selectedKind ? $"关联{KindName(selectedKind)} · {rows.Count(x => x.Kind == selectedKind)}" : $"全部关联作品 · {rows.Length}" : $"关联作品 · {rows.Length}";
         overview.Style = (Style)Microsoft.UI.Xaml.Application.Current.Resources[!complete ? "AccentButtonStyle" : "DefaultButtonStyle"];
-        filters.Visibility = V(rows.Length > 0);
+        var hasMultipleKinds = rows.Select(x => x.Kind).Distinct().Skip(1).Any();
+        filters.Visibility = V(complete || hasMultipleKinds);
         foreach (var kind in Kinds)
         {
-            var count = rows.Count(x => x.Kind == kind); choices[kind].Content = $"{KindName(kind)} {count}"; choices[kind].IsEnabled = count > 0;
+            var count = rows.Count(x => x.Kind == kind); choices[kind].Content = $"{KindName(kind)} {count}"; choices[kind].Visibility = V(count > 0);
             choices[kind].Style = (Style)Microsoft.UI.Xaml.Application.Current.Resources[complete && selected == kind ? "AccentButtonStyle" : "DefaultButtonStyle"];
             AutomationProperties.SetName(choices[kind], $"查看全部{KindName(kind)}关联，{count} 项");
         }
         var filtered = rows.Where(x => selected is null || x.Kind == selected).ToArray();
         var page = complete ? filtered.Take(limit).ToArray() : rows.GroupBy(x => x.Kind).SelectMany(g => g.Take(g.Key == BangumiRelationKind.Anime ? 4 : 3)).ToArray();
+        var visibleKeys = displayed.Select(x => x.Item.Key).ToHashSet();
         foreach (var kind in Kinds)
         {
             var items = page.Where(x => x.Kind == kind).ToArray(); if (items.Length == 0) continue;
-            var block = new StackPanel { Spacing = 8 }; var head = new TagFlowPanel { HorizontalSpacing = 10 };
-            head.Children.Add(new TextBlock { Text = KindName(kind), FontSize = 18, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-            if (!complete)
+            if (!visibleGroups.TryGetValue(kind, out var block))
             {
-                var count = rows.Count(x => x.Kind == kind);
-                var browse = new HyperlinkButton
+                block = new StackPanel { Spacing = 8 }; var head = new TagFlowPanel { HorizontalSpacing = 10 };
+                if (hasMultipleKinds && selected is null)
                 {
-                    Content = $"查看全部 {count} 项",
-                    FontSize = 13,
-                    Opacity = count > items.Length ? 0.92 : 0.68,
-                    Padding = new Thickness(0)
-                };
-                browse.Click += (_, _) => { Select(kind); FocusFirst(); }; head.Children.Add(browse);
+                    head.Children.Add(new TextBlock { Text = KindName(kind), FontSize = 18, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+                    block.Children.Add(head);
+                }
+                groups.Children.Add(block); visibleGroups.Add(kind, block);
             }
-            block.Children.Add(head);
             // The overview is one compact row flow per medium; semantic subheadings belong to the full list.
             foreach (var group in items.GroupBy(x => complete ? x.GroupName : string.Empty))
             {
-                if (complete) block.Children.Add(new TextBlock { Text = group.Key, FontSize = 13, Opacity = .75 });
-                var flow = new TagFlowPanel { MaximumItemWidth = 280, HorizontalSpacing = 12, VerticalSpacing = 10, CenterInlineItems = false };
-                foreach (var item in group) flow.Children.Add(Card(item)); block.Children.Add(flow);
+                if (!visibleFlows.TryGetValue((kind, group.Key), out var flow))
+                {
+                    if (complete) block.Children.Add(new TextBlock { Text = group.Key, FontSize = 13, Opacity = .75 });
+                    flow = new TagFlowPanel { MaximumItemWidth = 280, HorizontalSpacing = 12, VerticalSpacing = 10, CenterInlineItems = false };
+                    block.Children.Add(flow); visibleFlows.Add((kind, group.Key), flow);
+                }
+                foreach (var item in group.Where(item => visibleKeys.Add(item.Key)))
+                {
+                    var card = Card(item);
+                    flow.Children.Add(card);
+                    if (retainRows) InteractionMotion.RevealContent(card, .72f);
+                }
             }
-            groups.Children.Add(block);
         }
-        more.Visibility = V(complete && filtered.Length > page.Length); more.Content = $"显示更多（还有 {filtered.Length - page.Length} 项）";
-        all.Visibility = V(!complete && rows.Length > 0); all.Content = $"查看全部关联作品（{rows.Length}）";
+        more.Update(complete && filtered.Length > page.Length ? (selected, limit) : null);
+        all.Visibility = V(!complete && rows.Length > page.Length); all.Content = $"查看全部关联作品（{rows.Length}）";
+        if (!retainRows && page.Length > 0) InteractionMotion.EnterPage(groups);
         RenderSources(); if (focusedKey is not null) FocusKey(focusedKey);
         PresentationChanged?.Invoke();
     }
@@ -280,8 +289,8 @@ public sealed class BangumiRelatedView : StackPanel, IDisposable
         });
         var text = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(new TextBlock { Text = item.Title, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.Wrap, FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-        text.Children.Add(new TextBlock { Text = item.Label, MaxLines = 1, TextTrimming = TextTrimming.CharacterEllipsis, FontSize = 12, Opacity = .82 });
-        text.Children.Add(new TextBlock { Text = item.Provider, FontSize = 11, Opacity = .60 });
+        text.Children.Add(new TextBlock { Text = item.Label.Replace(" · 查看来源", "", StringComparison.Ordinal),
+            MaxLines = 1, TextTrimming = TextTrimming.CharacterEllipsis, FontSize = 12, Opacity = .82 });
         Grid.SetColumn(text, 1); grid.Children.Add(text);
         var button = new Button { Content = grid, Padding = new Thickness(10, 8, 10, 8), CornerRadius = new CornerRadius(8), HorizontalContentAlignment = HorizontalAlignment.Stretch };
         AutomationProperties.SetAutomationId(button, item.Bangumi is { } bgm ? "BangumiRelatedSubject" + bgm.Id : "NextMoeRelatedWork" + item.Id);
@@ -299,6 +308,8 @@ public sealed class BangumiRelatedView : StackPanel, IDisposable
     private void RenderSources()
     {
         sourceBody.Children.Clear();
+        if (model?.State == BangumiRelatedState.NoIdentity && !string.IsNullOrWhiteSpace(model.Message))
+            sourceBody.Children.Add(new TextBlock { Text = model.Message, TextWrapping = TextWrapping.Wrap });
         var linked = rows.Where(row => row.LinkedBangumiSubjectId is not null).ToArray();
         sourceBody.Children.Add(new TextBlock { Text = $"KunGal · {catalogRows.Count(CatalogRelatedWorks.Eligible)} 项游戏关联", TextWrapping = TextWrapping.Wrap });
         sourceBody.Children.Add(new TextBlock { Text = $"Bangumi · {model?.Items.Length ?? 0} 项跨媒体关联", TextWrapping = TextWrapping.Wrap });
@@ -310,7 +321,7 @@ public sealed class BangumiRelatedView : StackPanel, IDisposable
         if (shown?.UnsupportedCount > 0) sourceBody.Children.Add(new TextBlock { Text = $"原站另有 {shown.UnsupportedCount} 项其他媒体类型。", TextWrapping = TextWrapping.Wrap });
         if (model?.Identity is { } identity)
         {
-            var link = new HyperlinkButton { Content = "Bangumi 原作与关联 ↗", Padding = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Left };
+            var link = new ExternalLinkButton { Content = "Bangumi 原作与关联" };
             AutomationProperties.SetAutomationId(link, "BangumiRelatedSource");
             link.Click += async (_, _) =>
             {
@@ -335,7 +346,7 @@ public sealed class BangumiRelatedView : StackPanel, IDisposable
             entry.Children.Add(new TextBlock { Text = item.Evidence, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, FontSize = 13, Opacity = .75 });
             if (item.LinkedBangumiSubjectId is { } linkedId)
             {
-                var link = new HyperlinkButton { Content = "Bangumi 条目 ↗", Padding = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Left };
+                var link = new ExternalLinkButton { Content = "Bangumi 条目" };
                 var url = "https://bgm.tv/subject/" + linkedId;
                 link.Click += async (_, _) =>
                 {

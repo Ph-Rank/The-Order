@@ -111,8 +111,10 @@ public sealed partial class PlaygroundService
     }
     private ImmutableArray<PlaygroundWireMessage> ContextMessageWires(Run run, PlaygroundMessage message, bool includeImages = true)
     {
+        if (message.Id != run.UserId) message = message with { Attachments = PlaygroundGameFrames.WithoutPixels(message.Attachments) };
         if (run.Conversation.Options.Spoiler == PlaygroundSpoilerMode.Full) return MessageWires(message, includeImages);
-        bool images = includeImages && QuestionNarrativeScope(run).Allowed;
+        bool currentFrame = message.Id == run.UserId && message.Attachments.Any(a => a.IsGameFrame && IsImageAttachment(a));
+        bool images = includeImages && (QuestionNarrativeScope(run).Allowed || currentFrame);
         var attachments = message.Attachments.Select(attachment => IsImageAttachment(attachment) ? attachment : attachment with
             { Text = SpoilerSafeText(run, attachment.Text, true, out _) }).ToImmutableArray();
         if (message.Attachments.Any(IsImageAttachment) && !images) Activity(run, "未能确认附件作品的剧情范围，本轮未发送图片。");

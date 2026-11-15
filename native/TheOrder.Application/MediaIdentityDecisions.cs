@@ -29,7 +29,7 @@ public sealed record MediaIdentityAnchor(MediaIdentityReference Source, MediaIde
 {
     public string Key => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { Source, Purpose, Medium })));
     public bool IsValid => Source is { IsValid: true, Provider: "Native", Resource: "LibraryEntry" } && Purpose == MediaIdentityPurpose.CatalogWork && Medium == "Game"
-        || Source is { IsValid: true, Provider: "Native", Resource: "LibraryEntry" }
+        || (Source is { IsValid: true, Provider: "Native", Resource: "LibraryEntry" } or { IsValid: true, Provider: "NextMoe", Resource: "Work" })
             && (Purpose == MediaIdentityPurpose.GameVideo && Medium == "Game"
                 || Purpose == MediaIdentityPurpose.GameVideoSelection && (Medium == "Manual" || Medium is { Length: > 5 } && Medium.StartsWith("IGDB:", StringComparison.Ordinal) && GameVideos.ValidId(Medium[5..])))
         || Source is { IsValid: true, Provider: "MusicBrainz", Resource: "Release" } && Purpose == MediaIdentityPurpose.MusicListening && Medium == "Music"

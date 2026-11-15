@@ -13,7 +13,13 @@ internal static class NativeSessionCodec
     {
         var resolver = new DefaultJsonTypeInfoResolver();
         resolver.Modifiers.Add(info => {
-            if (info.Type == typeof(NativeSession)) { var computed = info.Properties.FirstOrDefault(p => p.Name == "isTerminal"); if (computed is not null) info.Properties.Remove(computed); }
+            if (info.Type == typeof(NativeSession))
+            {
+                var computed = info.Properties.FirstOrDefault(p => p.Name == "isTerminal");
+                if (computed is not null) info.Properties.Remove(computed);
+                var minimum = info.Properties.FirstOrDefault(p => p.Name == "awaitingRecordingMinimum");
+                if (minimum is not null) minimum.ShouldSerialize = (_, value) => value is true;
+            }
             // Keep legacy v1 bytes readable by the old strict reader. Domain records
             // remain serialization-independent; new overrides are emitted only in v2.
             if (info.Type == typeof(LaunchCompatibility)) {
@@ -33,7 +39,7 @@ internal static class NativeSessionCodec
         public override void Write(Utf8JsonWriter output, string value, JsonSerializerOptions options) => writer.Write(output, value, options);
     }
     private static readonly HashSet<string> Fields = ["version", "gameId", "installationId", "startedAtUtc", "createdObservedAtUtc", "endedAtUtc",
-        "accountingCutoffAtUtc", "accumulated100ns", "lifecycle", "reason", "userPaused", "revision", "writerOwner", "recovery", "recoveryToken"];
+        "accountingCutoffAtUtc", "accumulated100ns", "lifecycle", "reason", "userPaused", "revision", "writerOwner", "recovery", "recoveryToken", "awaitingRecordingMinimum"];
     internal static NativeSession Read(JsonElement value, long seconds)
     {
         if (value.ValueKind != JsonValueKind.Object) throw new InvalidDataException("native session 必须为对象。");
@@ -47,7 +53,8 @@ internal static class NativeSessionCodec
         {
             var native = value.Deserialize<NativeSession>(Options) ?? throw new InvalidDataException("空 session。");
             native.Validate();
-            if (native.Accumulated100ns / NativeSession.TicksPerSecond != seconds) throw new InvalidDataException("Session accounted marker 不一致。");
+            if (native.Accumulated100ns / NativeSession.TicksPerSecond != seconds || native.IsTerminal && native.AwaitingRecordingMinimum)
+                throw new InvalidDataException("Session accounted marker 不一致。");
             return native;
         }
         catch (JsonException e) { throw new InvalidDataException("Session v1 字段无效或缺失。", e); }

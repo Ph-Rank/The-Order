@@ -24,7 +24,12 @@ public sealed partial class ImportPage : Page
     }
     public Visibility Visible(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
     public Visibility TextVisible(string? text) => Visible(!string.IsNullOrWhiteSpace(text));
-    private void OnState(object? sender, PropertyChangedEventArgs e) => SynchronizeActions();
+    private void OnState(object? sender, PropertyChangedEventArgs e)
+    {
+        SynchronizeActions();
+        if (e.PropertyName == nameof(FilesViewModel.Candidates) && ViewModel.Stage == ImportStage.Review && ViewModel.HasCandidates)
+            InteractionMotion.RevealContent(CandidateList);
+    }
     private void SynchronizeActions()
     {
         if (CandidateList is null || ImportSelectedButton is null) return;
@@ -62,7 +67,7 @@ public sealed partial class ImportPage : Page
         {
             var selected = ViewModel.SelectedImportCandidates; if (!Workspace.CanEdit || !ViewModel.CanImportSelection || selected.IsEmpty) return;
             var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = UiText.Format($"将 {selected.Length} 个游戏加入书架？"), Content = UiText.Get("加入后会自动查找封面和简介；需要你确认的结果会出现在“待核对”中。游戏文件留在原位置，重复导入会自动跳过。"), PrimaryButtonText = UiText.Get("加入书架"), CloseButtonText = UiText.Get("继续选择"), DefaultButton = ContentDialogButton.Primary };
-            if (await dialog.ShowAsync() == ContentDialogResult.Primary) await ViewModel.ImportAsync(selected);
+            if (await dialog.ShowInShellAsync() == ContentDialogResult.Primary) await ViewModel.ImportAsync(selected);
         }
         catch (Exception) { Workspace.ReportUnexpected(); }
     }

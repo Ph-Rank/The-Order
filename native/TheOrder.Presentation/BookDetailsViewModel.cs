@@ -84,8 +84,8 @@ public sealed class BookDetailsViewModel(IBangumiSubjectDetailsReader subjects,
     {
         var saved = await books.BindingsAsync(Source!, token);
         if (!accept()) return;
-        AcceptBindings(saved); Message = saved.Length == 0 ? "尚未确认出版记录；检索结果需要逐条核对。" : $"已保存 {saved.Length} 条出版记录，可按需打开核对。"
-            + (saved.Any(x => x.NeedsReview) ? " 部分来源资料或层级已变化，原关联保留，请重新核对。" : "");
+        AcceptBindings(saved);
+        Message = saved.Any(x => x.NeedsReview) ? "部分已关联版本需要重新核对。" : "";
     });
     public Task LoadRelationsAsync(bool refresh = false)
     {
@@ -98,8 +98,8 @@ public sealed class BookDetailsViewModel(IBangumiSubjectDetailsReader subjects,
             if (value.Snapshot.SubjectId != id) throw new InvalidDataException();
             Relations = value;
             Message = value.Snapshot.Items.All(x => x.Kind != BangumiRelationKind.Book)
-                ? "本次未取得书籍关联。" : "书籍关系已读取。";
-            Message += CacheNotice(value.FromCache, value.IsStale, value.Warning);
+                ? "未找到书籍关联。" : "";
+            Message = (Message + CacheNotice(value.FromCache, value.IsStale, value.Warning)).Trim(' ', '·');
         });
     }
     public Task OpenRelatedAsync(string id)
@@ -118,7 +118,7 @@ public sealed class BookDetailsViewModel(IBangumiSubjectDetailsReader subjects,
             if (item.Relation == "单行本") source = source with { Identity = source.Identity with { Level = BookEntityLevel.Volume } };
             history.Push(previous); navigating = false; Source = source; Bangumi = result.Details; AniList = null; ResetResults();
             Incoming = $"《{previous.Source.Title}》 → 《{source.Title}》 · Bangumi 原标签：{item.Relation}";
-            Message = "已打开书籍资料；展开关系或检索出版记录以继续。" + CacheNotice(result.FromCache, result.IsStale, result.Warning);
+            Message = CacheNotice(result.FromCache, result.IsStale, result.Warning).Trim(' ', '·');
             // Read only the tiny saved-choice mapping, never recursively fetch relations.
             var saved = await books.BindingsAsync(source, token);
             if (accept()) AcceptBindings(saved);
@@ -156,8 +156,8 @@ public sealed class BookDetailsViewModel(IBangumiSubjectDetailsReader subjects,
         // Publication IDs remain independent even when their titles or ISBNs match.
         Candidates = (append ? Candidates.Concat(value.Page.Publications) : value.Page.Publications).DistinctBy(x => x.Id).Take(100).ToArray();
         Message = value.Page.Publications.Length == 0 ? "NDL 本次检索没有返回候选。可清空 ISBN，改用原标题检索。"
-            : $"已显示 {Candidates.Length} 条候选 / 原站共 {value.Page.Total} 条。请核对卷次、版本与 ISBN 后确认。";
-        Message += CacheNotice(value.FromCache, value.IsStale, value.Warning);
+            : "";
+        Message = (Message + CacheNotice(value.FromCache, value.IsStale, value.Warning)).Trim(' ', '·');
     });
     public Task PreviewAsync(string id, bool refresh = false)
     {
@@ -170,7 +170,7 @@ public sealed class BookDetailsViewModel(IBangumiSubjectDetailsReader subjects,
             Preview = new(candidate, search.FromCache, search.IsStale, search.Warning) { FromSearch = true };
             State = BookDetailsState.Ready;
             Message = candidate.IsAggregate ? "这是集合记录，仅供参考，不能确认绑定。"
-                : "已显示 NDL 检索资料；保存关联时会独立核验这条记录的编号、版本与 ISBN。";
+                : "确认时独立核验版本和 ISBN。";
             Message += CacheNotice(search.FromCache, search.IsStale, search.Warning); Notify();
             return Task.CompletedTask;
         }
@@ -179,8 +179,8 @@ public sealed class BookDetailsViewModel(IBangumiSubjectDetailsReader subjects,
             var result = await books.LoadAsync(id, refresh, token);
             if (!accept()) return;
             if (!BookValidation.Publication(result.Publication) || result.Publication.Id != id) throw new InvalidDataException();
-            Preview = result; Message = result.Publication.IsAggregate ? "这是集合记录，仅供参考，不能确认绑定。" : "出版记录预览；确认前请核对责任说明、卷次、版本与 ISBN。";
-            Message += CacheNotice(result.FromCache, result.IsStale, result.Warning);
+            Preview = result; Message = result.Publication.IsAggregate ? "集合记录不可关联。" : "";
+            Message = (Message + CacheNotice(result.FromCache, result.IsStale, result.Warning)).Trim(' ', '·');
         });
     }
     public Task ConfirmAsync()

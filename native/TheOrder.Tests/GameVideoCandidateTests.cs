@@ -76,6 +76,26 @@ public sealed class GameVideoCandidateTests
         Assert.Single(vm.PrimaryCandidates); Assert.Single(vm.OtherCandidates); Assert.False(vm.Complete); Assert.Null(vm.Game);
     }
     [Fact]
+    public async Task OnlineWorkCanFindAConsoleTrailerWithoutSharingLocalChoices()
+    {
+        var work = Work with { References = [new("igdb", "42", null)] };
+        var online = GameVideoSource.FromCatalog(work);
+        var local = GameVideoSource.From(work.Id, work);
+        var game = Game(42, name: online.Title) with { Platforms = ["Nintendo Switch"] };
+        Assert.True(GameVideos.PrimaryCandidate(online, game));
+        Assert.False(GameVideos.PrimaryCandidate(local, game));
+        var store = new SessionMediaIdentityDecisions();
+        using var view = new GameVideoViewModel(new(new GameVideoTests.Provider((_, _) => Task.FromResult(GameVideoTests.Result(game)))), store);
+        view.SetSource(online);
+        await view.LoadAsync();
+        Assert.Equal(42, view.Game?.Id);
+        var video = Assert.Single(view.Videos, item => item.VideoId == "abcdefghijk");
+        await view.ChooseVideoAsync(video, false);
+        Assert.NotNull((await store.ReadAsync(online.VideoContext(42), default)).Confirmed);
+        Assert.Null((await store.ReadAsync(local.VideoContext(42), default)).Confirmed);
+    }
+
+    [Fact]
     public void SearchUsesProviderEnglishThenOriginalWithoutChangingIdentityOrUsingAPersonalName()
     {
         var source = GameVideoSource.From("local", Work);

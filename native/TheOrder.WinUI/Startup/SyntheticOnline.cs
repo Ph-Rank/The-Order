@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -22,6 +23,7 @@ public sealed class SyntheticOnline : HttpMessageHandler, ICredentialProvider, I
     public SyntheticOnline(bool slowConnection = false, bool recognitionFixture = false, bool boundaryFixture = false) { this.slowConnection = slowConnection; this.recognitionFixture = recognitionFixture; BoundaryFixture = recognitionFixture && boundaryFixture; Client = new(this, false) { Timeout = Timeout.InfiniteTimeSpan }; }
     protected override void Dispose(bool disposing) { if (disposing) Client.Dispose(); base.Dispose(disposing); }
     private bool saved = true;
+    private bool failedScrollContinuation;
     public Task<string?> ReadAsync(CancellationToken cancellation) => Task.FromResult<string?>(saved ? "synthetic-only" : null);
     public Task<bool> HasCredentialAsync(CancellationToken cancellation) => Task.FromResult(saved);
     public Task SaveAsync(string secret, CancellationToken cancellation) { saved = true; return Task.CompletedTask; }
@@ -35,6 +37,92 @@ public sealed class SyntheticOnline : HttpMessageHandler, ICredentialProvider, I
             var image = uri.AbsolutePath.Contains("invalid", StringComparison.Ordinal) ? new byte[] { 1, 2, 3 } : Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAACgAAAA8CAIAAACb22+3AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABUSURBVFhH7c2hFQAgDMTQA1HWY1gGRIPmBZOo9sxvMyuVVDJyHNf7eu/5lDCWMJYwljCWMJYwljCWMJYwljCWMJYwljCWMJYwljCWMJYwljDWN3gDzZMCdFL7NuoAAAAASUVORK5CYII=");
             if (uri.AbsolutePath.Contains("alternative", StringComparison.Ordinal)) image = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAYAAACiu5n/AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACBSURBVGhD7c8xAYMAAMRA1FUJSuqhTmoLDbBHwLH8cHtynL/rfsPn+3/F0RClIcqGlYYoG1YaomxYaYiyYaUhyoaVhigbVhqibFhpiLJhpSHKhpWGKBtWGqJsWGmIsmGlIcqGlYYoG1YaomxYaYiyYaUhyoaVhigbVhqibFhpiPIAO6EzeKnXZYkAAAAASUVORK5CYII=");
             var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(image) }; response.Content.Headers.ContentType = new("image/png"); return response;
+        }
+        if (Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test)
+        {
+            var more = query.ContainsKey("cursor");
+            if (uri.AbsolutePath == "/v2/catalog/works" && query.TryGetValue("q", out var term) && term is "motion" or "motion-scroll" or "motion-retry")
+            {
+                await Task.Delay(550, cancellation);
+                if (term == "motion-retry" && more && !failedScrollContinuation)
+                {
+                    failedScrollContinuation = true;
+                    return Json(new { @object = "malformed-page" });
+                }
+                var ids = term != "motion"
+                    ? Enumerable.Range(more ? 21 : 1, more ? 4 : 20).Select(id => id.ToString(CultureInfo.InvariantCulture))
+                    : more ? new[] { "2", "3" } : new[] { "1", "2" };
+                return Json(new { @object = "list", items = ids.Select(Work), next_cursor = more ? null : "cur_motion" });
+            }
+            if (uri.AbsolutePath == "/v2/catalog/rankings")
+            {
+                await Task.Delay(550, cancellation);
+                var by = query["by"];
+                return Json(new { @object = "list", by, metric = query["metric"], unit = by == "consensus" ? "deviation" : "native",
+                    items = Enumerable.Range(more ? 3 : 1, 2).Select(rank => new
+                    {
+                        @object = "ranking_entry", rank, value = by switch
+                        {
+                            "consensus" or "erogamescape" or "howlongtobeat" => 91 - rank,
+                            "dlsite" => 5m - rank / 10m,
+                            _ => 9.1m - rank / 10m
+                        },
+                        work = Work(rank.ToString(CultureInfo.InvariantCulture))
+                    }), next_cursor = more ? null : "cur_motion" });
+            }
+            if (uri.AbsolutePath == "/v2/news")
+            {
+                await Task.Delay(550, cancellation);
+                return Json(new { @object = "list", items = Enumerable.Range(more ? 3 : 1, 2).Select(id => new
+                    {
+                        @object = "news_item", id = id.ToString(CultureInfo.InvariantCulture), title = $"合成资讯 {id}",
+                        summary = "用于验证资讯加载和分页。", lane = query.GetValueOrDefault("lane", "news"),
+                        source = new { display_name = "合成资讯来源", attribution = "合成转载署名" },
+                        published_at = "2026-11-07T12:00:00Z"
+                    }), next_cursor = more ? null : "cur_motion" });
+            }
+            if (Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_WALKTHROUGH_TEST") == "1")
+            {
+                const string listPath = "/v2/catalog/walkthroughs";
+                if (uri.AbsolutePath == listPath && query.GetValueOrDefault("work_id") == "53")
+                {
+                    await Task.Delay(550, cancellation);
+                    return Json(new { items = new[] { new { id = "900001", work_id = "53", source = "合成攻略", lang = "zh-Hans" } } });
+                }
+                if (uri.AbsolutePath == listPath + "/900001")
+                {
+                    await Task.Delay(550, cancellation);
+                    return Json(new { id = "900001", work_id = "53", source = "合成攻略", lang = "zh-Hans", chart = new
+                        {
+                            sections = new[] { new { key = "main", title = "合成路线" } },
+                            entries = new[] { new { key = "start", label = "START" } }, saves = Array.Empty<object>(),
+                            endings = new[] { new { key = "end", name = "END" } },
+                            segments = new[] { new { key = "route", section_key = "main",
+                                from_node = new { node_type = "entry", key = "start" }, to_node = new { node_type = "ending", key = "end" },
+                                steps = new[] { new { step_type = "choice", text = "沿着灯光继续前进" } } } }
+                        } });
+                }
+            }
+        }
+        if (uri.AbsolutePath == "/v2/catalog/calendar" && query.TryGetValue("month", out var month)
+            && Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test)
+        {
+            await Task.Delay(slowConnection ? 20_000 : 550, cancellation);
+            return Json(new
+            {
+                @object = "list",
+                items = Enumerable.Range(1, 100).Select(id => new
+                {
+                    @object = "work",
+                    id = id.ToString(CultureInfo.InvariantCulture),
+                    display_name = $"合成发售作品 {id}",
+                    medium = "galgame",
+                    content_limit = "sfw",
+                    release_date = month + (id == 100 ? "-21" : "-20"),
+                    release_date_precision = "day"
+                }),
+                meta = new { today = Now.ToOffset(TimeSpan.FromHours(9)).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) }
+            });
         }
         query.TryGetValue("q", out var q);
         if (recognitionFixture)
@@ -74,7 +162,8 @@ public sealed class SyntheticOnline : HttpMessageHandler, ICredentialProvider, I
         if (id == "87") await Task.Delay(40000, cancellation);
         return Json(Work(id == "86" ? "90" : id));
     }
-    private static object Work(string id) => new { @object = "work", id, display_name = "合成在线作品 " + id, cover = new { url = "https://images.example/" + (id == "99" ? "invalid" : "cover") + ".png" },
+    private static object Work(string id) => new { @object = "work", id, display_name = "合成在线作品 " + id, medium = "galgame", content_limit = "sfw",
+        cover = new { url = "https://images.example/" + (id == "99" ? "invalid" : "cover") + ".png" },
         covers = ArtworkChoices(),
         intros = new[] { new { lang = "zh-Hans", value = "这是隔离验收使用的虚构作品。资料按需加载；加入愿望单后可离线查看与编辑。" } }, companies = new[] { new { attribution_role = "developer", display_name = "Synthetic Studio" } } };
     private static object RecognitionWork(string id) => new { @object = "work", id,

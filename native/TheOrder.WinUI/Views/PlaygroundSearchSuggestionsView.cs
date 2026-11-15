@@ -57,7 +57,7 @@ internal sealed class PlaygroundSearchSuggestionsView : Grid, IDisposable
         if (string.IsNullOrWhiteSpace(dataDirectory) || html.Length > 262144)
         { State = "unavailable"; notice.Text = "Google 搜索建议未能呈现；此公开资料答复的展示仍需核验。"; return; }
         int run = ++generation; State = "loading";
-        var current = new WebView2(); web = current; Children.Insert(0, current);
+        var current = new WebView2 { Opacity = 0, IsHitTestVisible = false }; web = current; Children.Insert(0, current);
         try
         {
             var directory = Path.GetFullPath(dataDirectory);
@@ -93,6 +93,9 @@ internal sealed class PlaygroundSearchSuggestionsView : Grid, IDisposable
                 if (run != generation) return;
                 if (!e.IsSuccess) { Fail(); return; }
                 State = "ready"; notice.Visibility = Visibility.Collapsed;
+                current.Opacity = 1;
+                current.IsHitTestVisible = true;
+                InteractionMotion.RevealContent(this, .72f);
             };
             core.NavigateToString("<!doctype html><html><head><meta charset=\"utf-8\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'none'; font-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'\"><meta name=\"color-scheme\" content=\"light dark\"></head><body style=\"margin:0;background:transparent;font-family:Segoe UI,sans-serif\">" + html + "</body></html>");
         }

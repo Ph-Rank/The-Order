@@ -160,7 +160,7 @@ public sealed class WindowsPlaygroundStore : IPlaygroundStore
         var ids = conversations.Select(c => c.Id).ToHashSet();
         var messages = state.Messages.Where(m => ids.Contains(m.ConversationId)).Select(m => m.Retention != PlaygroundRetention.Portable
             ? m with { Text = "该公开检索答复仅在当次会话中展示，未长期保存；可以重新检索。", Attachments = [], Sources = [], SearchSuggestionsHtml = null }
-            : m with { SearchSuggestionsHtml = null }).ToImmutableArray();
+            : m with { SearchSuggestionsHtml = null, Attachments = PlaygroundGameFrames.WithoutPixels(m.Attachments) }).ToImmutableArray();
         var users = messages.Where(m => m.Role == "user").Select(m => m.Id).ToHashSet();
         return state with { Conversations = conversations, Messages = messages,
             Memories = state.Memories.Where(m => ids.Contains(m.ConversationId) && users.Contains(m.MessageId)).ToImmutableArray() };

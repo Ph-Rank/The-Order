@@ -38,7 +38,8 @@ public sealed partial class CatalogPresentationService
         // At most 64 scene candidates. Keep own artwork and a bounded set from this exact VNDB ID.
         var original = work.Presentation?.Art ?? [];
         var added = extra.Art.IsDefault ? [] : extra.Art.OrderByDescending(a => a.Kind == "vndb-curated").Take(24).ToImmutableArray();
-        var own = original.Where(a => !a.Kind.StartsWith("vndb-", StringComparison.Ordinal)).Take(64).ToArray();
+        var own = original.Where(a => !a.Kind.StartsWith("vndb-", StringComparison.Ordinal) ||
+            a.Kind == ArtworkSources.VndbPromoKind && a.Url == retainedUrl).Take(64).ToArray();
         var budget = 64 - added.Length;
         var selected = own.Length <= budget ? own : Enumerable.Range(0, budget).Select(i => own[(int)Math.Round(i * (own.Length - 1d) / (budget - 1))]).ToArray();
         if (retainedUrl is not null && selected.Length > 0 && !selected.Any(a => a.Url == retainedUrl) && own.FirstOrDefault(a => a.Url == retainedUrl) is { } screened)

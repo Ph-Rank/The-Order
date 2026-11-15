@@ -6,28 +6,35 @@ constexpr float opacity = .94f, bodyFont = 20.f, originalFont = 16.f;
 constexpr float textInset = 66.f, stepGap = 4.f;
 struct Layout {
     float x, y, width, height, scale, sidebar;
-    float inset, readerX, readerWidth, tocX, tocWidth, contentTop, contentBottom, footerY;
+    float inset, controlInset, readerX, readerWidth, tocX, tocWidth, contentTop, contentBottom, footerY;
     bool compact;
 };
 struct HeaderLayout {
-    float top,titleWidth,sourceX,sourceY,sourceWidth,attributionY,ruleY,contentTop;
+    float top, rowHeight, titleWidth, closeWidth, sourceX, sourceY, sourceWidth, attributionY, ruleY, contentTop;
 };
-inline HeaderLayout header(const Layout& layout,bool sources,bool attribution) {
-    const float s=layout.scale,available=layout.width-2*layout.inset,top=8*s;
-    const bool inlineSources=sources&&available>=620*s;
-    const float sourceWidth=std::min(246*s,available),titleWidth=available-60*s-(inlineSources?sourceWidth+14*s:0);
-    const float sourceX=inlineSources?layout.inset+titleWidth+14*s:layout.inset;
-    const float sourceY=inlineSources?top:top+30*s;
-    const float rowBottom=(sources&&!inlineSources?sourceY:top)+24*s;
+inline HeaderLayout header(const Layout& layout,int sourceCount,bool attribution) {
+    const float s=layout.scale, inset=layout.controlInset, available=layout.width-2*inset;
+    const float top=(layout.compact?6.f:9.f)*s, rowHeight=(layout.compact?24.f:27.f)*s;
+    const float closeWidth=(layout.compact?42.f:48.f)*s, gap=8*s;
+    const float preferredSources=(sourceCount*(layout.compact?59.f:70.f)+std::max(0,sourceCount-1)*4.f)*s;
+    const bool inlineSources=sourceCount>0 && available>=preferredSources+closeWidth+2*gap+86*s;
+    const float sourceWidth=std::min(preferredSources,available);
+    const float titleWidth=available-closeWidth-gap-(inlineSources?sourceWidth+gap:0);
+    const float sourceX=inlineSources?layout.width-inset-closeWidth-gap-sourceWidth:inset;
+    const float sourceY=inlineSources?top:top+rowHeight+4*s;
+    const float rowBottom=(sourceCount>0&&!inlineSources?sourceY:top)+rowHeight;
     const float attributionY=rowBottom+3*s,ruleY=attribution?attributionY+15*s:rowBottom+4*s;
-    return {top,titleWidth,sourceX,sourceY,sourceWidth,attributionY,ruleY,ruleY+6*s};
+    return {top,rowHeight,titleWidth,closeWidth,sourceX,sourceY,sourceWidth,attributionY,ruleY,ruleY+5*s};
 }
+inline bool attributionBesideFlowModes(const Layout& layout) {
+    return layout.width-2*layout.controlInset>=300*layout.scale;
+}
+inline float flowModeHeight(const Layout& layout) { return (layout.compact?23.f:26.f)*layout.scale; }
 inline Layout layout(float width, float height, float dpi = 96.f) {
     const float density=std::clamp(dpi/96.f,1.f,3.f);
     const bool compact=width/density<820||height/density<600;
-    const float fit=compact?std::clamp(std::min(width/(density*560),height/(density*320)),.8f,1.f):
-        std::clamp(std::min(width/(density*720),height/(density*480)),.85f,1.f);
-    const float scale=density*fit;
+    // Fit the controls at the desktop DPI, with a smaller logical scale on very short windows.
+    const float scale=std::min(density,std::max(.8f,std::min(width/440.f,height/360.f)));
     const float w=std::min(width*(compact?.96f:.92f),1160*scale),h=height*(compact?.94f:.90f);
     const float navigation=w>=820*scale?(compact?168.f:184.f)*scale:0;
     const float toc=!compact&&w>=1056*scale?136*scale:0;
@@ -35,7 +42,8 @@ inline Layout layout(float width, float height, float dpi = 96.f) {
     const float reader=std::min(640*scale,w-(compact?28.f:48.f)*scale-navigation-toc-gaps);
     const float inset=(w-navigation-toc-gaps-reader)/2;
     const float readerX=inset+navigation+(navigation>0?24*scale:0);
-    return {(width-w)/2,(height-h)/2,w,h,scale,navigation,inset,readerX,reader,
+    const float controlInset=(compact?12.f:20.f)*scale;
+    return {(width-w)/2,(height-h)/2,w,h,scale,navigation,inset,controlInset,readerX,reader,
         readerX+reader+(toc>0?24*scale:0),toc,(compact?56.f:86.f)*scale,h-10*scale,h-10*scale,compact};
 }
 struct Style {float body,original,heading,padding,stagePadding,gap,label,alternative,alternativeOriginal;};

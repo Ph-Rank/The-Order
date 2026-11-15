@@ -21,6 +21,8 @@ public sealed record CatalogPresentationEntry(string Algorithm, CachedCatalogWor
     public int ArtworkSchema { get; init; }
     public int CoverSchema { get; init; }
     public int BannerSchema { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool VndbPromoChecked { get; init; }
     public BannerAssessment[] BannerAssessments { get; init; } = [];
     public bool CatalogCoverKnown { get; init; }
     public WorkCover? CatalogCover { get; init; }
@@ -70,8 +72,11 @@ public sealed partial class CatalogPresentationService(IOnlineCatalog catalog, I
     private static bool CoverReady(CatalogPresentationEntry entry) => entry.CoverSchema == CoverSchemaVersion && entry.CatalogCoverKnown &&
         entry.CoverDecision is { Complete: true } decision && decision.Algorithm == CoverAesthetics.Algorithm &&
         decision.InputSignature == CoverAesthetics.Signature(CoverAesthetics.Candidates(entry.Work, entry.CatalogCover)) && decision.SelectedUrl == entry.Work.CoverUrl;
+    private static bool NeedsVndbPromo(CatalogPresentationEntry entry) =>
+        entry.Banner is null && !entry.VndbPromoChecked && entry.Work.Presentation is not null && ArtworkSources.VndbWorkId(entry.Work) is not null;
     public static bool NeedsPreparation(CatalogPresentationEntry entry) =>
-        !entry.Prepared || entry.BannerSchema != BannerSchemaVersion || !entry.MediaPrepared || entry.MediaSchema != MediaSchema || !CoverReady(entry) || entry.ArtworkSchema != ArtworkSchemaVersion || NeedsDisplay(entry);
+        !entry.Prepared || entry.BannerSchema != BannerSchemaVersion || NeedsVndbPromo(entry) ||
+        !entry.MediaPrepared || entry.MediaSchema != MediaSchema || !CoverReady(entry) || entry.ArtworkSchema != ArtworkSchemaVersion || NeedsDisplay(entry);
     public WorkMetadata? PreparedWork(string id) { lock (gate) return memory.GetValueOrDefault(id).Entry?.Work; }
     public static string Signature(CachedCatalogWork current, CachedCatalogWork? reference)
         => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { Algorithm, Current = current, Reference = reference })));
@@ -206,13 +211,36 @@ public sealed partial class CatalogPresentationService(IOnlineCatalog catalog, I
             // A failed reference request must be retryable, and may not silently change version identity.
             if (entry.ArtworkSchema != ArtworkSchemaVersion) entry = await SupplementAsync(entry, token).ConfigureAwait(false);
             entry=await PrepareMediaAsync(entry,token).ConfigureAwait(false);
-            if (entry.Prepared && entry.BannerSchema == BannerSchemaVersion) return entry.MediaPrepared;
+            bool screened = entry.Prepared && entry.BannerSchema == BannerSchemaVersion;
+            if (screened && !NeedsVndbPromo(entry)) return entry.MediaPrepared;
             var identity = await auth.CaptureAsync(token).ConfigureAwait(false);
             using var request = CancellationTokenSource.CreateLinkedTokenSource(token, identity.Changed);
             await using var detector = detectorFactory();
             lock (gate) analyses++;
-            var result = await BannerSelection.AnalyzeAsync(entry.Work, null, images, registry, request.Token, detector).ConfigureAwait(false);
-            if (result.Choice is null && CatalogReferences.Preferred(entry.Work) is { } relation)
+            var result = screened
+                ? new BannerSelection.Outcome(null, true) { Assessments = entry.BannerAssessments }
+                : await BannerSelection.AnalyzeAsync(entry.Work, null, images, registry, request.Token, detector).ConfigureAwait(false);
+            var current = entry.Current;
+            bool promoChecked = entry.VndbPromoChecked;
+            if (result.Choice is null && NeedsVndbPromo(entry) && entry.Work.Presentation is { } display)
+            {
+                var extra = artwork is null ? new ArtworkSupplement([], true) : await artwork.ReadPromoAsync(entry.Work, request.Token).ConfigureAwait(false);
+                promoChecked = extra.Complete;
+                if (!extra.Art.IsDefaultOrEmpty)
+                {
+                    var promoWork = entry.Work with { BannerUrl = null, Covers = [], Presentation = display with { Art = extra.Art } };
+                    var promo = await BannerSelection.AnalyzeAsync(promoWork, null, images, registry, request.Token, detector).ConfigureAwait(false);
+                    promoChecked &= promo.Complete || promo.Choice is not null;
+                    result = result with { Choice = promo.Choice, Assessments = [.. result.Assessments.Where(a => a.Kind != ArtworkSources.VndbPromoKind), .. promo.Assessments] };
+                    if (promo.Choice is { } chosen)
+                    {
+                        var art = extra.Art.First(a => a.Url == chosen.Url);
+                        current = CachedCatalogWork.From(entry.Work with
+                        { Presentation = display with { Art = [art, .. display.Art.Where(a => a.Url != art.Url).Take(63)] } });
+                    }
+                }
+            }
+            if (result.Choice is null && !screened && CatalogReferences.Preferred(entry.Work) is { } relation)
             {
                 if (entry.Reference is null)
                 {
@@ -235,7 +263,8 @@ public sealed partial class CatalogPresentationService(IOnlineCatalog catalog, I
             }
             bool complete = (result.Choice is not null || result.Complete) &&
                 (CatalogReferences.Preferred(entry.Work) is null || entry.Reference is not null || result.Choice is not null);
-            var updated = entry with { Banner = result.Choice ?? (result.Complete ? null : entry.Banner),
+            var updated = entry with { Current = current, Signature = Signature(current, entry.Reference),
+                Banner = result.Choice ?? (result.Complete ? null : entry.Banner), VndbPromoChecked = promoChecked,
                 BannerSchema = complete ? BannerSchemaVersion : 0, BannerAssessments = result.Assessments,
                 Prepared = complete && entry.ArtworkSchema == ArtworkSchemaVersion };
             if (result.Choice is { } choice)
@@ -264,7 +293,7 @@ public sealed partial class CatalogPresentationService(IOnlineCatalog catalog, I
             }
             finally { operations.Release(); }
             Prepared?.Invoke(id);
-            return updated.Prepared && updated.MediaPrepared;
+            return updated.Prepared && updated.MediaPrepared && !NeedsVndbPromo(updated);
         }
         finally { analysis.Release(); }
     }

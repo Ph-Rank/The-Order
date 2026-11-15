@@ -26,8 +26,8 @@ public sealed partial class PlaygroundView
         AutomationProperties.SetAutomationId(generationSave, "PlaygroundSaveGeneration");
         PlaygroundAppearance.Apply(generationSave); generationSave.Click += async (_, _) => await RunAsync(SaveGenerationSettingsAsync);
         settings.Children.Add(generationSave); settings.Children.Add(generationUsage);
-        var notice = Label("各会话通用。估算费用不等于最终账单。", 12);
-        notice.Style = generationUsage.Style = PlaygroundAppearance.Style("PGMetadataTextStyle"); settings.Children.Add(notice);
+        generationUsage.Style = PlaygroundAppearance.Style("PGMetadataTextStyle");
+        ToolTipService.SetToolTip(generationSave, "生成设置对所有会话生效。");
         ToolTipService.SetToolTip(generationContext, "字符数不等于 token 数，包含工具说明及可读续接内容；超出时停止发送，不自动扩大。");
         ToolTipService.SetToolTip(generationTimeout, "停止前服务商可能已处理请求；生成期间不能更改这些设置。");
     }
@@ -53,7 +53,8 @@ public sealed partial class PlaygroundView
             finally { generationSync = false; }
         }
         var reply = service.Snapshot.Messages.LastOrDefault(m => m.ConversationId == selected && m.Role == "assistant");
-        if (reply is null) { generationUsage.Text = "尚无本会话的返回用量。"; ToolTipService.SetToolTip(generationUsage, null); }
+        generationUsage.Visibility = reply is null ? Visibility.Collapsed : Visibility.Visible;
+        if (reply is null) { generationUsage.Text = ""; ToolTipService.SetToolTip(generationUsage, null); }
         else
         {
             // A model switch changes future requests, never the price identity
@@ -79,6 +80,6 @@ public sealed partial class PlaygroundView
             TimeoutSeconds = Number(generationTimeout.Value, current.TimeoutSeconds, 10, 1800)
         }, lifetime.Token);
         generationDirty = false; SyncGenerationSettings();
-        notification.Message = "生成设置已保存，后续请求将使用新值。"; notification.Severity = InfoBarSeverity.Informational; notification.IsOpen = true;
+        ReportNotice?.Invoke("生成设置已保存。", InfoBarSeverity.Success);
     }
 }

@@ -9,6 +9,7 @@ internal sealed class NativeLifecycleLog(NativeProfileStore profile) : ILoggerPr
 {
     private readonly object gate = new();
     private readonly NativeLifecycleJournal journal = new(profile);
+    private readonly Queue<string> recentWarnings = new(8);
     private bool disposed;
     public ILogger CreateLogger(string categoryName) => new LifecycleLogger(this);
     public void Dispose() { lock (gate) disposed = true; }
@@ -17,8 +18,18 @@ internal sealed class NativeLifecycleLog(NativeProfileStore profile) : ILoggerPr
         lock (gate)
         {
             if (disposed) return;
-            journal.Write(level.ToString(), error?.GetType().Name);
+            var errorType = error?.GetType().Name;
+            journal.Write(level.ToString(), errorType);
+            if (level < LogLevel.Warning) return;
+            if (errorType is not { Length: > 0 and <= 96 } ||
+                !errorType.All(c => char.IsAsciiLetterOrDigit(c) || c == '_')) errorType = "Lifecycle";
+            if (recentWarnings.Count == 8) recentWarnings.Dequeue();
+            recentWarnings.Enqueue(FormattableString.Invariant($"{DateTimeOffset.UtcNow:u} {level} {errorType}"));
         }
+    }
+    internal string RecentWarnings()
+    {
+        lock (gate) return string.Join('\n', recentWarnings);
     }
     private sealed class LifecycleLogger(NativeLifecycleLog owner) : ILogger
     {

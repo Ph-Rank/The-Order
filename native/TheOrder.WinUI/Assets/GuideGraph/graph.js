@@ -11,7 +11,10 @@
     $('routeValue').textContent = select.selectedOptions[0]?.textContent || '全部路线';
     $('routeButton').setAttribute('aria-expanded', String(open)); list.hidden = !open;
     list.replaceChildren();
-    for (const option of select.options) {
+    const primary = Array.from(select.options);
+    const current = select.selectedIndex;
+    const options = current > 0 ? [primary[current], ...primary.filter((_, index) => index !== current)] : primary;
+    for (const option of options) {
       const item = document.createElement('button'); item.type = 'button'; item.role = 'option';
       item.textContent = option.textContent; item.dataset.value = option.value;
       item.setAttribute('aria-selected', String(option.value === select.value)); item.tabIndex = option.value === select.value ? 0 : -1;

@@ -6,7 +6,7 @@ public static class ShellNavigationPolicy
         page == WorkspacePage.Installations ? installationGameId : selectedId;
     public static bool CanGoBack(WorkspacePage page, bool browsingDiscovery = false) => page switch
     {
-        WorkspacePage.Library or WorkspacePage.Settings or WorkspacePage.Statistics or WorkspacePage.Playground => false,
+        WorkspacePage.Library or WorkspacePage.Settings or WorkspacePage.Statistics or WorkspacePage.Playground or WorkspacePage.Status => false,
         WorkspacePage.Online => browsingDiscovery,
         _ => true
     };

@@ -23,7 +23,8 @@ public sealed partial class WindowsWalkthroughSessions
         {
             if (configuration.Profile is not NativeProfileStore profile) throw new InvalidOperationException(); profile.ValidateAccess();
             Dictionary<string, LocalReadingPosition> positions; Dictionary<string, OverlayPagePreference> lastPages; lock (gate) { positions = new(readingPositions); lastPages = new(overlayPages); }
-            var bytes = JsonSerializer.SerializeToUtf8Bytes(new Preference(1, profile.Manifest.ProfileId, profile.Manifest.StoreId, enabled, key) { CustomShortcut = true, Sources = new(sources), Notes = notes ?? new(notePreferences), Positions = positions, LastPages = lastPages });
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(new Preference(1, profile.Manifest.ProfileId, profile.Manifest.StoreId, enabled, key) { CustomShortcut = true, Sources = new(sources), Notes = notes ?? new(notePreferences), Positions = positions,
+                LastPages = lastPages.Where(p => p.Value.Channel < 3).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal), LastChatPages = lastPages.Where(p => p.Value.Channel == 3).Select(p => p.Key).ToArray() });
             if (bytes.Length > 2 * 1024 * 1024) throw new InvalidDataException("说明文件设置超过容量限制。");
             await WindowsAtomicFile.WriteAsync(Path.Combine(root, PreferenceName), bytes).ConfigureAwait(false);
         }
@@ -83,8 +84,10 @@ public sealed partial class WindowsWalkthroughSessions
     {
         lock (gate)
         {
-            if (!Current(slot) || channel is < 0 or > 2) return;
+            if (!Current(slot) || channel is < 0 or > 3 || channel == 3 && slot.Chat is null) return;
             CaptureReadingPosition(slot); slot.Channel = channel; slot.ReaderRevision++; slot.ReadingReady = false;
+            slot.View.Write(176, channel);
+            if (channel == 3) return;
             if (channel != 2) slot.View.Write(144, channel);
             if (channel == 0)
             {
@@ -103,7 +106,7 @@ public sealed partial class WindowsWalkthroughSessions
         long revision; int channel; ImmutableArray<LocalReadingFile> files;
         lock (gate)
         {
-            if (!Current(slot) || slot.Channel == 0) return; channel = slot.Channel; files = channel == 1 ? slot.Local.Guides : slot.Local.Notes;
+            if (!Current(slot) || slot.Channel is not (1 or 2)) return; channel = slot.Channel; files = channel == 1 ? slot.Local.Guides : slot.Local.Notes;
             if (fileIndex < 0 || fileIndex >= Math.Max(1, files.Length) || pageIndex is < 0 or > 2000) return;
             CaptureReadingPosition(slot); revision = ++slot.ReaderRevision; slot.LocalIndex = fileIndex; slot.ReadingReady = false;
             Write(null, 0, files.IsEmpty ? channel == 1 ? "尚未选择本地攻略。请在游戏工具 → 本地攻略中添加文件。" : "尚未选择说明文件。请在游戏工具 → 说明文件中添加文件。" : "正在读取…");
@@ -132,7 +135,9 @@ public sealed partial class WindowsWalkthroughSessions
                 slot.LocalFilePositions[channel] = fileIndex; slot.LocalPagePositions[channel] = pageIndex;
                 StorePosition(slot.GameId, channel, file.Path, pageIndex, saved?.Progress ?? startProgress, saved?.Zoom ?? 1, touch: true);
                 slot.ReadingReady = true;
-                slot.HasDocument = true; slot.ReadFailure = null; Report(slot.GameId, (channel == 1 ? "本地攻略" : "说明文件") + "已准备：" + WindowsGuideHotkeys.Label(VirtualKey) + " 显示或隐藏");
+                slot.HasDocument = true;
+                slot.ReadFailure = null;
+                ReportReady(slot);
             }
         }
         catch (OperationCanceledException) { }

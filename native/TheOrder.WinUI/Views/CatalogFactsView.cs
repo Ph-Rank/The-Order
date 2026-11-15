@@ -11,6 +11,7 @@ namespace TheOrder.WinUI.Views;
 public sealed class CatalogFactsView : StackPanel
 {
     private WorkMetadata? work;
+    private WorkMetadata? source;
     private string? displayedTitle;
     private bool compact;
     private bool dense;
@@ -38,6 +39,8 @@ public sealed class CatalogFactsView : StackPanel
     public CatalogFactsView() { Spacing = 5; }
     public void SetWork(WorkMetadata? value, string? title = null)
     {
+        if (ReferenceEquals(value, source) && title == displayedTitle) return;
+        source = value;
         work = value is null ? null : CatalogLanguage.Project(value); displayedTitle = title; Render();
     }
     private TextBlock Text(string value, double? size = null, double opacity = 1.0)

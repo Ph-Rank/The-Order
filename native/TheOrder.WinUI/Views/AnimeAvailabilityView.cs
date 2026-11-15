@@ -4,6 +4,7 @@ using System.Numerics;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
@@ -22,7 +23,7 @@ internal sealed class AnimeAvailabilityView : StackPanel, IDisposable
     private readonly StackPanel pvBody = new() { Spacing = 10 };
     private readonly Grid host = new() { MaxWidth = 960, HorizontalAlignment = HorizontalAlignment.Center, Visibility = Visibility.Collapsed };
     private readonly Button retry = new() { Content = "重新加载 PV", CornerRadius = new(6), Visibility = Visibility.Collapsed };
-    private readonly Button original = new() { Padding = new(12, 8, 12, 8), CornerRadius = new(6) };
+    private readonly ExternalLinkButton original = new();
     private CompositionRoundedRectangleGeometry? playerGeometry;
     private CompositionGeometricClip? playerClip;
     private PointerEventHandler? wheelHandler;
@@ -31,7 +32,7 @@ internal sealed class AnimeAvailabilityView : StackPanel, IDisposable
     private int? mediaId; private AniListTrailer? trailer; private WebView2? web; private long version; private bool disposed;
     private string state = "idle"; private int? error; private InMemoryRandomAccessStream? document;
     private string? playerProbe;
-    public AnimeAvailabilityView(string automationPrefix = "Anime", string attribution = "AniList 收录的预告片，由原平台播放器提供播放。")
+    public AnimeAvailabilityView(string automationPrefix = "Anime")
     {
         Spacing = 12; Children.Add(pv);
         AutomationProperties.SetAutomationId(this, automationPrefix + "Availability"); AutomationProperties.SetAutomationId(retry, automationPrefix + "RetryPV");
@@ -39,8 +40,8 @@ internal sealed class AnimeAvailabilityView : StackPanel, IDisposable
         AutomationProperties.SetAutomationId(pv, automationPrefix + "PV");
         if (automationPrefix != "Anime") pv.Header = "播放影像 · YouTube";
         var actions = new TagFlowPanel { HorizontalSpacing = 10, VerticalSpacing = 8, CenterInlineItems = false, Children = { original, retry } };
-        pvBody.Children.Add(Text(13, attribution));
-        pvBody.Children.Add(Text(12, "可在播放器的“设置 → 画质”中选择清晰度；可用选项由 YouTube 提供。"));
+        SetPlayerMessage("");
+        AutomationProperties.SetLiveSetting(playerStatus, AutomationLiveSetting.Polite);
         pvBody.Children.Add(actions); pvBody.Children.Add(playerStatus); pvBody.Children.Add(host); pv.Content = pvBody;
         retry.Click += async (_, _) => { Stop(); await StartAsync(); };
         original.Click += async (_, _) => { if (trailer is { } value) await OpenLinkAsync(value.Url); };
@@ -55,16 +56,16 @@ internal sealed class AnimeAvailabilityView : StackPanel, IDisposable
         if (mediaId != id || trailer != value || !isAnime) { Stop(); pv.IsExpanded = false; }
         mediaId = id; trailer = value; Visibility = isAnime && value is not null ? Visibility.Visible : Visibility.Collapsed;
         pv.IsEnabled = canLoad;
-        original.Content = new TextBlock { Text = (value?.Site == "dailymotion" ? "Dailymotion" : "YouTube") + " ↗", IsHitTestVisible = false };
+        original.Content = value?.Site == "dailymotion" ? "Dailymotion" : "YouTube";
         AutomationProperties.SetName(original, "在原平台打开预告片");
         ToolTipService.SetToolTip(original, value?.Url);
-        if (value is { CanEmbed: false }) playerStatus.Text = "此视频平台暂不支持应用内播放，可在原站观看。";
+        if (value is { CanEmbed: false }) SetPlayerMessage("此视频仅支持在原平台播放。");
         if (canLoad && pv.IsExpanded && value?.CanEmbed == true && web is null && state != "failed") _ = StartAsync();
     }
     private async Task OpenLinkAsync(string url)
     {
         try { if (!AniListPlayback.SafeExternalUrl(url) || !await Windows.System.Launcher.LaunchUriAsync(new Uri(url))) throw new InvalidOperationException(); }
-        catch { if (!disposed) { playerStatus.Text = "暂时无法打开原平台，请稍后重试。"; } }
+        catch { if (!disposed) SetPlayerMessage("暂时无法打开原平台，请稍后重试。"); }
     }
     private void FitPlayer()
     {
@@ -81,8 +82,9 @@ internal sealed class AnimeAvailabilityView : StackPanel, IDisposable
     {
         if (disposed || web is not null || trailer is not { CanEmbed: true } value || !AniListPlayback.ValidTrailer(value)) return;
         var run = ++version; state = "loading"; error = null; retry.Visibility = Visibility.Collapsed;
-        playerStatus.Text = "正在加载原站播放器…"; host.Visibility = Visibility.Visible;
-        var current = new WebView2 { DefaultBackgroundColor = Microsoft.UI.Colors.Transparent, MinWidth = 200, MinHeight = 200, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
+        SetPlayerMessage("正在载入播放器…"); host.Visibility = Visibility.Visible;
+        var current = new WebView2 { DefaultBackgroundColor = Microsoft.UI.Colors.Transparent, MinWidth = 200, MinHeight = 200,
+            HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch, Opacity = 0, IsHitTestVisible = false };
         // Register before attachment/EnsureCoreWebView2Async: WebView2 installs
         // its normal wheel handlers when creating the core browser. Handling here
         // prevents Chromium from consuming vertical wheel input first.
@@ -133,9 +135,15 @@ internal sealed class AnimeAvailabilityView : StackPanel, IDisposable
                 try
                 {
                     using var json = JsonDocument.Parse(args.WebMessageAsJson); var kind = json.RootElement.GetProperty("kind").GetString(); var value = json.RootElement.GetProperty("value").GetInt32();
-                    if (kind == "ready") { state = "ready"; playerStatus.Text = "点击原站播放器开始播放 · YouTube"; }
-                    else if (kind == "state") { state = value switch { 1 => "playing", 2 => "paused", 0 => "ended", 3 => "buffering", _ => "ready" }; playerStatus.Text = state == "playing" ? "正在播放 · YouTube" : "PV · YouTube"; }
-                    else if (kind == "error") { error = value; state = "failed"; playerStatus.Text = AniListPlayback.PlayerError(value); retry.Visibility = Visibility.Visible; }
+                    if (kind == "ready") { state = "ready"; SetPlayerMessage(""); }
+                    else if (kind == "state") { state = value switch { 1 => "playing", 2 => "paused", 0 => "ended", 3 => "buffering", _ => "ready" }; SetPlayerMessage(""); }
+                    else if (kind == "error") { error = value; state = "failed"; SetPlayerMessage(AniListPlayback.PlayerError(value)); retry.Visibility = Visibility.Visible; }
+                    if ((kind is "ready" or "state") && !current.IsHitTestVisible)
+                    {
+                        current.Opacity = 1;
+                        current.IsHitTestVisible = true;
+                        InteractionMotion.RevealContent(host, .66f);
+                    }
                 }
                 catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException) { }
             };
@@ -147,7 +155,12 @@ internal sealed class AnimeAvailabilityView : StackPanel, IDisposable
         }
         catch (Exception) { if (run == version && !disposed) Fail("无法加载播放器。请确认已安装 Microsoft Edge WebView2，并检查网络；仍可在原站观看。"); }
     }
-    private void Fail(string message) { Stop(); state = "failed"; playerStatus.Text = message; retry.Visibility = Visibility.Visible; }
+    private void SetPlayerMessage(string message)
+    {
+        playerStatus.Text = message;
+        playerStatus.Visibility = message.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+    private void Fail(string message) { Stop(); state = "failed"; SetPlayerMessage(message); retry.Visibility = Visibility.Visible; }
     internal void Stop()
     {
         version++; var previous = web; web = null;
@@ -156,7 +169,7 @@ internal sealed class AnimeAvailabilityView : StackPanel, IDisposable
         interceptWheel = null; wheelHandler = null; try { previous?.Close(); } catch { } host.Children.Clear(); document?.Dispose(); document = null;
         if (playerClip is not null) { ElementCompositionPreview.GetElementVisual(host).Clip = null; playerClip.Dispose(); playerClip = null; playerGeometry?.Dispose(); playerGeometry = null; }
         host.Visibility = Visibility.Collapsed; retry.Visibility = Visibility.Collapsed;
-        state = "idle"; error = null; playerProbe = null; playerStatus.Text = "展开后自动加载预告片，收起或离开页面时关闭。";
+        state = "idle"; error = null; playerProbe = null; SetPlayerMessage("");
     }
     internal object Evidence => new { state, error, hasPlayer = web?.CoreWebView2 is not null, inPrivate = web?.CoreWebView2?.Profile.IsInPrivateModeEnabled, mediaId, trailer,
         playerWidth = host.ActualWidth, playerHeight = host.ActualHeight, playerProbe, message = playerStatus.Text,

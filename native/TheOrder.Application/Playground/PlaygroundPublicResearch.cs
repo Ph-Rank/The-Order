@@ -22,7 +22,7 @@ public sealed partial class PlaygroundService
         && Provider(run.Conversation.Options.Provider).Capabilities(run.Conversation.Options.Model, run.Conversation.Options.Endpoint).Search;
     private bool SearchToolAvailable(Run run) => SearchAvailable(run) && run.SafePublicQuestion is not null
         && Provider(run.Conversation.Options.Provider).Capabilities(run.Conversation.Options.Model, run.Conversation.Options.Endpoint).Tools;
-    private bool FetchToolAvailable(Run run) => SearchToolAvailable(run) && run.Conversation.Options.Provider == PlaygroundProviderKind.DeepSeek
+    private bool FetchToolAvailable(Run run) => (SearchToolAvailable(run) || GameQuoteAvailable(run)) && run.Conversation.Options.Provider == PlaygroundProviderKind.DeepSeek
         && Provider(run.Conversation.Options.Provider).Capabilities(run.Conversation.Options.Model, run.Conversation.Options.Endpoint) is { Verified: true, Tools: true };
 
     // The model receives no writable query field. This is a bounded selection of
@@ -31,7 +31,7 @@ public sealed partial class PlaygroundService
     private void PreparePublicQuestion(Run run)
     {
         if (!SearchAvailable(run)) return;
-        if (run.Conversation.Options.Provider == PlaygroundProviderKind.Gemini && !run.Attachments.IsEmpty)
+        if (run.Conversation.Options.Provider == PlaygroundProviderKind.Gemini && run.Attachments.Any(a => !a.IsGameFrame))
         { Activity(run, "本轮优先讨论手动附件，未执行独立 Google 公开检索。"); return; }
         run.SafePublicQuestion = SafePublicQuestion(run);
     }
@@ -126,6 +126,21 @@ public sealed partial class PlaygroundService
     }
     private string AcceptPublicResult(Run run, PlaygroundResearchResult result)
     {
+        // Independent searches may each start numbering at web_1. Keep earlier
+        // references bound to their original URL when another quote is checked.
+        if (result.Retention == PlaygroundRetention.Portable)
+        {
+            string text = result.Text;
+            var sources = result.Sources.Select(source =>
+            {
+                if (source.Kind != PlaygroundSourceKind.Web || !SafeWebUrl(source.Url)
+                    || !run.Sources.TryGetValue(source.Id, out var previous) || previous.Url == source.Url) return source;
+                string id = "web_" + Hash(source.Url!)[7..31];
+                text = text.Replace("[[" + source.Id + "]]", "[[" + id + "]]", StringComparison.Ordinal);
+                return source with { Id = id };
+            }).ToImmutableArray();
+            result = result with { Text = text, Sources = sources };
+        }
         if (result.Retention != PlaygroundRetention.Portable)
         {
             run.Retention = result.Retention; run.Suggestions = result.SearchSuggestionsHtml;

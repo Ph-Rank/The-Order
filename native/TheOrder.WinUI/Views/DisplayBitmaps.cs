@@ -10,7 +10,7 @@ internal static class DisplayBitmaps
 {
     private static readonly ConditionalWeakTable<IImagePipeline, DecodedSurfaceCache<WriteableBitmap>> pipelines = new();
     private static DecodedSurfaceCache<WriteableBitmap> For(IImagePipeline pipeline) => pipelines.GetValue(pipeline, _ => new(Create));
-    private static WriteableBitmap Create(RasterPixels pixels)
+    internal static WriteableBitmap Create(RasterPixels pixels)
     {
         var bitmap = new WriteableBitmap(pixels.Width, pixels.Height);
         using (var buffer = bitmap.PixelBuffer.AsStream()) buffer.Write(pixels.Bgra);

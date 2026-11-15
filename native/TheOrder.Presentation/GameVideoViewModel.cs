@@ -23,13 +23,14 @@ public sealed class GameVideoViewModel(GameVideoReader reader, IMediaIdentityDec
     public GameVideoItem[] Videos { get; private set; } = [];
     public string Message { get; private set; } = "";
     public bool Busy { get; private set; }
+    public bool UsesWorkLevelMatch => Game is not null && !matchedInstallation;
     public bool Complete { get; private set; }
     public long Version { get; private set; }
     public string? DefaultVideo => videoChoices?.Confirmed?.Target.Id;
     private MediaIdentityDecisionDocument? mapping, videoChoices;
     private MediaUserLinks? userLinks;
     private CancellationTokenSource? stop;
-    private bool loaded, disposed;
+    private bool loaded, disposed, matchedInstallation;
     private void Changed() => PropertyChanged?.Invoke(this, new(null));
     public void SetSource(GameVideoSource? source)
     {
@@ -98,14 +99,13 @@ public sealed class GameVideoViewModel(GameVideoReader reader, IMediaIdentityDec
                     && choice.TargetFormat == GameVideos.IdentityFormat(exact) && choice.TargetParentId == exact.VersionParent?.ToString()))
             {
                 Game = exact;
+                matchedInstallation = installedEdition is not null;
                 var selectedVideos = await decisions.ReadAsync(source.VideoContext(exact.Id), token);
                 if (!Current(run, source)) return;
                 videoChoices = selectedVideos;
-                Message = result.Stale ? "当前使用已缓存的游戏影像；在线读取失败，可重试。" : installedEdition is not null
-                    ? "已按本地安装的 Steam 编号对应游戏版本；视频仍以所选版本的来源记录为准。"
-                    : "作品级影像，不代表你本地的具体发行版本。";
+                Message = result.Stale ? "在线影像暂不可用，已显示缓存。" : "";
             }
-            else { Game = null; videoChoices = personalVideos; Message = Candidates.Length == 0 ? "尚未找到对应的 IGDB 游戏，可更换标题或手动添加视频。" : Complete ? "请选择并确认对应游戏；请核对原版、重制版、移植版与合集。" : "候选未完整读取，请手动核对，未自动确认。"; }
+            else { Game = null; videoChoices = personalVideos; Message = Candidates.Length == 0 ? "未找到对应游戏，可更换标题或添加视频。" : Complete ? "请选择对应的游戏版本。" : "候选未读全，请手动核对。"; }
             if (!Current(run, source)) return;
             loaded = true; Rebuild();
             if (Game is not null && Videos.Length == 0 && !result.Stale) Message = Game.Videos.Length > 0 ? "此游戏的影像已被排除，可在选项中恢复。" : "本次未读取到可用影像，可稍后刷新。";

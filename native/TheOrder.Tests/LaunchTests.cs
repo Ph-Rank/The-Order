@@ -208,6 +208,28 @@ public sealed class LaunchTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task HeadlessExeWaitingForItsGameTransfersBeforeEitherExits()
+    {
+        await using var f = new LaunchFixture();
+        f.Set("waiting-launcher");
+        await f.Approve();
+        var exit = new TaskCompletionSource<ProcessEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        f.Service.ProcessChanged += fact => { if (fact.Kind == ProcessEventKind.ProcessExited) exit.TrySetResult(fact); };
+        var started = await f.Service.LaunchAsync("g");
+        Assert.True(started.ProcessCreated);
+        var childPid = (await f.Report("run-game")).GetProperty("pid").GetInt32();
+        using var child = Process.GetProcessById(childPid);
+        _ = child.Handle;
+        await f.Wait(() => f.Service.Status.Current?.Pid == childPid);
+        Assert.Equal(ProcessPresence.Active, f.Platform.RevalidateExternal(started.Initial!));
+        File.WriteAllText(Path.Combine(f.Reports, "run-game.stop"), "normal fixture close");
+        var confirmed = await exit.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(childPid, confirmed.Current!.Pid);
+        Assert.Equal(child.ExitTime.ToUniversalTime(), confirmed.ExitOccurredAtUtc!.Value.UtcDateTime);
+        Assert.Equal(ProcessTrackingState.Exited, f.Service.Status.Tracking);
+    }
+
+    [Fact]
     public async Task ActualChildTreeRequiresParentCreationAndExitInterval()
     {
         await using var f = new LaunchFixture(); f.Set("launcher");

@@ -48,6 +48,16 @@ public sealed partial class TransactionalLibrary
             throw new StaleLibraryRequestException();
     }
 
+    // The initial checkpoint may fail. If play ends before it was ever saved, release
+    // that admission without rewriting the library or disturbing the launch scope.
+    internal Task ReleaseUnrecordedLaunchAsync(GameLaunchIdentity identity, string installationId) => Enqueue(() =>
+    {
+        AssertSessionIdentity(identity, installationId);
+        if (pendingOwnedSessions.GetValueOrDefault(identity.GameId) != installationId) throw new SessionConflictException();
+        pendingOwnedSessions.Remove(identity.GameId);
+        return Task.FromResult(true);
+    }, default);
+
     public Task<CommitResult<PlaySession>> CommitSessionAsync(GameLaunchIdentity identity, PlaySession target,
         bool create = false, bool recover = false, long? expectedRevision = null, CancellationToken cancellation = default)
         => Mutate(games =>
@@ -62,7 +72,7 @@ public sealed partial class TransactionalLibrary
             {
                 if (!create || recover || !pendingOwnedSessions.TryGetValue(game.Id, out var install) || install != n.InstallationId
                     || games.Any(e => e.Sessions.Any(s => s.Id == target.Id)) || n.Accumulated100ns != 0 || n.Revision != 0
-                    || n.Recovery != new SessionRecovery(0, null)) throw new SessionConflictException();
+                    || n.Recovery != new SessionRecovery(0, null) || n.IsTerminal && n.AwaitingRecordingMinimum) throw new SessionConflictException();
             }
             else
             {
@@ -83,16 +93,22 @@ public sealed partial class TransactionalLibrary
                 }
                 else if (old.WriterOwner != epoch || n.Revision <= old.Revision || n.Recovery != old.Recovery) throw new SessionConflictException();
                 if (n.Accumulated100ns < old.Accumulated100ns) throw new SessionConflictException();
+                if (n.AwaitingRecordingMinimum != (old.AwaitingRecordingMinimum && n.Accumulated100ns < NativeSession.MinimumRecordedTicks))
+                    throw new SessionConflictException();
             }
             var projected = n.Project(target.Id);
-            var delta = checked(projected.Seconds - (previous?.Seconds ?? 0));
+            if (n.IsTerminal && n.AwaitingRecordingMinimum)
+                return (games.Replace(game, game with { Sessions = game.Sessions.Remove(previous!) }), projected);
+            bool countedBefore = old is { AwaitingRecordingMinimum: false };
+            bool countedNow = !n.AwaitingRecordingMinimum;
+            var delta = checked((countedNow ? projected.Seconds : 0) - (countedBefore ? previous!.Seconds : 0));
             var start = NativeSession.Format(n.StartedAtUtc ?? n.CreatedObservedAtUtc);
             var changed = game with
             {
                 Sessions = previous is null ? game.Sessions.Add(projected) : game.Sessions.Replace(previous, projected),
                 TotalPlaySeconds = checked(game.TotalPlaySeconds + delta),
-                PlayCount = checked(game.PlayCount + (previous is null ? 1 : 0)),
-                LastPlayedAt = game.LastPlayedAt is null || string.CompareOrdinal(start, game.LastPlayedAt) > 0 ? start : game.LastPlayedAt
+                PlayCount = checked(game.PlayCount + (countedNow && !countedBefore ? 1 : 0)),
+                LastPlayedAt = countedNow && (game.LastPlayedAt is null || string.CompareOrdinal(start, game.LastPlayedAt) > 0) ? start : game.LastPlayedAt
             };
             return (games.Replace(game, changed), projected);
         }, cancellation, sessionMutation: true);
@@ -113,7 +129,7 @@ public sealed partial class TransactionalLibrary
 
     internal Task<CommitResult<bool>> InvalidateSessionRecoveryAsync(SessionReason reason) => Mutate(games =>
     {
-        var changed = games.Select(e => e with { Sessions = [.. e.Sessions.Select(s => s.Native is { IsTerminal: false } n
+        var changed = games.Select(e => e with { Sessions = [.. e.RecordedSessions.Select(s => s.Native is { IsTerminal: false } n
             ? (n with { WriterOwner = epoch, Revision = n.Revision + 1, Lifecycle = SessionLifecycle.Incomplete,
                 Reason = reason, EndedAtUtc = null, RecoveryToken = null }).Project(s.Id) : s)] }).ToImmutableArray();
         return (changed, true);
@@ -127,7 +143,7 @@ public sealed partial class TransactionalLibrary
 
     private static LibraryEntry PortableSessionHistory(LibraryEntry e) => e with
     {
-        Sessions = [.. e.Sessions.Select(s => s.Native is { IsTerminal: false } n
+        Sessions = [.. e.RecordedSessions.Select(s => s.Native is { IsTerminal: false } n
             ? (n with { Lifecycle = SessionLifecycle.Incomplete, Reason = SessionReason.ImportedSnapshot, EndedAtUtc = null, RecoveryToken = null }).Project(s.Id) : s)]
     };
 }

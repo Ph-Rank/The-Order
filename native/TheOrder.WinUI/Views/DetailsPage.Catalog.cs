@@ -17,6 +17,9 @@ public sealed partial class DetailsPage
     private CancellationTokenSource? catalogStop;
     private long catalogGeneration;
     private string? catalogIdentity;
+    private WorkMetadata? presentedWork;
+    private sealed record BannerSelectionEntry(string Identity, string GameId, string? WorkId, long? Auth, BannerChoice? Choice);
+    private readonly List<BannerSelectionEntry> bannerSelections = [];
     private long catalogDataMilliseconds;
     private bool catalogPrepared;
     private bool catalogMediaPrepared;
@@ -45,22 +48,36 @@ public sealed partial class DetailsPage
     {
         var identity = detail is null ? null : detail.Id + "/" + detail.Metadata?.Id + "/" + detail.Metadata?.FetchedAt;
         if (catalogIdentity == identity && catalogStop is not null && !catalogStop.IsCancellationRequested) return;
+        var sameWork = identity is not null && catalogIdentity == identity;
         CancelCatalog(); catalogIdentity = identity;
-        BangumiRelated.SetCatalog(detail?.Metadata);
-        heroPresentation.SetPending(true);
-        if(presentations is null||detail?.Metadata is null)RichCatalog.SetWork(detail?.Metadata, detail?.Personal.Name, collapseFacts: true);
-        else RichCatalog.SetWork(detail.Metadata, detail.Personal.Name, collapseFacts: true);
-        SetHeroArtwork(null);
-        CatalogReadStatus.Text = ""; RetryCatalog.Visibility = Visibility.Collapsed;
-        CatalogStatusRow.Visibility = Visibility.Collapsed;
+        var warm = bannerSelections.Find(entry => entry.Identity == identity && entry.Auth == authGeneration?.Invoke());
+        heroPresentation.SetPending(warm is null);
+        SetHeroArtwork(warm?.Choice);
+        if (!sameWork)
+        {
+            presentedWork = detail?.Metadata;
+            BangumiRelated.SetCatalog(detail?.Metadata);
+            RichCatalog.SetWork(detail?.Metadata, detail?.Personal.Name, collapseFacts: true);
+            CatalogReadStatus.Text = ""; RetryCatalog.Visibility = Visibility.Collapsed;
+            CatalogStatusRow.Visibility = Visibility.Collapsed;
+        }
+        HeroFacts.SetWork(presentedWork, detail?.Personal.Name);
         if (detail?.Metadata is { } work && presentations is not null && registry is not null && IsLoaded) _ = LoadCatalogAsync(work);
         else if (detail is not null && personalBanners is not null && IsLoaded) _ = LoadPersonalBannerOnlyAsync(detail.Id);
         else heroPresentation.SetPending(false);
     }
     internal void RefreshPersonalBanner(string gameId)
     {
+        bannerSelections.RemoveAll(entry => entry.GameId == gameId);
         if (!IsLoaded || ViewModel.Draft?.Source.Id != gameId) return;
         catalogIdentity = null; SynchronizeCatalog(ViewModel.Draft.Source);
+    }
+    private void RememberBanner(string? gameId, string? workId, long? auth, BannerChoice? choice)
+    {
+        if (gameId is null || catalogIdentity is null) return;
+        bannerSelections.RemoveAll(entry => entry.GameId == gameId);
+        bannerSelections.Add(new(catalogIdentity, gameId, workId, auth, choice));
+        if (bannerSelections.Count > 8) bannerSelections.RemoveAt(0);
     }
     private async Task<string?> ReadPersonalBannerAsync(string? gameId, CancellationToken token)
     {
@@ -77,7 +94,11 @@ public sealed partial class DetailsPage
         {
             var key = await ReadPersonalBannerAsync(gameId, token);
             if (Accept())
-                SetHeroArtwork(key is null ? null : new(key, "", 1, "local", gameId));
+            {
+                var choice = key is null ? null : new BannerChoice(key, "", 1, "local", gameId);
+                SetHeroArtwork(choice);
+                RememberBanner(gameId, null, authGeneration?.Invoke(), choice);
+            }
         }
         catch (OperationCanceledException) { }
         catch (Exception e) { if (Accept()) App.TraceVisualFailure(e); }
@@ -89,7 +110,8 @@ public sealed partial class DetailsPage
     {
         browser?.Reset();
         if (CatalogHost.Visibility != Visibility.Visible) return;
-        CatalogHost.Visibility = Visibility.Collapsed; DetailsRoot.Visibility = Visibility.Visible;
+        CatalogHost.Visibility = Visibility.Collapsed;
+        InteractionMotion.EnterPage(DetailsRoot);
         SynchronizeBangumi();
         BangumiRelated.ResumeNavigation();
         HeroStage.Reattach();
@@ -107,40 +129,72 @@ public sealed partial class DetailsPage
     private async void OnRetryCatalog(object sender, RoutedEventArgs e) { if (ViewModel.Draft?.Source.Metadata is { } work) await LoadCatalogAsync(work, true); }
     internal void RefreshPrepared(string id)
     {
+        bannerSelections.RemoveAll(entry => entry.WorkId == id && entry.Choice?.Kind != "local");
         browser?.RefreshPrepared(id);
-        if (IsLoaded && ViewModel.Draft?.Source.Metadata is { } work && work.Id == id) _ = LoadCatalogAsync(work);
+        if (IsLoaded && ViewModel.Draft?.Source.Metadata is { } work && work.Id == id) _ = LoadCatalogAsync(work, queuePreparation: false);
     }
-    private async Task LoadCatalogAsync(WorkMetadata saved, bool refresh = false)
+    private async Task LoadCatalogAsync(WorkMetadata saved, bool refresh = false, bool queuePreparation = true)
     {
         if (presentations is null || registry is null) return;
         catalogStop?.Cancel(); catalogStop?.Dispose(); catalogStop = new(); var token = catalogStop.Token; var generation = ++catalogGeneration; var auth = authGeneration?.Invoke();
         var gameId = ViewModel.Draft?.Source.Id;
         bool Accept() => IsLoaded && generation == catalogGeneration && !token.IsCancellationRequested && auth == authGeneration?.Invoke() && ViewModel.Draft?.Source.Id == gameId && ViewModel.Draft?.Source.Metadata?.Id == saved.Id;
-        CatalogReadStatus.Text = UiText.Get("正在补充目录资料…"); RetryCatalog.Visibility = Visibility.Collapsed;
-        CatalogStatusRow.Visibility = Visibility.Visible;
+        if (refresh)
+        {
+            CatalogReadStatus.Text = UiText.Get("正在补充目录资料…");
+            RetryCatalog.Visibility = Visibility.Collapsed;
+            CatalogStatusRow.Visibility = Visibility.Visible;
+        }
         try
         {
             var timer = System.Diagnostics.Stopwatch.StartNew();
-            var personalKey = await ReadPersonalBannerAsync(gameId, token); if (!Accept()) return;
-            if (personalKey is not null) SetHeroArtwork(new(personalKey, "", 1, "local", saved.Id));
-            var cached = await presentations.GetAsync(saved.Id, refresh, token); if (!Accept()) return;
-            if(CatalogPresentationService.NeedsPreparation(cached))presentations.Queue([saved.Id],priority:true);
+            async Task<string?> ReadAndShowPersonalAsync()
+            {
+                var key = await ReadPersonalBannerAsync(gameId, token);
+                if (key is not null && Accept())
+                {
+                    var local = new BannerChoice(key, "", 1, "local", saved.Id);
+                    SetHeroArtwork(local);
+                    RememberBanner(gameId, saved.Id, auth, local);
+                    heroPresentation.SetPending(false);
+                }
+                return key;
+            }
+            var personal = ReadAndShowPersonalAsync();
+            var publicCatalog = presentations.GetAsync(saved.Id, refresh, token);
+            await Task.WhenAll(personal, publicCatalog);
+            if (!Accept()) return;
+            var personalKey = await personal;
+            var cached = await publicCatalog;
+            bool preparing = queuePreparation && CatalogPresentationService.NeedsPreparation(cached);
+            if (preparing) presentations.Queue([saved.Id], priority: true);
             catalogDataMilliseconds = timer.ElapsedMilliseconds; catalogPrepared = cached.Prepared;catalogMediaPrepared=cached.MediaPrepared;
             var work = cached.Work;
+            presentedWork = work;
+            var renderCount = RichCatalog.RenderCount;
             RichCatalog.SetWork(work, ViewModel.Draft?.Source.Personal.Name, collapseFacts: true);
+            if (RichCatalog.RenderCount != renderCount) InteractionMotion.RevealContent(RichCatalog, .74f);
             BangumiRelated.SetCatalog(work);
             HeroFacts.SetWork(work, ViewModel.Draft?.Source.Personal.Name);
             UpdateHeroFrame(HeroFrame.ActualWidth);
             SourceLinks.ItemsSource = CandidateDetailLinks.From(work).Select(l => new DetailSourceLink(l.Title, l.Url)).ToArray();
-            CatalogReadStatus.Text = work.Presentation?.IntroSource is "kungal" or "curated" ? UiText.Get("KunGal 目录资料") : UiText.Get("KunGal 目录 · ") + CatalogContentView.SiteName(work.Presentation?.IntroSource ?? "") + UiText.Get(" 资料");
-            if (!cached.Prepared) CatalogReadStatus.Text += UiText.Get(" · 图片正在后台准备");
-            CatalogStatusRow.Visibility = Visibility.Visible;
+            CatalogReadStatus.Text = "";
+            CatalogStatusRow.Visibility = Visibility.Collapsed;
+            RetryCatalog.Visibility = Visibility.Collapsed;
             var choice = personalKey is null ? cached.Banner : new BannerChoice(personalKey, "", 1, "local", saved.Id);
             SetHeroArtwork(choice);
+            RememberBanner(gameId, saved.Id, auth, choice);
             if (refresh) presentations.Queue([saved.Id]);
             // Provenance stays inside the collapsed sources section, never on the CG overlay.
-            ArtworkSourceText.Text = string.Join("\n", new[] { ViewModel.Draft?.Source.Relationship, ViewModel.Draft?.Source.CoverDescription,
-                choice is null ? UiText.Get("尚无合适横图。") : choice.Kind == "local" ? UiText.Get("个人本地横幅 · 原图") : choice.ReferenceTitle is { } sourceTitle ? UiText.Get("横幅 CG · ") + sourceTitle + UiText.Get("（关联版本）") : UiText.Get("本版本横幅 CG") });
+            var artworkSource = choice switch
+            {
+                null => UiText.Get("尚无合适横图。"),
+                { Kind: "local" } => UiText.Get("个人本地横幅 · 原图"),
+                { Kind: ArtworkSources.VndbPromoKind } => UiText.Get("横幅 · VNDB 发行宣传图"),
+                { ReferenceTitle: { } sourceTitle } => UiText.Get("横幅 CG · ") + sourceTitle + UiText.Get("（关联版本）"),
+                _ => UiText.Get("本版本横幅 CG")
+            };
+            ArtworkSourceText.Text = string.Join("\n", new[] { ViewModel.Draft?.Source.Relationship, ViewModel.Draft?.Source.CoverDescription, artworkSource });
         }
         catch (OperationCanceledException) { }
         catch (OnlineException e) { if (Accept()) { CatalogReadStatus.Text = UiText.Get("已保留本地资料。") + e.Message; RetryCatalog.Visibility = Visibility.Visible; CatalogStatusRow.Visibility = Visibility.Visible; } }
@@ -151,7 +205,7 @@ public sealed partial class DetailsPage
     private async void OnShowRelatedWorks(object sender, RoutedEventArgs args)
     {
         if (!IsLoaded || ViewModel.IsDetailsLoading || CatalogHost.Visibility == Visibility.Visible || RelatedMediaHost.Visibility == Visibility.Visible) return;
-        BangumiRelated.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = .1 });
+        BangumiRelated.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = InteractionMotion.Enabled, VerticalAlignmentRatio = .1 });
         try { await BangumiRelated.ExpandAsync(); }
         catch (Exception error) { App.TraceVisualFailure(error); }
     }
@@ -206,7 +260,8 @@ public sealed partial class DetailsPage
         relatedReturnFocus = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) as Control;
         if (CatalogHost.Visibility == Visibility.Visible) CloseCatalogBrowser();
         BangumiRelated.SuspendNavigation(); HeroStage.ReleaseBeforeLeave();
-        gameVideos?.Suspend(); DetailsRoot.Visibility = Visibility.Collapsed; RelatedMediaHost.Visibility = Visibility.Visible;
+        gameVideos?.Suspend(); DetailsRoot.Visibility = Visibility.Collapsed;
+        InteractionMotion.EnterPage(RelatedMediaHost);
         relatedMedia.RelationLabel = card.Label; relatedMedia.RelationEvidence = card.Evidence;
         await relatedMedia.OpenAsync(item, ViewModel.Draft?.Source.Personal.Name ?? "原作");
     }
@@ -214,9 +269,10 @@ public sealed partial class DetailsPage
     {
         relatedMedia?.Deactivate();
         if (RelatedMediaHost.Visibility != Visibility.Visible) return;
-        RelatedMediaHost.Visibility = Visibility.Collapsed; DetailsRoot.Visibility = Visibility.Visible;
+        RelatedMediaHost.Visibility = Visibility.Collapsed; InteractionMotion.StopPage(RelatedMediaHost); DetailsRoot.Visibility = Visibility.Visible;
         var focus = relatedReturnFocus; relatedReturnFocus = null;
         if (!restore) return;
+        InteractionMotion.EnterPage(DetailsRoot);
         SynchronizeBangumi(); BangumiRelated.ResumeNavigation(); HeroStage.Reattach();
         DispatcherQueue.TryEnqueue(() => { if (IsLoaded && RelatedMediaHost.Visibility != Visibility.Visible && focus?.IsLoaded == true) focus.Focus(FocusState.Programmatic); });
         BangumiRelated.RestoreNavigationFocus();
@@ -254,7 +310,7 @@ public sealed partial class DetailsPage
         if (IsLoaded && ViewModel.Page == WorkspacePage.Details) SynchronizeBangumi();
     }
     internal bool HasExclusiveContentBody => new[] { DetailsRoot.Visibility, CatalogHost.Visibility, RelatedMediaHost.Visibility }.Count(x => x == Visibility.Visible) == 1;
-    internal object BangumiEvidence => new { exclusiveContentBody = HasExclusiveContentBody, relations = BangumiRelated.Evidence, mediaVisible = RelatedMediaHost.Visibility == Visibility.Visible, media = relatedMedia?.Evidence, catalogVisible = CatalogHost.Visibility == Visibility.Visible, catalog = browser?.RelationEvidence, gameId = ViewModel.Draft?.Source.Id, gameScroll = DetailsScroll.VerticalOffset, contentLanguage = RichCatalog.LanguageEvidence, releases = RichCatalog.ReleaseEvidence };
+    internal object BangumiEvidence => new { exclusiveContentBody = HasExclusiveContentBody, relations = BangumiRelated.Evidence, mediaVisible = RelatedMediaHost.Visibility == Visibility.Visible, media = relatedMedia?.Evidence, catalogVisible = CatalogHost.Visibility == Visibility.Visible, catalog = browser?.RelationEvidence, gameId = ViewModel.Draft?.Source.Id, gameScroll = DetailsScroll.VerticalOffset, catalogFade = browser?.PageFade, detailFade = InteractionMotion.PageEvidence(DetailsRoot), contentLanguage = RichCatalog.LanguageEvidence, releases = RichCatalog.ReleaseEvidence };
     internal async Task BangumiFixtureAsync(string action, BangumiRelationKind? kind = null, string? subjectId = null)
     {
         if (action == "catalogEntityOpen")

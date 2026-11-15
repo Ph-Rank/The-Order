@@ -7,10 +7,19 @@ public sealed partial class RecognitionReview : UserControl, IImageHost
 {
     public RecognitionViewModel ViewModel { get; }
     public IImagePipeline Images { get; }
+    private string? shownRemote;
+    private IReadOnlyList<RecognitionCandidateCard> shownCandidates = [];
     public RecognitionReview(RecognitionViewModel viewModel, IImagePipeline images)
     {
         ViewModel = viewModel; Images = images; InitializeComponent(); RemoteRichFacts.Images = images; ManualIdBox.KeyDown += OnManualKey;
         CandidateList.AddHandler(PointerWheelChangedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler(OnCandidateWheel), true);
+        Loaded += (_, _) =>
+        {
+            shownRemote = ViewModel.DisplayedCandidateId;
+            shownCandidates = ViewModel.Candidates;
+            ViewModel.PropertyChanged += OnResult;
+        };
+        Unloaded += (_, _) => ViewModel.PropertyChanged -= OnResult;
         SizeChanged += (_, e) =>
         {
             var narrow = e.NewSize.Width < 460;
@@ -18,7 +27,22 @@ public sealed partial class RecognitionReview : UserControl, IImageHost
             Grid.SetColumn(ManualApplyButton, narrow ? 0 : 1);
         };
     }
+    private void OnResult(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(RecognitionViewModel.Candidates) && !shownCandidates.SequenceEqual(ViewModel.Candidates))
+        {
+            shownCandidates = ViewModel.Candidates;
+            if (shownCandidates.Count > 0) InteractionMotion.RevealContent(CandidateList, .72f);
+        }
+        if (e.PropertyName != nameof(RecognitionViewModel.RemoteFacts) || shownRemote == ViewModel.DisplayedCandidateId) return;
+        shownRemote = ViewModel.DisplayedCandidateId;
+        if (shownRemote is not null) InteractionMotion.RevealContent(RemoteRichFacts, .7f);
+    }
     public Visibility ShowText(string? value) => !string.IsNullOrWhiteSpace(value) ? Visibility.Visible : Visibility.Collapsed;
+    public static Visibility CatalogSourceVisibility(string url) =>
+        KunGalNavigation.TryEntity(url, out _) ? Visibility.Visible : Visibility.Collapsed;
+    public static Visibility BrowserSourceVisibility(string url) =>
+        CatalogSourceVisibility(url) == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
     private void OnCandidateWheel(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
         var point = e.GetCurrentPoint(CandidateList).Properties;
@@ -66,7 +90,7 @@ public sealed partial class RecognitionReview : UserControl, IImageHost
         var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "手动关联所选作品？",
             Content = ViewModel.SelectedCandidateHasConflict ? "识别证据存在差异。请核对作品和版本；继续后按你的明确选择关联，个人名称、封面及笔记保留。" : "将这个目录作品关联到当前游戏，保留个人资料。",
             PrimaryButtonText = ViewModel.SelectedCandidateHasConflict ? "仍要关联" : "确认关联", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary && ViewModel.SelectedGameId == game && ViewModel.SelectedId == review
+        if (await dialog.ShowInShellAsync() == ContentDialogResult.Primary && ViewModel.SelectedGameId == game && ViewModel.SelectedId == review
             && ViewModel.SelectedCandidateItem?.Id == id && ViewModel.CanLinkSelectedManually) await ViewModel.ManualLinkSelectedAsync();
     }
     private async void OnManual(object sender, RoutedEventArgs e) => await ViewModel.ManualLinkAsync();

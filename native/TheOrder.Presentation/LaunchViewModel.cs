@@ -23,10 +23,12 @@ public sealed class LaunchViewModel(ILaunchLibrary library, ILaunchCommands serv
     public string? SelectedInstallationId { get; private set; }
     public ImmutableArray<LaunchInstallationItem> Installations { get; private set; } = [];
     public string Message { get; private set; } = UiText.Get("选择本地安装。");
+    public string DetailNotice { get; private set; } = "";
     public string Position { get; private set; } = "";
     public string GlobalMessage => service.Status.Message;
     public LaunchStatus Runtime => service.Status;
-    public LaunchOutcome? LastRequestOutcome { get; private set; }
+    public LaunchStatus? LastRequestStatus { get; private set; }
+    public LaunchOutcome? LastRequestOutcome => LastRequestStatus?.Outcome;
     public LaunchOutcome Availability => prepared?.Outcome ?? LaunchOutcome.InstallationMissing;
     public bool Busy => busy;
     public bool CanLaunch => !disposed && !busy && prepared?.Outcome == LaunchOutcome.Ready;
@@ -49,7 +51,7 @@ public sealed class LaunchViewModel(ILaunchLibrary library, ILaunchCommands serv
             await PrepareCore(intent, token);
         }
         catch (OperationCanceledException) { }
-        catch (Exception) { if (intent == generation) { Message = UiText.Get("无法读取启动安装，请重新打开详情。"); Notify(); } }
+        catch (Exception) { if (intent == generation) { SetMessage(UiText.Get("无法读取启动安装，请重新打开详情。")); Notify(); } }
     });
     public Task SelectAsync(string? installationId) => Track(async () =>
     {
@@ -65,11 +67,11 @@ public sealed class LaunchViewModel(ILaunchLibrary library, ILaunchCommands serv
     private async Task PrepareCore(long intent, CancellationToken token)
     {
         var id = GameId;
-        if (id is null || SelectedInstallationId is null) { Message = UiText.Get("没有默认启动安装，请明确选择一项。"); Notify(); return; }
-        Message = UiText.Get("正在核对启动位置…"); Notify();
+        if (id is null || SelectedInstallationId is null) { SetMessage(UiText.Get("没有默认启动安装，请明确选择一项。"), Installations.Length > 0); Notify(); return; }
+        SetMessage(UiText.Get("正在核对启动位置…"), showInDetails: false); Notify();
         var value = await service.PrepareAsync(id, SelectedInstallationId, token);
         if (disposed || intent != generation || token.IsCancellationRequested) return;
-        prepared = value; Message = value.Message;
+        prepared = value; SetMessage(value.Message, value.Outcome != LaunchOutcome.Ready);
         Position = value.Snapshot is { } s ? UiText.Get("启动文件：") + s.Installation.Executable + UiText.Get("\n工作目录：") + s.WorkingDirectory.StoredPath
             + (s.ExplicitWorkingDirectory ? UiText.Get("（明确指定）") : UiText.Get("（程序所在目录）")) + UiText.Get("\n参数：") + System.Text.Json.JsonSerializer.Serialize(s.Installation.Arguments) : "";
         last = null; Refresh(); Notify();
@@ -84,24 +86,36 @@ public sealed class LaunchViewModel(ILaunchLibrary library, ILaunchCommands serv
             if (intent == generation) await PrepareCore(intent, NewPreparation());
         }
         catch (OperationCanceledException) { }
-        catch (Exception) { if (intent == generation) Message = UiText.Get("位置未能保存或已经变化，请重新核对。"); }
+        catch (Exception) { if (intent == generation) SetMessage(UiText.Get("位置未能保存或已经变化，请重新核对。")); }
         finally { busy = false; Notify(); }
     });
     public Task LaunchAsync() => Track(async () =>
     {
         if (!CanLaunch || GameId is not { } id) return;
         var intent = generation; var installation = SelectedInstallationId;
+        var previousStatus = service.Status;
         busy = true; var previousObservation = launch;
         var operation = launch = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); Notify();
         try
         {
             var result = await service.LaunchAsync(id, installation, operation.Token);
-            LastRequestOutcome = result.Outcome;
+            LastRequestStatus = result;
             if (result.ProcessCreated) previousObservation?.Dispose();
             else { if (ReferenceEquals(launch, operation)) launch = previousObservation; operation.Dispose(); }
-            if (!disposed && intent == generation) { Message = result.Message; last = result; }
+            if (!disposed && intent == generation) { SetMessage(result.Message); last = result; }
         }
-        catch (Exception) { if (ReferenceEquals(launch, operation)) launch = previousObservation; operation.Dispose(); if (!disposed && intent == generation) Message = service.Status.ProcessCreated ? UiText.Get("程序已启动，状态显示受限；请勿重复启动。") : UiText.Get("启动请求未完成。"); }
+        catch (Exception)
+        {
+            if (ReferenceEquals(launch, operation)) launch = previousObservation;
+            operation.Dispose();
+            var runtime = service.Status;
+            bool created = !ReferenceEquals(previousStatus, runtime) && runtime.Snapshot?.Game.GameId == id && runtime.ProcessCreated;
+            var message = UiText.Get(created ? "程序已启动，状态显示受限；请勿重复启动。" : "启动请求未完成。");
+            LastRequestStatus = created
+                ? runtime with { Outcome = LaunchOutcome.StartedButTrackingLimited, Message = message }
+                : new(LaunchOutcome.LaunchFailed, ProcessTrackingState.None, null, null, null, message);
+            if (!disposed && intent == generation) SetMessage(message);
+        }
         finally { busy = false; Notify(); }
     });
     public void Cancel() { if (disposed) return; launch?.Cancel(); launch?.Dispose(); launch = null; Notify(); }
@@ -113,13 +127,18 @@ public sealed class LaunchViewModel(ILaunchLibrary library, ILaunchCommands serv
         if (ReferenceEquals(last, value)) return;
         last = value;
         if (value.Snapshot?.Game == entry?.Identity && entry is not null)
-        { Message = value.Message; Notify(); }
+        { SetMessage(value.Message); Notify(); }
     }
     public void Leave()
     {
         if (disposed) return; // The drained WinUI window may unload after host disposal.
         generation++; preparation?.Cancel(); entry = null; prepared = null; Installations = []; SelectedInstallationId = null;
-        Position = ""; Message = UiText.Get("选择本地安装。"); last = null; Notify();
+        Position = ""; SetMessage(UiText.Get("选择本地安装。"), showInDetails: false); last = null; Notify();
+    }
+    private void SetMessage(string message, bool showInDetails = true)
+    {
+        Message = message;
+        DetailNotice = showInDetails ? message : "";
     }
     private void Notify() { if (!disposed) Changed(""); }
     private Task Track(Func<Task> action)

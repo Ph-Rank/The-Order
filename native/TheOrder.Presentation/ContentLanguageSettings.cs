@@ -18,7 +18,7 @@ public sealed class ContentLanguageSettings(IContentLanguagePreferencesStore sto
             if (disposed) return;
             if (!ContentLanguage.Valid(read.Preference)) throw new InvalidDataException();
             Preference = read.Preference; readOnly = read.ReadOnly;
-            Message = read.Warning ?? "优先使用已有译文；缺少时依次使用备用语言、原文。重新进入详情页即可生效。";
+            Message = read.Warning ?? "";
         }
         catch (Exception) { readOnly = true; Message = "资料语言偏好暂不可读取，仍可浏览原始资料。"; }
         Apply(Preference); initialized = true; Notify();
@@ -35,7 +35,7 @@ public sealed class ContentLanguageSettings(IContentLanguagePreferencesStore sto
         {
             await store.SaveAsync(value);
             Preference = value; Apply(value);
-            Message = "已保存。重新进入详情页后按资料语言显示，个人名称保持不变。";
+            Message = "重新进入详情页后生效。";
         }
         catch (Exception) { Message = "资料语言偏好未能保存，仍保留原选项；请重试。"; }
         finally { saving = false; if (!disposed) Notify(); }

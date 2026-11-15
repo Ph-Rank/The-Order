@@ -7,8 +7,16 @@ namespace TheOrder.Platform.Windows;
 // Derived pixels only. Personal JPEGs live in library.json and are never owned/deleted here.
 public sealed partial class IsolatedThumbnailCache(NativeConfiguration configuration) : IThumbnailDiskCache
 {
+    private const string DirectoryName = "native-thumbnails-v1";
     private const int Magic = 0x314F4854;
+    private const int MaximumFiles = 4096;
     private readonly SemaphoreSlim queue = new(1, 1);
+
+    internal Task<ImageCacheUsage> ManageDiskAsync(bool clear) =>
+        ImageCacheStorage.WithDirectoryAsync(configuration, DirectoryName,
+            name => name.EndsWith(".thumb", StringComparison.Ordinal) && CacheKey().IsMatch(name[..^6]),
+            MaximumFiles + 16, queue, clear);
+
     public Task<RasterPixels?> ReadAsync(string key, CancellationToken cancellation) => Run<RasterPixels?>(root =>
     {
         try
@@ -26,8 +34,8 @@ public sealed partial class IsolatedThumbnailCache(NativeConfiguration configura
     public Task WriteAsync(string key, RasterPixels pixels, long maximumBytes, CancellationToken cancellation) => Run(root =>
     {
         if (maximumBytes <= 0 || pixels.Bytes + 44 > maximumBytes) return false;
-        var files = new DirectoryInfo(root).EnumerateFiles("*.thumb").Take(4097).ToArray();
-        if (files.Length > 4096) return false; // Cache flooding cannot trigger unbounded enumeration/deletion.
+        var files = new DirectoryInfo(root).EnumerateFiles("*.thumb").Take(MaximumFiles + 1).ToArray();
+        if (files.Length > MaximumFiles) return false; // Cache flooding cannot trigger unbounded enumeration/deletion.
         long total = files.Sum(f => f.Length); string target = Path.Combine(root, key + ".thumb");
         foreach (var file in files.OrderBy(f => f.LastWriteTimeUtc))
         {
@@ -60,7 +68,7 @@ public sealed partial class IsolatedThumbnailCache(NativeConfiguration configura
                 try
                 {
                     NativeProfileAccess.Validate(configuration);
-                    var cacheRoot = Path.Combine(profile, "native-thumbnails-v1");
+                    var cacheRoot = Path.Combine(profile, DirectoryName);
                     Directory.CreateDirectory(cacheRoot);
                     var cacheHandles = IsolatedLibraryPersistence.PinDirectoryChain(cacheRoot);
                     try { cancellation.ThrowIfCancellationRequested(); return action(cacheRoot); }

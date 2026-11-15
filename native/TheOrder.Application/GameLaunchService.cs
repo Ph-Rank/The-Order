@@ -218,7 +218,7 @@ public sealed class GameLaunchService(ILaunchLibrary library, IFilesystemIdentit
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, requestedCancellation);
         var owned = new List<IObservedProcess> { initial };
         var clock = Stopwatch.StartNew(); var current = initial;
-        bool hadWindow = false, ambiguous = false, incompleteTree = false;
+        bool hadWindow = false, adoptedWhileLauncherRunning = false, ambiguous = false, incompleteTree = false;
         var unresolvedAttachments = new HashSet<ProcessIdentity>();
         var scopedIdentities = new HashSet<ProcessIdentity>();
         bool commandLaunch = string.Equals(Path.GetExtension(created.Snapshot!.Executable.FinalPath), ".cmd", StringComparison.OrdinalIgnoreCase);
@@ -244,8 +244,13 @@ public sealed class GameLaunchService(ILaunchLibrary library, IFilesystemIdentit
                 { Limited(UiText.Get("程序已经启动，但无法可靠查询进程；没有把查询失败当作退出。")); return; }
                 bool exited = root.State == ProcessTrackingState.Exited;
                 if (exited) exitedAt ??= clock.Elapsed.TotalMilliseconds;
-                bool waitingCommand = commandLaunch && current == initial && !exited;
-                bool observeTree = clock.Elapsed < options.InitialTreeWindow || exited || waitingCommand;
+                // Some EXE launchers wait headlessly for the game, just like a synchronous
+                // command script. Start looking while both lifetimes are still observable.
+                bool waitingLauncher = current == initial && !exited && (commandLaunch || !hadWindow);
+                bool uncoveredMember = waitingLauncher && membership is { Complete: true }
+                    && membership.ActivePids.Any(pid => owned.All(p => p.Pid != pid));
+                bool observeTree = clock.Elapsed < options.InitialTreeWindow || exited || uncoveredMember
+                    || waitingLauncher && commandLaunch;
                 if (observeTree && treePolls++ < options.MaximumTreePolls)
                 {
                     var tree = platform.Descendants(observed, options.MaximumProcesses, options.MaximumCandidates);
@@ -277,9 +282,10 @@ public sealed class GameLaunchService(ILaunchLibrary library, IFilesystemIdentit
                     }
                 }
                 else if (observeTree) ambiguous = true;
-                if (exited || waitingCommand)
+                if (exited || waitingLauncher)
                 {
-                    if (exited) Publish(Status with { Tracking = ProcessTrackingState.ObservingHandoff, Message = UiText.Get("入口进程已退出，正在核对可能的游戏子进程。") });
+                    if (exited && Status.Tracking != ProcessTrackingState.ObservingHandoff)
+                        Publish(Status with { Tracking = ProcessTrackingState.ObservingHandoff, Message = UiText.Get("入口进程已退出，正在核对可能的游戏子进程。") });
                     var candidates = owned.Where(p => p != current).Select(p => (Process: p, Observation: p.Query()))
                         .Where(p => p.Observation.State == ProcessTrackingState.RunningConfirmed && p.Observation.Identity is { } id
                             && p.Observation.HasWindow && LaunchSelection.IsContinuationExecutable(Path.GetFileName(id.ImagePath))
@@ -287,10 +293,10 @@ public sealed class GameLaunchService(ILaunchLibrary library, IFilesystemIdentit
                     if (candidates.Length > 1) ambiguous = true;
                     var handoffScope = lifetimeScope?.Query();
                     RememberScope(handoffScope);
-                    bool commandScopeCovered = !waitingCommand || handoffScope is { Complete: true }
+                    bool launcherScopeCovered = !waitingLauncher || handoffScope is { Complete: true }
                         && handoffScope.ActivePids.Contains(candidates.Length == 1 ? candidates[0].Process.Pid : -1)
                         && handoffScope.ActivePids.All(pid => owned.Any(p => p.Pid == pid && p.Query().State == ProcessTrackingState.RunningConfirmed));
-                    if (!ambiguous && !incompleteTree && unresolvedAttachments.Count == 0 && candidates.Length == 1 && commandScopeCovered)
+                    if (!ambiguous && !incompleteTree && unresolvedAttachments.Count == 0 && candidates.Length == 1 && launcherScopeCovered)
                     {
                         var next = candidates[0];
                         if (candidateIdentity != next.Observation.Identity) { candidateIdentity = next.Observation.Identity; candidateSince = clock.Elapsed.TotalMilliseconds; }
@@ -298,6 +304,7 @@ public sealed class GameLaunchService(ILaunchLibrary library, IFilesystemIdentit
                         {
                             var handoffMs = clock.Elapsed.TotalMilliseconds - (exitedAt ?? 0);
                             var previous = Status.Current; current = next.Process; hadWindow = true; exitedAt = null; candidateSince = null;
+                            adoptedWhileLauncherRunning |= waitingLauncher;
                             authoritativeScopeGeneration = ScopeCheckpoint(handoffScope, next.Observation);
                             Publish(Status with { Current = next.Observation.Identity, Tracking = ProcessTrackingState.RunningConfirmed, AttachMilliseconds = created.StartMilliseconds + clock.Elapsed.TotalMilliseconds, HandoffMilliseconds = handoffMs,
                                 Message = UiText.Get("已根据父子关系、创建时间和唯一游戏窗口接续追踪。") }, ProcessEventKind.ProcessHandoff, previous);
@@ -322,7 +329,7 @@ public sealed class GameLaunchService(ILaunchLibrary library, IFilesystemIdentit
                         return;
                     }
                 }
-                else if (Status.Tracking != ProcessTrackingState.RunningConfirmed)
+                if (!exited && Status.Tracking != ProcessTrackingState.RunningConfirmed)
                     Publish(Status with { Current = root.Identity, Tracking = ProcessTrackingState.RunningConfirmed, AttachMilliseconds = created.StartMilliseconds + clock.Elapsed.TotalMilliseconds, Message = UiText.Get("游戏进程正在运行。") }, ProcessEventKind.ProcessTrackingAttached);
                 await Task.Delay(observeTree ? options.PollInterval : options.RunningPollInterval, stop.Token).ConfigureAwait(false);
             }
@@ -344,11 +351,11 @@ public sealed class GameLaunchService(ILaunchLibrary library, IFilesystemIdentit
             if (tracked is not { State: ProcessTrackingState.RunningConfirmed, HasWindow: true, Identity: { } id }
                 || scope is not { Complete: true } || !scope.ActivePids.Contains(id.Pid)) return null;
             if (scope.ActiveProcesses == 1 && scope.ActivePids.Length == 1) return scope.TotalProcesses;
-            // A synchronous CMD wrapper can stay alive until its GUI child ends. In that
+            // A synchronous launcher can stay alive until its GUI child ends. In that
             // case every kernel-scope birth must have been observed through an exact lease,
             // and every live PID must still be covered. A missed short-lived birth prevents
             // this checkpoint; unchanged total births and zero live members are required later.
-            return commandLaunch && scope.TotalProcesses == scopedIdentities.Count
+            return adoptedWhileLauncherRunning && scope.TotalProcesses == scopedIdentities.Count
                 && scope.ActivePids.All(pid => owned.Any(p => p.Pid == pid && p.Query().State == ProcessTrackingState.RunningConfirmed))
                 ? scope.TotalProcesses : null;
         }

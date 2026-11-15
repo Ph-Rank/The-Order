@@ -19,6 +19,9 @@ public sealed class MarkdownView : StackPanel, IImageHost
     public IImagePipeline Images {get;set;}=null!;
     public IRemoteCoverRegistry? Registry {get;set;}
     public Func<string,Task>? OpenLink {get;set;}
+    // Bundled help opts in. Regular Markdown has no access to these resources or navigation actions.
+    internal Func<string, string, FrameworkElement?>? CreateEmbeddedFigure { get; set; }
+    internal Func<string, Action?>? ResolveArticleLink { get; set; }
     private int nodes,images;
     private (string Text, IImagePipeline? Images, IRemoteCoverRegistry? Registry, Func<string,Task>? Link, ElementTheme Theme)? rendered;
     internal int RenderCount { get; private set; }
@@ -41,6 +44,12 @@ public sealed class MarkdownView : StackPanel, IImageHost
             else if(block is QuoteBlock quote){var body=new StackPanel{Spacing=8};Blocks(quote,body,depth+1);target.Children.Add(new Border{Child=body,Padding=new Thickness(12,4,0,4),BorderThickness=new Thickness(3,0,0,0),BorderBrush=(Brush)Microsoft.UI.Xaml.Application.Current.Resources["AccentBrush"]});}
             else if(block is CodeBlock code){target.Children.Add(new Border{Padding=new Thickness(12),CornerRadius=new CornerRadius(6),Background=(Brush)Microsoft.UI.Xaml.Application.Current.Resources["SubtleFillColorSecondaryBrush"],Child=new ScrollViewer{HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollMode=ScrollMode.Enabled,Content=new TextBlock{Text=code.Lines.ToString(),FontFamily=MonospaceFont,FontSize=13,IsTextSelectionEnabled=true}}});}
             else if(block is ThematicBreakBlock){target.Children.Add(new Border{Height=1,Background=(Brush)Microsoft.UI.Xaml.Application.Current.Resources["DividerBrush"]});}
+            else if (CreateEmbeddedFigure is { } createFigure &&
+                block is ParagraphBlock { Inline.FirstChild: LinkInline { IsImage: true, Url: { } imageUrl, NextSibling: null } image } &&
+                createFigure(imageUrl, string.Concat(image.OfType<LiteralInline>().Select(literal => literal.Content.ToString()))) is { } figure)
+            {
+                target.Children.Add(figure);
+            }
             else if(block is LeafBlock leaf){var text=new RichTextBlock{FontSize=block is HeadingBlock heading?Math.Max(16,28-heading.Level*2):15,LineHeight=26,IsTextSelectionEnabled=true,TextWrapping=TextWrapping.Wrap};if(block is HeadingBlock)text.FontWeight=Microsoft.UI.Text.FontWeights.SemiBold;var paragraph=new Paragraph();if(leaf.Inline is not null)Inlines(leaf.Inline,paragraph.Inlines,depth+1,target);text.Blocks.Add(paragraph);target.Children.Add(text);}
             else if(block is ContainerBlock container)Blocks(container,target,depth+1);
         }
@@ -56,6 +65,13 @@ public sealed class MarkdownView : StackPanel, IImageHost
             case EmphasisInline emphasis:Span span=emphasis.DelimiterChar=='~'?new Span{TextDecorations=TextDecorations.Strikethrough}:emphasis.DelimiterCount>=2?new Bold():new Italic();Inlines(emphasis,span.Inlines,depth+1,imageTarget);target.Add(span);break;
             case LinkInline link:
                 if(link.IsImage){var alt=string.Concat(link.OfType<LiteralInline>().Select(l=>l.Content.ToString()));var key=MarkdownContent.AllowedLink(link.Url)&&link.Url!.StartsWith("https://",StringComparison.Ordinal)&&images<12?Registry?.Register(link.Url,"markdown"):null;if(key is not null){images++;imageTarget.Children.Add(new CoverPresenter{SourceKey=key,MaxWidth=640,Height=280,PreserveEntireImage=true,HorizontalAlignment=HorizontalAlignment.Left});}else target.Add(new Run{Text=alt});}
+                else if (link.Url is { } fragment && ResolveArticleLink?.Invoke(fragment) is { } navigate)
+                {
+                    var hyperlink = new Hyperlink();
+                    Inlines(link, hyperlink.Inlines, depth + 1, imageTarget);
+                    hyperlink.Click += (_, _) => navigate();
+                    target.Add(hyperlink);
+                }
                 else if(MarkdownContent.ResolveLink(link.Url) is { } url){var hyper=new Hyperlink();Inlines(link,hyper.Inlines,depth+1,imageTarget);hyper.Click+=async(_,_)=>{try{if(OpenLink is not null)await OpenLink(url);else await Windows.System.Launcher.LaunchUriAsync(new Uri(url));}catch{/* Keep the readable text; no automatic navigation retry. */}};target.Add(hyper);}
                 else Inlines(link,target,depth+1,imageTarget);break;
             case AutolinkInline auto when MarkdownContent.AllowedLink(auto.Url):var ah=new Hyperlink();ah.Inlines.Add(new Run{Text=auto.Url});ah.Click+=async(_,_)=>{try{if(OpenLink is not null)await OpenLink(auto.Url);else await Windows.System.Launcher.LaunchUriAsync(new Uri(auto.Url));}catch{}};target.Add(ah);break;

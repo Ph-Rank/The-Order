@@ -24,6 +24,8 @@ public sealed class RailNavigationItem : NavigationViewItem
         if (Icon is not null || MenuItems.Count != 0 || HasUnrealizedChildren
             || GetTemplateChild("NavigationViewItemPresenter") is not NavigationViewItemPresenter presenter) return;
         presenter.ApplyTemplate();
+        if (Find<Microsoft.UI.Xaml.Shapes.Rectangle>(presenter, "SelectionIndicator") is { } indicator)
+            indicator.Fill = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         if (Find<Grid>(presenter, "ContentGrid") is { } grid)
         { grid.Margin = new Thickness(0); grid.HorizontalAlignment = HorizontalAlignment.Stretch; }
         if (Find<Border>(presenter, "IconColumn") is { } icon)

@@ -8,9 +8,16 @@ namespace TheOrder.Platform.Windows;
 // A full cache refuses new writes; all reads and enumeration remain bounded.
 public sealed partial class IsolatedArtworkCache(NativeConfiguration configuration) : IRemoteArtworkCache
 {
+    private const string DirectoryName = "native-artwork-v1";
     private const int Magic=0x31414F54, MaximumFileBytes=20*1024*1024, MaximumFiles=20000;
     private const long MaximumBytes=2L*1024*1024*1024;
     private readonly SemaphoreSlim serial=new(1);
+
+    internal Task<ImageCacheUsage> ManageDiskAsync(bool clear) =>
+        ImageCacheStorage.WithDirectoryAsync(configuration, DirectoryName,
+            name => name.EndsWith(".art", StringComparison.Ordinal) && KeyPattern().IsMatch(name[..^4]),
+            MaximumFiles + 16, serial, clear);
+
     private static byte[]? ReadFile(string path)
     {
         try
@@ -51,7 +58,7 @@ public sealed partial class IsolatedArtworkCache(NativeConfiguration configurati
             var profile=NativeProfileAccess.Validate(configuration);var held=IsolatedLibraryPersistence.PinDirectoryChain(profile);
             try
             {
-                NativeProfileAccess.Validate(configuration);var root=Path.Combine(profile,"native-artwork-v1");Directory.CreateDirectory(root);
+                NativeProfileAccess.Validate(configuration);var root=Path.Combine(profile,DirectoryName);Directory.CreateDirectory(root);
                 var cacheHeld=IsolatedLibraryPersistence.PinDirectoryChain(root);
                 try {cancellation.ThrowIfCancellationRequested();return action(root);}
                 finally {foreach(var h in cacheHeld)h.Dispose();}

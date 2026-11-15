@@ -11,6 +11,8 @@ using TheOrder.Application;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
 
+using TheOrder.WinUI.Views;
+
 namespace TheOrder.WinUI;
 public sealed partial class MainWindow
 {
@@ -70,12 +72,13 @@ public sealed partial class MainWindow
                 }
             }
             else if (value is "settings-top" or "settings-online" or "settings-bangumi" or "settings-backups" or "settings-update"
-                or "settings-appearance" or "settings-launch" or "settings-library" or "settings-sync" or "settings-collapse-all")
+                or "settings-appearance" or "settings-application" or "settings-guide" or "settings-launch"
+                or "settings-library" or "settings-sync" or "settings-collapse-all")
             {
                 if (ViewModel.Page != TheOrder.Presentation.WorkspacePage.Settings) throw new InvalidOperationException();
                 settingsPage.RevealSettingsTest(value);
             }
-            else if (value == "clear-notice") NoticeBar.IsOpen = false;
+            else if (value == "clear-notice") statusPage.ClearHistory();
             else throw new InvalidDataException("Unknown bounded page inspection.");
             await Task.Delay(200);
         }
@@ -87,13 +90,15 @@ public sealed partial class MainWindow
                 throw new InvalidOperationException("A clean Test details page is required.");
             var value = request.GetProperty("value").GetString();
             var controls = P1Elements(detailsPage).OfType<FrameworkElement>().ToArray();
-            if (value == "clear-notice") NoticeBar.IsOpen = false;
+            if (value == "clear-notice") statusPage.ClearHistory();
             else if (value == "long-notice")
             {
                 // Fixed synthetic text exercises wrapping in the actual control, without
                 // changing LaunchViewModel, bindings' source, installations or persistence.
-                controls.OfType<TextBlock>().Single(t => AutomationProperties.GetAutomationId(t) == "LaunchMessage").Text =
-                    "尚未选定启动程序。请从这部作品的游戏文件夹中选择正确的 exe 或 cmd；如果路径已经移动，请在启动设置中更新位置并重新确认，然后再启动游戏。";
+                statusPage.Post(new("启动游戏",
+                    "尚未选定启动程序。请从这部作品的游戏文件夹中选择正确的 exe 或 cmd；如果路径已经移动，请在启动设置中更新位置并重新确认，然后再启动游戏。",
+                    InfoBarSeverity.Warning));
+                await Navigate(TheOrder.Presentation.WorkspacePage.Status);
             }
             else if (value is "edit" or "finish")
             {
@@ -143,8 +148,8 @@ public sealed partial class MainWindow
             if (peer.GetPattern(PatternInterface.Invoke) is not IInvokeProvider invoke) throw new InvalidOperationException();
             invoke.Invoke(); await Task.Delay(600);
         }
-        if (action == "p1DismissDiscovery") { if (libraryPage.DismissDiscovery is { } dismiss) await dismiss(); }
-        if (action == "p1ReviewDiscovery") { files.ReviewDiscovered(sources.Candidates); await Navigate(TheOrder.Presentation.WorkspacePage.Import); }
+        if (action == "p1DismissDiscovery") await IgnoreStatusDiscoveryAsync();
+        if (action == "p1ReviewDiscovery") await ReviewDiscoveredGamesAsync();
         if (action == "p1IgnoreCandidate")
         {
             if (!files.IsSourceDiscovery) throw new InvalidDataException();
@@ -220,13 +225,16 @@ public sealed partial class MainWindow
         }
         if (action == "p1Shortcut")
         {
-            var input = P1Elements(p1Dialog).OfType<Views.GuideShortcutInput>().Single();
+            if (ViewModel.Page != TheOrder.Presentation.WorkspacePage.Settings || p1Dialog is not null)
+                throw new InvalidOperationException("Shortcut fixture requires the game assistant settings.");
+            var input = settingsPage.GuideShortcut ?? throw new InvalidOperationException("Game assistant settings are not open.");
             var value = request.GetProperty("value").GetString();
             if (value == "record")
             {
                 int key = request.GetProperty("key").GetInt32(), modifiers = request.GetProperty("modifiers").GetInt32();
                 if (key is not (0x4a or 0x4b or 0x77 or 0x20) || modifiers is < 0 or > 7) throw new InvalidDataException("Bounded synthetic shortcut required");
-                input.BeginRecording(); input.Record(key, modifiers);
+                input.BeginRecording();
+                await input.RecordAsync(key, modifiers);
             }
             else if (value == "capture") input.BeginRecording();
             else if (value != "evidence") throw new InvalidDataException();
@@ -274,13 +282,13 @@ public sealed partial class MainWindow
         if (action == "p1Statistics")
         {
             if (p1Dialog?.Title as string != "游玩统计") throw new InvalidDataException();
-            var combos = P1Elements(p1Dialog).OfType<ComboBox>().ToArray();
+            var combos = P1Elements(p1Dialog).OfType<SelectedFirstComboBox>().ToArray();
             var index = request.GetProperty("value").GetInt32(); if (index is < 0 or > 1) throw new InvalidDataException();
-            combos.Single(c => c.Header as string == "统计区间").SelectedIndex = index;
+            combos.Single(c => c.Header as string == "统计区间").OptionIndex = index;
             if (request.TryGetProperty("id", out var id))
             {
                 var choose = combos.Single(c => c.Header as string == "作品");
-                var item = choose.Items.OfType<ComboBoxItem>().Single(c => c.Tag as string == id.GetString()); choose.SelectedItem = item;
+                var item = choose.Options.OfType<ComboBoxItem>().Single(c => c.Tag as string == id.GetString()); choose.SelectedOption = item;
             }
             await Task.Delay(200);
         }
@@ -297,12 +305,12 @@ public sealed partial class MainWindow
                     if (!double.IsFinite(hours) || hours is < 0 or > 8784 || days is < 0 or > 30) throw new InvalidDataException();
                     controls.OfType<CalendarDatePicker>().Single().Date = DateTimeOffset.Now.AddDays(-days);
                     controls.OfType<NumberBox>().Single().Value = hours;
-                    controls.OfType<ComboBox>().Single(c => c.Header as string == "方式").SelectedIndex = request.GetProperty("replace").GetBoolean() ? 1 : 0;
+                    controls.OfType<SelectedFirstComboBox>().Single(c => c.Header as string == "方式").OptionIndex = request.GetProperty("replace").GetBoolean() ? 1 : 0;
                     break;
                 case "source":
                     var source = request.GetProperty("source").GetString() ?? "";
                     var number = DirectMetadataIdentity.Normalize(source, request.GetProperty("number").GetString() ?? "");
-                    controls.OfType<ComboBox>().Single(c => c.Header as string == "资料源").SelectedIndex = source == "bangumi" ? 0 : 1;
+                    controls.OfType<SelectedFirstComboBox>().Single(c => c.Header as string == "资料源").OptionIndex = source == "bangumi" ? 0 : 1;
                     controls.OfType<TextBox>().Single(c => c.Header as string == "作品编号或作品链接").Text = number;
                     break;
                 default: throw new InvalidDataException();
@@ -312,11 +320,18 @@ public sealed partial class MainWindow
         {
             var id = request.GetProperty("value").GetString() ?? "";
             if (id is not ("SaveManualPlaytime" or "PreviewMetadataSource" or "ApplyMetadataSource" or "ScanLibrarySources" or "IgnoreAllSourceCandidates" or "WalkthroughRead"
-                or "SaveGuideOverlaySettings" or "CheckGuideOverlayShortcut" or "ResetGuideShortcut")
+                or "ResetGuideShortcut" or "SaveGuideSource" or "OpenGameAssistantSettings" or "OpenGameAssistantReading" or "GuideNoticeOpenGameTools")
                 && !id.StartsWith("RestoreIgnored:", StringComparison.Ordinal)
                 && !id.StartsWith("UndoManual:", StringComparison.Ordinal) && id is not ("RemoveSource:bangumi" or "RemoveSource:vndb")) throw new InvalidDataException();
-            var button = P1Elements(p1Dialog).OfType<Button>().Single(b => AutomationProperties.GetAutomationId(b) == id);
-            if (!button.IsEnabled) throw new InvalidOperationException("Action disabled.");
+            if (id == "GuideNoticeOpenGameTools") await Navigate(TheOrder.Presentation.WorkspacePage.Status);
+            var host = id switch
+            {
+                "ResetGuideShortcut" when ViewModel.Page == TheOrder.Presentation.WorkspacePage.Settings => (FrameworkElement)settingsPage,
+                "GuideNoticeOpenGameTools" => statusPage,
+                _ => p1Dialog
+            };
+            var button = P1Elements(host).OfType<Button>().First(b => AutomationProperties.GetAutomationId(b) == id);
+            if (!button.IsEnabled || button.Visibility != Visibility.Visible) throw new InvalidOperationException("Action unavailable.");
             var peer = FrameworkElementAutomationPeer.CreatePeerForElement(button) ?? new ButtonAutomationPeer(button);
             if (peer.GetPattern(PatternInterface.Invoke) is not IInvokeProvider invoke) throw new InvalidOperationException();
             invoke.Invoke(); await Task.Delay(200); await p1Operation;
@@ -339,7 +354,15 @@ public sealed partial class MainWindow
             tools = P1Elements(p1Dialog).OfType<Views.GameToolsView>().SingleOrDefault()?.Evidence,
             guide = P1Elements(p1Dialog).OfType<Views.WalkthroughReaderView>().SingleOrDefault()?.LayoutForFixture(),
             entries = extras.Snapshot?.Entries.Length, candidates = sources.Candidates.Length, roots = sources.Sources.Length,
-            notifications = libraryPage.NotificationEvidenceFixture(), ignored = sources.Sources.Sum(s => s.IgnoredCandidates.Length),
+            notifications = new
+            {
+                recognitionVisible = statusPage.HasTask("recognition"), recognitionText = recognition.ProgressText, recognitionMessage = recognition.Message,
+                recognitionBusy = recognition.HasRecognitionWork, recognitionTotal = recognition.Progress.Total,
+                discoveryOpen = statusPage.HasNotice("source-discovery") || statusPage.HasNotice("source-error"),
+                discoveryTitle = statusPage.NoticeTitle("source-error") ?? statusPage.NoticeTitle("source-discovery"),
+                menuItems = libraryPage.ContextMenuEvidenceFixture()
+            },
+            ignored = sources.Sources.Sum(s => s.IgnoredCandidates.Length),
             sourceSettings = sources.Sources.Select(s => new { s.Id, kind = s.Kind.ToString(), s.ShowUnconfirmedSteam, ignored = s.IgnoredCandidates.Length }),
             sourceDiscovery = files.IsSourceDiscovery, importCandidates = files.Candidates.Count, importSelection = files.SelectedImportCount,
             installationDraft = files.Draft is null ? null : new { files.Draft.SaveFolder, files.Draft.MuteInBackground, files.Draft.UseSteam },

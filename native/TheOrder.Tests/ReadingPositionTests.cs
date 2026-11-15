@@ -10,6 +10,34 @@ namespace TheOrder.Tests;
 
 public sealed class ReadingPositionTests
 {
+    [Fact] public async Task LastChatPageUsesOptionalFieldSoOlderReadersCanKeepTheirGuideSettings()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "TheOrder-chat-page-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var codec = new NativeLibraryCodec(); using var profile = NativeProfileStore.Open(new(NativeProfileKind.Test, folder), codec);
+            var persistence = profile.CreateLibraryPersistence();
+            try { await persistence.SaveAsync(persistence.ReadMain()!, codec.Encode([SessionTestRig.Entry()], SessionTestRig.Date)); }
+            finally { (persistence as IDisposable)?.Dispose(); }
+            string path = Path.Combine(folder, "native-guide-overlay-v1.json");
+            await File.WriteAllTextAsync(path, System.Text.Json.JsonSerializer.Serialize(new { Version = 1, ProfileId = profile.Manifest.ProfileId,
+                StoreId = profile.Manifest.StoreId, Enabled = true, VirtualKey = 0x4a, CustomShortcut = true,
+                Sources = new Dictionary<string, int> { ["g"] = 1 }, LastChatPages = new[] { "g" } }));
+            var configuration = profile.Configuration(true);
+            await using var client = new OfflineLibraryClient(new IsolatedLibraryFactory(codec, configuration), new LegacyClientTextRules()); await client.LoadAsync(default);
+            await using (var first = new WindowsWalkthroughSessions(client, new NoNetwork(), configuration, new Access()))
+            {
+                await first.InitializeAsync(); Assert.True(first.CanConfigure); Assert.Equal(3, first.LastOverlayPage("g")?.Channel);
+                await first.ConfigureAsync(true, 0x4a);
+            }
+            using var json = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(path));
+            Assert.Empty(json.RootElement.GetProperty("LastPages").EnumerateObject());
+            Assert.Equal("g", json.RootElement.GetProperty("LastChatPages")[0].GetString());
+            await using var restarted = new WindowsWalkthroughSessions(client, new NoNetwork(), configuration, new Access()); await restarted.InitializeAsync();
+            Assert.True(restarted.CanConfigure); Assert.Equal(1, restarted.SourceFor("g")); Assert.Equal(3, restarted.LastOverlayPage("g")?.Channel);
+        }
+        finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
+    }
     [Theory] [InlineData(0x6004b)] [InlineData(0x77)]
     public async Task CustomShortcutSurvivesRestartAndPreservesReadingPreferences(int shortcut)
     {

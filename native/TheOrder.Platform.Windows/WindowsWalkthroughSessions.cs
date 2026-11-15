@@ -9,7 +9,8 @@ using TheOrder.Application;
 namespace TheOrder.Platform.Windows;
 
 // Owns only the companion, never a game process. The existing launch/session engine remains authoritative.
-public sealed record GuideLaunchNotice(string GameId, string Title, string Message, bool Warning);
+public enum GuideLaunchAction { None, OpenReading, ChangeShortcut }
+public sealed record GuideLaunchNotice(string GameId, string Title, string Message, bool Warning, GuideLaunchAction Action);
 
 public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient library, IWalkthroughReader reader,
     NativeConfiguration configuration, INextMoeAccess auth, IGuideFlowLayout? flowLayout = null, ILocalReadingLibrary? localReading = null) : IGameGuideLaunch, IAsyncDisposable
@@ -24,6 +25,12 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
     private bool disposed;
     private bool lightTheme;
     private int appearanceDpi = 96;
+    public Func<CancellationToken, Task<TheOrder.Application.Playground.PlaygroundService>>? ChatFactory { get; set; }
+    private string ChatKey(string gameId)
+    {
+        var entry = library.CurrentSnapshot!.Entries.First(e => e.Id == gameId);
+        return "game:" + gameId + ":" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(TheOrder.Application.Playground.PlaygroundService.WorkKeyFor(entry))));
+    }
     public void SetAppearance(bool light, int dpi)
     {
         dpi = Math.Clamp(dpi, 96, 384);
@@ -43,21 +50,24 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
     public bool CanConfigure { get; private set; } = true;
     private const string PreferenceName = "native-guide-overlay-v1.json";
     private sealed record Preference(int Version, Guid ProfileId, Guid StoreId, bool Enabled, int VirtualKey)
-    { public bool CustomShortcut { get; init; } public Dictionary<string, int>? Sources { get; init; } public Dictionary<string, string[]>? Notes { get; init; } public Dictionary<string, LocalReadingPosition>? Positions { get; init; } public Dictionary<string, OverlayPagePreference>? LastPages { get; init; } }
+    { public bool CustomShortcut { get; init; } public Dictionary<string, int>? Sources { get; init; } public Dictionary<string, string[]>? Notes { get; init; } public Dictionary<string, LocalReadingPosition>? Positions { get; init; } public Dictionary<string, OverlayPagePreference>? LastPages { get; init; } public string[]? LastChatPages { get; init; } }
     private readonly Dictionary<string, int> sourcePreferences = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string[]> notePreferences = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim preferenceGate = new(1, 1);
     public string Message { get; private set; } = "游戏内阅读：J 显示或隐藏";
+    private readonly Dictionary<string, GuideLaunchNotice> notices = new(StringComparer.Ordinal);
     private GuideLaunchNotice? notice;
     public GuideLaunchNotice? Notice { get { lock (gate) return notice; } }
-    private void Report(string gameId, string message, bool warning = false)
+    public GuideLaunchNotice? NoticeFor(string gameId) { lock (gate) return notices.GetValueOrDefault(gameId); }
+    private void Report(string gameId, string message, bool warning = false, GuideLaunchAction? action = null)
     {
         lock (gate)
         {
-            Message = message;
             var title = library.CurrentSnapshot?.Entries.FirstOrDefault(e => e.Id == gameId)?.Name ?? "";
-            var next = new GuideLaunchNotice(gameId, title, message, warning);
-            if (notice != next) notice = next;
+            var next = new GuideLaunchNotice(gameId, title, message, warning, action ??
+                (warning ? GuideLaunchAction.OpenReading : GuideLaunchAction.None));
+            if (notices.GetValueOrDefault(gameId) == next) return;
+            notices[gameId] = notice = next;
         }
     }
     public Task InitializeAsync() => Task.Run(() => {
@@ -78,22 +88,41 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
             foreach (var pair in settings.Notes ?? []) notePreferences[pair.Key] = pair.Value;
             LoadReadingPositions(settings.Positions ?? []);
             LoadOverlayPages(settings.LastPages ?? []);
+            if (settings.LastChatPages is { } chatPages)
+            {
+                if (chatPages.Length > 512 || chatPages.Any(g => g.Length is < 1 or > 200) || chatPages.Distinct(StringComparer.Ordinal).Count() != chatPages.Length) throw new InvalidDataException();
+                foreach (string game in chatPages) overlayPages[game] = new(3, overlayPages.GetValueOrDefault(game)?.Graph ?? true);
+            }
             Configure(settings.Enabled, settings.CustomShortcut ? settings.VirtualKey : WindowsGuideHotkeys.FromLegacy(settings.VirtualKey));
         }
         catch (Exception error) when (error is IOException or JsonException or InvalidDataException or UnauthorizedAccessException)
         { lock (gate) { Enabled = false; CanConfigure = false; Message = "攻略显示设置无法安全读取，原文件已保留；网络攻略仍可阅读。"; } }
         finally { foreach (var handle in held) handle.Dispose(); }
     });
+    public (bool Available, string Message) CheckShortcut(int virtualKey)
+    {
+        lock (gate)
+        {
+            if (Enabled && virtualKey == VirtualKey && slots.Any(s => s.View.ReadInt32(44) == 1))
+                return (true, WindowsGuideHotkeys.Label(virtualKey) + " 正由游戏内助手使用。");
+        }
+        return WindowsGuideHotkeys.Check(virtualKey);
+    }
+
     public async Task ConfigureAsync(bool enabled, int virtualKey)
     {
         if (!CanConfigure || !WindowsGuideHotkeys.IsSupported(virtualKey)) throw new GuideHotkeyUnavailableException("请录入字母、数字、F1–F11 或符号键，可搭配 Ctrl、Shift、Alt；系统及翻页按键不可用。");
-        if (enabled)
-        {
-            bool ownGuide; lock (gate) ownGuide = Enabled && virtualKey == VirtualKey && slots.Any(s => s.View.ReadInt32(44) == 1);
-            if (!ownGuide) WindowsGuideHotkeys.RequireAvailable(virtualKey);
-        }
         await preferenceGate.WaitAsync().ConfigureAwait(false);
-        try { await PersistPreferencesAsync(enabled, virtualKey, sourcePreferences).ConfigureAwait(false); Configure(enabled, virtualKey); }
+        try
+        {
+            if (enabled || virtualKey != VirtualKey)
+            {
+                var availability = CheckShortcut(virtualKey);
+                if (!availability.Available) throw new GuideHotkeyUnavailableException(availability.Message);
+            }
+            await PersistPreferencesAsync(enabled, virtualKey, sourcePreferences).ConfigureAwait(false);
+            Configure(enabled, virtualKey);
+        }
         finally { preferenceGate.Release(); }
     }
     public void Configure(bool enabled, int virtualKey)
@@ -101,14 +130,26 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
         if (!WindowsGuideHotkeys.IsSupported(virtualKey)) throw new ArgumentOutOfRangeException(nameof(virtualKey));
         lock (gate)
         {
+            bool keyChanged = virtualKey != VirtualKey;
             Enabled = enabled; VirtualKey = virtualKey;
             if (!enabled)
             {
                 available.Clear(); foreach (var slot in slots) slot.Dispose(); slots.Clear();
-                if (notice is { } previous) Report(previous.GameId, "游戏内攻略已关闭，可在游戏工具中重新开启。");
+                notices.Clear();
+                notice = null;
             }
-            else foreach (var slot in slots) slot.View.Write(76, VirtualKey);
-            Message = enabled ? $"游戏内阅读：{WindowsGuideHotkeys.Label(virtualKey)} 显示或隐藏" : "本次运行已关闭游戏内阅读";
+            else if (keyChanged)
+            {
+                foreach (var slot in slots)
+                {
+                    slot.KeyStatus = 0;
+                    slot.View.Write(76, VirtualKey);
+                    // The host will recheck the new key on the next foreground probe.
+                    slot.View.Write(44, 0);
+                    Report(slot.GameId, "快捷键已更新，切回游戏后检查连接。");
+                }
+            }
+            Message = enabled ? $"游戏内阅读：{WindowsGuideHotkeys.Label(virtualKey)} 显示或隐藏" : "已关闭游戏内阅读与对话。";
         }
     }
     public async Task PrepareForGameAsync(string gameId, CancellationToken cancellation)
@@ -123,7 +164,7 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
         lock (gate)
         {
             if (disposed) return;
-            if (!Enabled) { Report(gameId, "游戏内攻略已关闭，可在游戏工具中开启。"); return; }
+            if (!Enabled) return;
             work = library.CurrentSnapshot?.Entries.FirstOrDefault(e => e.Id == gameId)?.Metadata?.Id ?? "";
             generation = auth.AuthContext.Generation;
             if (available.TryGetValue(gameId, out var cached) && cached.WorkId == work
@@ -134,7 +175,7 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
         }
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellation, lifetime.Token);
         budget.CancelAfter(TimeSpan.FromSeconds(4));
-        void Remember(ImmutableArray<WalkthroughSummary> summaries, string? next)
+        void Remember(ImmutableArray<WalkthroughSummary> summaries, string? next, string message, bool warning = false)
         {
             lock (gate)
             {
@@ -142,26 +183,29 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
                     || (library.CurrentSnapshot?.Entries.FirstOrDefault(e => e.Id == gameId)?.Metadata?.Id ?? "") != work) return;
                 if (available.Count >= 64) available.Clear();
                 available[gameId] = new(work, generation, DateTimeOffset.UtcNow, summaries, next) { Local = files };
+                Report(gameId, message, warning);
             }
         }
         if (!CatalogReleaseFacts.Id(work))
         {
-            Remember([], null);
-            Report(gameId, !files.Guides.IsEmpty ? "已找到本地攻略，正在准备游戏内阅读。" : !files.Notes.IsEmpty ? "已找到游戏说明文件，可使用说明快捷键阅读。" : "尚未关联网络资料，也没有找到本地攻略或说明文件。", files.Guides.IsEmpty && files.Notes.IsEmpty);
+            Remember([], null, !files.Guides.IsEmpty ? "已找到本地攻略，正在准备游戏内阅读。"
+                : !files.Notes.IsEmpty ? "正在准备说明文件。" : "尚未关联网络资料，也没有找到本地攻略或说明文件。", files.Guides.IsEmpty && files.Notes.IsEmpty);
             return;
         }
         try
         {
             // Like linked local details, a known work is read directly, independently of discovery filtering.
             var page = await reader.ListAsync(work, null, true, budget.Token).WaitAsync(budget.Token).ConfigureAwait(false);
-            Remember(page.Items, page.NextCursor);
-            Report(gameId, page.Items.IsEmpty && !files.Guides.IsEmpty ? "没有网络攻略，已自动选用本地攻略。" : page.Items.IsEmpty ? "此作品暂无网络攻略。" : "已找到对应攻略，正在准备游戏内显示。", page.Items.IsEmpty && files.Guides.IsEmpty && files.Notes.IsEmpty);
+            Remember(page.Items, page.NextCursor,
+                page.Items.IsEmpty && !files.Guides.IsEmpty ? "没有网络攻略，已自动选用本地攻略。"
+                : page.Items.IsEmpty ? "此作品暂无网络攻略。" : "已找到对应攻略，正在准备游戏内显示。",
+                page.Items.IsEmpty && files.Guides.IsEmpty && files.Notes.IsEmpty);
         }
         catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
-        { Remember([], null); Report(gameId, !files.Guides.IsEmpty ? "网络服务未响应，本次先使用本地攻略。" : "攻略服务暂未响应；本地说明文件仍可阅读。", true); }
-        catch (OnlineException error) { Remember([], null); Report(gameId, Failure(error.Failure) + (!files.Guides.IsEmpty ? " 本次先使用本地攻略。" : ""), true); }
+        { Remember([], null, !files.Guides.IsEmpty ? "网络服务未响应，本次先使用本地攻略。" : "攻略服务暂未响应。", true); }
+        catch (OnlineException error) { Remember([], null, Failure(error.Failure) + (!files.Guides.IsEmpty ? " 本次先使用本地攻略。" : ""), true); }
         catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException)
-        { Remember([], null); Report(gameId, "网络攻略暂不可用，本地资料仍可阅读。", true); }
+        { Remember([], null, "网络攻略暂不可用。", true); }
     }
     public IGameGuideLaunchPlan? Prepare(LaunchSnapshot snapshot)
     {
@@ -170,7 +214,7 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
             if (disposed || !Enabled) return null;
             var entry = library.CurrentSnapshot?.Entries.FirstOrDefault(e => e.Id == snapshot.Game.GameId);
             if (entry is null) return null; string workId = entry.Metadata?.Id ?? "";
-            if (!available.Remove(entry.Id, out var prepared) || prepared.Guides.IsEmpty && prepared.Local.Guides.IsEmpty && prepared.Local.Notes.IsEmpty
+            if (!available.Remove(entry.Id, out var prepared) || ChatFactory is null && prepared.Guides.IsEmpty && prepared.Local.Guides.IsEmpty && prepared.Local.Notes.IsEmpty
                 || prepared.WorkId != workId || prepared.Auth != auth.AuthContext.Generation
                 || DateTimeOffset.UtcNow - prepared.At >= TimeSpan.FromMinutes(2)) return null;
             if (slots.Count >= 16) { Report(entry.Id, "当前攻略会话过多，未启用本次攻略快捷键。", true); return null; }
@@ -178,7 +222,7 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
             try
             {
                 var slot = new Slot(this, snapshot, entry.Name, workId, VirtualKey, prepared, lifetime.Token);
-                slots.Add(slot); Report(entry.Id, "正在准备游戏内攻略…");
+                slots.Add(slot); Report(entry.Id, "正在准备游戏内阅读…");
                 slot.Pending = LoadAsync(slot, prepared.Cursor);
                 return slot;
             }
@@ -266,11 +310,18 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
     {
         lock (gate)
         {
-            if (!Current(slot)) return;
-            if (slot.ReadFailure is { } failure) Report(slot.GameId, failure, true);
+            if (!Current(slot) || slots.LastOrDefault(s => s.GameId == slot.GameId) != slot) return;
+            var key = WindowsGuideHotkeys.Label(VirtualKey);
+            if (slot.KeyStatus == 2)
+                Report(slot.GameId, $"{key} 已被其他程序占用。", true, GuideLaunchAction.ChangeShortcut);
+            else if (slot.KeyStatus == 3)
+                Report(slot.GameId, "助手快捷键尚未连接。", true);
             else if (slot.Warning is { } warning) Report(slot.GameId, warning, true);
-            else if (slot.HasDocument) Report(slot.GameId, slot.Pid == 0 ? "攻略已载入，正在等待游戏显示连接…"
-                : "攻略已准备：" + WindowsGuideHotkeys.Label(VirtualKey) + " 显示或隐藏");
+            else if (slot.ReadFailure is { } failure)
+                Report(slot.GameId, slot.KeyStatus == 1 && slot.Chat is not null ? $"{failure} 按 {key} 可打开对话。" : failure, true);
+            else if (slot.HasDocument || slot.Chat is not null)
+                Report(slot.GameId, slot.KeyStatus == 1 ? $"按 {key} 显示或隐藏游戏内助手。"
+                    : slot.HasDocument ? "攻略已载入，正在等待游戏显示连接…" : "正在等待游戏显示连接…");
         }
     }
     private static string Failure(OnlineFailure failure) => failure switch
@@ -284,7 +335,7 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
         && auth.AuthContext.Generation == slot.AuthGeneration
         && library.CurrentSnapshot?.Entries.Any(e => e.Id == slot.GameId && (e.Metadata?.Id ?? "") == slot.WorkId) == true;
     private void Update(Slot slot, GuideOverlayDocument document)
-    { lock (gate) { if (!Current(slot)) return; slot.Write(document); if (slot.Channel == 0) { slot.HasDocument = false; slot.ReadFailure = document.Status; Report(slot.GameId, document.Status, true); if (!slot.Local.Guides.IsEmpty) slot.Pending = ChangeChannelAsync(slot, 1); } } }
+    { lock (gate) { if (!Current(slot)) return; if (slot.Chat is not null) document = document with { Status = document.Status.Replace("本次快捷键不可用", "可切换对话继续使用阅读窗口", StringComparison.Ordinal) }; slot.Write(document); if (slot.Channel == 0) { slot.HasDocument = false; slot.ReadFailure = document.Status; ReportReady(slot); if (!slot.Local.Guides.IsEmpty) slot.Pending = ChangeChannelAsync(slot, 1); } } }
     // Executed from the presentation's existing low-frequency launch timer.
     public void Tick(LaunchStatus? launch = null)
     {
@@ -297,7 +348,7 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
                 CaptureOverlayPage(slot);
                 if (!Current(slot))
                 {
-                    if (notice?.GameId == slot.GameId && slots.LastOrDefault(s => s.GameId == slot.GameId) == slot)
+                    if (slots.LastOrDefault(s => s.GameId == slot.GameId) == slot)
                         Report(slot.GameId, auth.AuthContext.Generation != slot.AuthGeneration
                             ? "登录状态已变化，本次攻略会话已结束；下次启动游戏时会重新准备。"
                             : "作品关联已变化，本次攻略会话已结束；下次启动游戏时会重新准备。", true);
@@ -325,26 +376,29 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
                     && DateTimeOffset.UtcNow - slot.AttachedAt < TimeSpan.FromSeconds(30);
                 if (!Alive(slot.Pid, slot.Created) && !handoff)
                 {
-                    if (notice?.GameId == slot.GameId && slots.LastOrDefault(s => s.GameId == slot.GameId) == slot)
-                        Report(slot.GameId, "本次攻略会话已结束；若游戏仍在运行，可先使用网络攻略。", true);
+                    if (slots.LastOrDefault(s => s.GameId == slot.GameId) == slot)
+                        Report(slot.GameId, "本次游戏内助手已结束。");
                     slots.Remove(slot); slot.Dispose(); continue;
                 }
                 slot.View.Write(32, Environment.TickCount64);
+                slot.Chat?.Tick(slot.View.ReadInt32(16) != 0 && slot.View.ReadInt32(176) == 3);
                 int command = slot.View.ReadInt32(56);
                 if (command != 0)
                 {
                     int argument = slot.View.ReadInt32(60); slot.View.Write(56, 0);
                     if (command == 1) slot.Pending = SelectAsync(slot, argument);
-                    else if (command == 2 && argument is >= 0 and <= 2) slot.Pending = ChangeChannelAsync(slot, argument);
-                    else if (command == 3 && slot.Channel != 0) slot.Pending = ReadLocalAsync(slot, argument, 0, restore: true);
-                    else if (command == 4 && slot.Channel != 0) slot.Pending = ReadLocalAsync(slot, slot.LocalIndex, argument);
-                    else if (command == 5 && slot.Channel != 0 && argument is -1 or 1) slot.Pending = ReadLocalAsync(slot, slot.LocalIndex, slot.LocalPagePositions[slot.Channel] + argument, startProgress: argument < 0 ? 1 : 0);
+                    else if (command == 2 && argument is >= 0 and <= 3) slot.Pending = ChangeChannelAsync(slot, argument);
+                    else if (command == 3 && slot.Channel is 1 or 2) slot.Pending = ReadLocalAsync(slot, argument, 0, restore: true);
+                    else if (command == 4 && slot.Channel is 1 or 2) slot.Pending = ReadLocalAsync(slot, slot.LocalIndex, argument);
+                    else if (command == 5 && slot.Channel is 1 or 2 && argument is -1 or 1) slot.Pending = ReadLocalAsync(slot, slot.LocalIndex, slot.LocalPagePositions[slot.Channel] + argument, startProgress: argument < 0 ? 1 : 0);
                 }
                 int keyStatus = slot.View.ReadInt32(44);
-                if (keyStatus == 3) { slot.KeyConflict = true; Report(slot.GameId, "阅读快捷键尚未连接，可先在游戏工具中阅读。", true); }
-                if (keyStatus == 2) { slot.KeyConflict = true; Report(slot.GameId, WindowsGuideHotkeys.Label(VirtualKey) + " 已被其他程序占用，请在游戏工具 → 游戏内攻略中更换快捷键。", true); }
-                else if (keyStatus == 1 && slot.KeyConflict)
-                { slot.KeyConflict = false; ReportReady(slot); }
+                // Zero also means the game lost focus. Keep the last foreground diagnosis while the user opens Game Tools.
+                if (keyStatus != 0 && keyStatus != slot.KeyStatus)
+                {
+                    slot.KeyStatus = keyStatus;
+                    ReportReady(slot);
+                }
             }
             QueueReadingSave();
         }
@@ -408,6 +462,7 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
         public long AuthGeneration { get; }
         public MemoryMappedFile Mapping { get; }
         public MemoryMappedViewAccessor View { get; }
+        public WindowsGameChat? Chat { get; }
         public CancellationTokenSource Cancel { get; }
         public CancellationToken Token { get; }
         public Task? Pending { get; set; }
@@ -419,7 +474,7 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
         public DateTimeOffset CreatedAt { get; } = DateTimeOffset.UtcNow;
         public string Architecture { get; private set; } = "x64";
         public DateTimeOffset AttachedAt { get; private set; }
-        public bool KeyConflict { get; set; }
+        public int KeyStatus { get; set; }
         public bool WasVisible { get; set; }
         public LocalReadingFiles Local { get; set; }
         public int Channel { get; set; }
@@ -451,9 +506,13 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
             Cancel = CancellationTokenSource.CreateLinkedTokenSource(cancellation); Token = Cancel.Token;
             Mapping = MemoryMappedFile.CreateNew(Name, GuideOverlayWire.MaximumBytes, MemoryMappedFileAccess.ReadWrite);
             View = Mapping.CreateViewAccessor(); View.Write(0, GuideOverlayWire.Magic); View.Write(4, GuideOverlayWire.Version);
+            if (owner.ChatFactory is { } factory)
+            {
+                Chat = new WindowsGameChat(Name, owner.ChatKey(GameId), title, factory, () => owner.Current(this), Token);
+            }
             View.Write(76, key); View.Write(88, .94f); View.Write(92, 22f); View.Write(112, System.Environment.ProcessId);
-            View.Write(148, (Guides.IsEmpty ? 0 : 1) | (Local.Guides.IsEmpty ? 0 : 2) | (Local.Notes.IsEmpty ? 0 : 4));
-            View.Write(72, owner.LastOverlayPage(GameId)?.Graph == false ? 0 : 1);
+            View.Write(148, (Guides.IsEmpty ? 0 : 1) | (Local.Guides.IsEmpty ? 0 : 2) | (Local.Notes.IsEmpty ? 0 : 4) | (Chat is null ? 0 : 8));
+            View.Write(72, 1); // Every new launch starts at the full route map.
             View.Write(212, owner.lightTheme ? 1 : 0); View.Write(216, owner.appearanceDpi);
             View.Write(32, System.Environment.TickCount64);
             // Runtime configuration lives in a new session directory, never in a game directory.
@@ -477,7 +536,7 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
             }
             catch
             {
-                View?.Dispose(); Mapping?.Dispose(); Cancel?.Dispose(); payload.Dispose();
+                Chat?.Dispose(); View?.Dispose(); Mapping?.Dispose(); Cancel?.Dispose(); payload.Dispose();
                 foreach (var handle in directories) handle.Dispose(); throw;
             }
         }
@@ -487,12 +546,13 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
             {
                 if (owner.disposed || Cancel.IsCancellationRequested) return;
                 Pid = pid; Created = creationFileTime; AttachedAt = DateTimeOffset.UtcNow; View.Write(40, pid); View.Write(48, creationFileTime);
+                Chat?.Bind(Pid, Created);
                 using var process = Process.GetProcessById(pid);
                 if (IsWow64Process2(process.Handle, out var machine, out _)) Architecture = machine == 0x14c ? "x86" : "x64";
             }
             var module = Path.Combine(owner.ComponentDirectory, Architecture, "TheOrder.GuideRuntime.dll");
             if (WindowsGuidePayload.AllowsNative(Snapshot)) owner.StartHelper(this, "--inject", module);
-            else { Warning = "攻略已准备；当前启动方式使用窗口攻略，请使用窗口或无边框全屏，并按 " + WindowsGuideHotkeys.Label(owner.VirtualKey) + "。"; owner.Report(GameId, Warning, true); }
+            else Warning = "当前启动方式使用窗口助手，请用窗口或无边框全屏。";
             if (owner.StartHelper(this, "--desktop")) owner.ReportReady(this);
         }
         public void AttachObserved(ProcessIdentity identity)
@@ -502,15 +562,26 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
                 if (owner.disposed || Cancel.IsCancellationRequested || Pid == identity.Pid && Created == identity.CreationFileTime
                     || !Alive(identity.Pid, identity.CreationFileTime)) return;
                 Pid = identity.Pid; Created = identity.CreationFileTime; AttachedAt = DateTimeOffset.UtcNow;
-                View.Write(40, Pid); View.Write(48, Created); View.Write(24, 0L);
+                KeyStatus = 0;
+                View.Write(40, Pid); View.Write(48, Created); View.Write(24, 0L); View.Write(44, 0);
+                Chat?.Bind(Pid, Created);
                 using var process = Process.GetProcessById(Pid);
                 if (IsWow64Process2(process.Handle, out var machine, out _)) Architecture = machine == 0x14c ? "x86" : "x64";
                 if (!owner.StartHelper(this, "--desktop")) return;
-                Warning = "攻略已随游戏继续显示；此启动方式请使用窗口或无边框全屏，并按 " + WindowsGuideHotkeys.Label(owner.VirtualKey) + "。";
-                owner.Report(GameId, ReadFailure ?? Warning, true);
+                Warning = "当前启动方式使用窗口助手，请用窗口或无边框全屏。";
+                owner.ReportReady(this);
             }
         }
-        public void FailedBeforeCreation() { lock (owner.gate) { owner.slots.Remove(this); Dispose(); } }
+        public void FailedBeforeCreation()
+        {
+            lock (owner.gate)
+            {
+                if (owner.slots.LastOrDefault(s => s.GameId == GameId) == this)
+                    owner.Report(GameId, "游戏未能启动，助手会话已结束。");
+                owner.slots.Remove(this);
+                Dispose();
+            }
+        }
         public void Write(GuideOverlayDocument document)
         {
             if (document.Reading is null)
@@ -527,7 +598,7 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
             View.Write(8, ++sequence); Thread.MemoryBarrier(); View.WriteArray(GuideOverlayWire.HeaderBytes, data, 0, data.Length);
             View.Write(12, data.Length); View.Write(84, Selected); View.Write(176, Channel); Thread.MemoryBarrier(); View.Write(8, ++sequence);
         }
-        public void Dispose() { if (Interlocked.Exchange(ref closed, 1) != 0) return; Cancel.Cancel(); View.Write(16, 0); View.Write(32, 0L); View.Dispose(); Mapping.Dispose(); Cancel.Dispose(); payload.Dispose(); foreach (var handle in directories) handle.Dispose(); _ = CloseReadingAsync(); }
+        public void Dispose() { if (Interlocked.Exchange(ref closed, 1) != 0) return; Cancel.Cancel(); Chat?.Dispose(); View.Write(16, 0); View.Write(32, 0L); View.Dispose(); Mapping.Dispose(); Cancel.Dispose(); payload.Dispose(); foreach (var handle in directories) handle.Dispose(); _ = CloseReadingAsync(); }
         private async Task CloseReadingAsync() { await DocumentGate.WaitAsync().ConfigureAwait(false); try { LocalDocument?.Dispose(); LocalDocument = null; } finally { DocumentGate.Release(); } }
     }
     [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)]

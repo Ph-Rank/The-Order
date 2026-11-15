@@ -1,4 +1,5 @@
 using System.Text.Json;
+using TheOrder.WinUI.Views;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
@@ -22,8 +23,10 @@ public sealed partial class MainWindow
     private string visualScreen = "VisualGallery";
     private string? fixtureDirectory;
     private DispatcherTimer? visualFixtureTimer;
+    private object? firstStartupFrame;
+    private Task? startupFrameCapture;
     private ResourceDictionary? visualTokens;
-    private bool pageTranslationEnabled, pageMotionFailed, failPageMotionForTest;
+    private bool pageMotionFailed, failPageMotionForTest;
     private string? pageMotionFailure;
     private long pageAnimationCount;
 
@@ -76,7 +79,7 @@ public sealed partial class MainWindow
         var content = new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
         content.Children.Add(new SymbolIcon(icon) { Width = 23, Height = 23, HorizontalAlignment = HorizontalAlignment.Center });
         content.Children.Add(new TextBlock { Text = label, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center });
-        return new NavigationViewItem { Content = content, Tag = tag, Height = 74, Padding = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Center };
+        return new Views.RailNavigationItem { Content = content, Tag = tag, Height = 74, Padding = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Center };
     }
     // One compact labeled rail at every window width.
     private void OnNavigationDisplayModeChanged(NavigationView sender, NavigationViewDisplayModeChangedEventArgs args) => UpdateNavigationChrome();
@@ -85,41 +88,119 @@ public sealed partial class MainWindow
         if (ContentLayer is null) return;
         ContentLayer.CornerRadius = new CornerRadius(0);
         ContentLayer.BorderThickness = new Thickness(0);
+        QueueRailIndicator();
     }
     private void OnPaneToggle(TitleBar sender, object args) => Navigation.IsPaneOpen = !Navigation.IsPaneOpen;
-    private void OnShellSizeChanged(object sender, SizeChangedEventArgs args) { }
+    private void OnShellSizeChanged(object sender, SizeChangedEventArgs args) => QueueRailIndicator();
 
     private void StartVisualFixture(object sender, RoutedEventArgs e)
     {
         visualFixtureTimer?.Start();
         if (fixtureDirectory is not null)
+        {
+            CompositionTarget.Rendering += RecordFirstStartupFrame;
             File.WriteAllText(Path.Combine(fixtureDirectory, "fixture-ready.json"), JsonSerializer.Serialize(new { ready = true, isolatedTest = true }));
+        }
     }
+
+    private void RecordFirstStartupFrame(object? sender, object e)
+    {
+        CompositionTarget.Rendering -= RecordFirstStartupFrame;
+        var logoBounds = StartupLogoStage.TransformToVisual(Root).TransformBounds(
+            new Windows.Foundation.Rect(0, 0, StartupLogoStage.ActualWidth, StartupLogoStage.ActualHeight));
+        var ringCenter = StartupRing.TransformToVisual(Root).TransformPoint(
+            new Windows.Foundation.Point(StartupRing.ActualWidth / 2, StartupRing.ActualHeight / 2));
+        firstStartupFrame = new
+        {
+            theme = Root.ActualTheme.ToString(),
+            loading = StartupSurface.Visibility == Visibility.Visible,
+            titleBarHasExtraContent = TitleBarHasExtraContent,
+            backdrop = windowBackdrop.UsingMica ? "Mica" : "Solid",
+            background = OpaqueCanvas.Visibility == Visibility.Visible
+                ? (OpaqueCanvas.Background as SolidColorBrush)?.Color.ToString()
+                : null,
+            caption = AppWindow.TitleBar.PreferredTheme.ToString(),
+            logo = (StartupLogo.Source as Microsoft.UI.Xaml.Media.Imaging.BitmapImage)?.UriSource?.Segments.LastOrDefault(),
+            logoSize = logoBounds.Width,
+            logoCenter = new { x = logoBounds.X + logoBounds.Width / 2, y = logoBounds.Y + logoBounds.Height / 2 },
+            ringCenter = new { x = ringCenter.X, y = ringCenter.Y }
+        };
+        var captureOrbit = Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_STARTUP_CAPTURE") == "1";
+        if (StartupSurface.Visibility == Visibility.Visible && (captureOrbit || CaptureStartupTransition))
+            startupFrameCapture = CaptureStartupFramesAsync(captureOrbit);
+    }
+
+    private bool CaptureStartupTransition => visualFixtureTimer is not null &&
+        Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_STARTUP_FADE_CAPTURE") == "1";
+
+    private async Task CaptureStartupHomeFadeAsync()
+    {
+        if (!CaptureStartupTransition) return;
+        try
+        {
+            await NextStartupFrameAsync();
+            await Task.Delay(104);
+            if (startupHomeFade is not null) await CaptureRound3Async("startup-home-fade");
+        }
+        catch (Exception error) { App.TraceVisualFailure(error); }
+    }
+
+    private async Task CaptureStartupFramesAsync(bool captureOrbit)
+    {
+        try
+        {
+            // This runs only in the isolated visual fixture. The real startup never waits for the sweep.
+            await CaptureRound3Async("startup");
+            if (!captureOrbit || !Views.InteractionMotion.Enabled || materialPolicy?.HighContrast == true) return;
+
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            while (startupLogoLighting is null && deadline.ElapsedMilliseconds < 1000)
+                await Task.Delay(16);
+            if (startupLogoLighting is not { } lighting) return;
+
+            var elapsed = lighting.GetCurrentTime();
+            var captureClock = System.Diagnostics.Stopwatch.StartNew();
+            foreach (var step in new[] { 0, 2, 4, 6, 8, 10, 12 })
+            {
+                var delay = TimeSpan.FromMilliseconds(step * StartupLightStepMilliseconds + 24) - elapsed - captureClock.Elapsed;
+                if (delay > TimeSpan.Zero) await Task.Delay(delay);
+                await CaptureRound3Async($"startup-orbit-{step}");
+            }
+        }
+        catch (Exception error) { App.TraceVisualFailure(error); }
+    }
+
     private void ApplyMaterialPolicy()
     {
         if (visualStopped || materialPolicy is null) return;
         RefreshPlaygroundPolicy();
         var effectiveMode = EffectiveMaterialMode;
-        Views.InteractionMotion.Allowed = materialPolicy.MotionAllowed;
+        Views.InteractionMotion.ApplyPolicy(materialPolicy.MotionAllowed, materialPolicy.HighContrast);
         materialPolicy.AppOpaque = effectiveMode == Views.MaterialMode.Opaque;
         materialPolicy.Apply(Microsoft.UI.Xaml.Application.Current.Resources);
         RefreshCaptionTheme();
+        if (startupHomeFade is not null && !CanAnimateStartupHome) HideStartupSurface();
+        UpdateStartupTheme();
+        RefreshStartupLogoLighting();
         var visible = visualWindowVisible && AppWindow.IsVisible && App.Instance?.WindowHidden != true;
         // Win10 uses a solid window canvas. That does not disable supported in-app
         // Acrylic or the artwork-owned banner glass; their existing policy is independent.
         ApplyBackdrop(materialPolicy.EffectsAllowed);
         // Hidden windows hold no glass renderer: stages drop to their XAML layers and release swapchains.
         var stageAllowed = materialPolicy.EffectsAllowed && visible;
-        libraryPage.SetStagePolicy(stageAllowed, materialPolicy.HighContrast, effectiveMode);
-        detailsPage.SetStagePolicy(stageAllowed, materialPolicy.HighContrast, effectiveMode);
-        onlinePage.SetStagePolicy(stageAllowed, materialPolicy.HighContrast, effectiveMode);
-        settingsPage.ShowMaterialState(materialMode, materialPolicy.EffectsAllowed, materialPolicy.HighContrast,
+        var highContrast = materialPolicy.HighContrast;
+        libraryPage.SetStagePolicy(stageAllowed, highContrast, effectiveMode);
+        detailsPage.SetStagePolicy(stageAllowed, highContrast, effectiveMode);
+        onlinePage.SetStagePolicy(stageAllowed, highContrast, effectiveMode);
+        statisticsPage.SetHighContrast(highContrast);
+        settingsPage.ShowMaterialState(materialMode, materialPolicy.EffectsAllowed, highContrast,
             controlledAdvanced, materialReadOnly || !materialInitialized, materialPreferenceNotice);
         gallery?.SetAdvanced(materialPolicy.EffectsAllowed && visible);
         gallery?.SetMotionAllowed(materialPolicy.MotionAllowed && visible);
         if (!materialPolicy.MotionAllowed && Root.XamlRoot is not null)
         {
             ResetPageMotion();
+            QueueRailIndicator();
         }
     }
 
@@ -128,37 +209,12 @@ public sealed partial class MainWindow
     internal void SetVisualWindowVisible(bool visible)
     {
         visualWindowVisible = visible;
-        if (!visible) detailsPage.SuspendGameVideos();
+        if (!visible) { detailsPage.SuspendGameVideos(); onlinePage.SuspendGameVideos(); }
         ApplyMaterialPolicy();
     }
 
-    private void UpdateSessionChrome(SessionPresentation presentation)
+    private static (string Glyph, string BrushKey) SessionVisualFacts(NativeSession native, SessionTracking tracking, SessionTiming timing)
     {
-        var native = Sessions.Session?.Session?.Native;
-        var facts = SessionVisualFacts(native, Sessions.Session?.Tracking, Sessions.Session?.Timing, Sessions.Error is not null, !Sessions.Ready);
-        SessionIcon.Glyph = facts.Glyph;
-        var brush = ResolveSessionBrush(facts.BrushKey);
-        if (!ReferenceEquals(SessionIcon.Foreground, brush)) SessionIcon.Foreground = brush;
-        if (!ReferenceEquals(SessionState.Foreground, brush)) SessionState.Foreground = brush;
-        SessionState.Visibility = string.IsNullOrEmpty(SessionState.Text) ? Visibility.Collapsed : Visibility.Visible;
-        SessionDuration.Visibility = string.IsNullOrEmpty(presentation.Duration) ? Visibility.Collapsed : Visibility.Visible;
-        PauseTiming.Visibility = presentation.CanPause ? Visibility.Visible : Visibility.Collapsed;
-        ResumeTiming.Visibility = presentation.CanResume ? Visibility.Visible : Visibility.Collapsed;
-        // The icon expresses session facts; personal library status never controls it.
-        // The title-bar indicator replaces the old session bar; it appears only when there is a session fact to show.
-        SessionSurface.Visibility = Sessions.Session?.Session is not null || Sessions.Error is not null || !Sessions.Ready ? Visibility.Visible : Visibility.Collapsed;
-        SessionDetails.Visibility = Sessions.Session?.Session?.Native?.GameId is not null ? Visibility.Visible : Visibility.Collapsed;
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SessionSurface, "游玩会话：" + SessionChipTitle.Text + "，" + SessionState.Text);
-        ApplyMaterialPolicy();
-    }
-
-    // Only existing snapshot facts select visual emphasis. No process or timing
-    // fact is inferred from an icon, personal library status, or local UI clock.
-    private static (string Glyph, string BrushKey) SessionVisualFacts(NativeSession? native, SessionTracking? tracking, SessionTiming? timing, bool error = false, bool recovering = false)
-    {
-        if (error) return ("\uEA39", "ErrorTextBrush");
-        if (recovering) return ("\uE777", "RecoveryTextBrush");
-        if (native is null) return ("\uE8F1", "TextSecondaryBrush");
         if (native.Lifecycle == SessionLifecycle.Completed) return ("\uE73E", "SuccessTextBrush");
         if (native.Lifecycle == SessionLifecycle.Incomplete) return ("\uE783", "WarningTextBrush");
         if (native.Lifecycle == SessionLifecycle.RecoveryPending) return ("\uE777", "RecoveryTextBrush");
@@ -167,7 +223,7 @@ public sealed partial class MainWindow
         return timing == SessionTiming.Running ? ("\uE768", "SuccessTextBrush") : ("\uE823", "TextSecondaryBrush");
     }
 
-    private Brush ResolveSessionBrush(string key)
+    private Brush ResolveSessionBrush(string key, Brush fallback)
     {
         // Resolve only our dictionary, never materialize lazy system resources.
         var resources = Microsoft.UI.Xaml.Application.Current.Resources;
@@ -179,103 +235,38 @@ public sealed partial class MainWindow
         var theme = materialPolicy?.HighContrast == true ? "HighContrast" : Root.ActualTheme.ToString();
         if (visualTokens?.ThemeDictionaries.TryGetValue(theme, out var value) == true && value is ResourceDictionary tokens
             && tokens.TryGetValue(key, out var brush) && brush is Brush result) return result;
-        return SessionTitle.Foreground;
+        return fallback;
     }
 
     private void AnimatePage()
     {
         galleryVisible = false;
-        if (pageMotionFailed || materialPolicy?.MotionAllowed != true || Root.XamlRoot is null) return;
-        try
+        if (pageMotionFailed || materialPolicy?.MotionAllowed != true || Root.XamlRoot is null || !startupReady) return;
+        InteractionMotion.EnterPage(PageContent, () =>
         {
-            // Translation is an opt-in composition property, unlike Opacity. Register it
-            // before starting either effect, and remember only a successful registration.
-            if (!pageTranslationEnabled)
-            {
-                ElementCompositionPreview.SetIsTranslationEnabled(PageContent, true);
-                pageTranslationEnabled = true;
-            }
-            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
-            visual.StopAnimation("Opacity");
-            using var animation = visual.Compositor.CreateScalarKeyFrameAnimation();
-            animation.InsertKeyFrame(0, .86f); animation.InsertKeyFrame(1, 1);
-            animation.Duration = TimeSpan.FromMilliseconds((double)Microsoft.UI.Xaml.Application.Current.Resources["MotionPageMilliseconds"]);
-            visual.StartAnimation("Opacity", animation);
             if (failPageMotionForTest)
             {
                 failPageMotionForTest = false;
                 throw new ArgumentException("Synthetic page-motion failure after opacity started.");
             }
-            using var position = visual.Compositor.CreateVector3KeyFrameAnimation();
-            position.InsertKeyFrame(0, new System.Numerics.Vector3(0, 6, 0)); position.InsertKeyFrame(1, System.Numerics.Vector3.Zero);
-            position.Duration = animation.Duration; visual.StartAnimation("Translation", position);
             pageAnimationCount++;
-        }
-        catch (Exception exception) { DisablePageMotion(exception); }
+        }, error =>
+        {
+            pageMotionFailed = true;
+            pageMotionFailure = $"{error.GetType().Name}: 0x{error.HResult:X8}";
+            App.Instance?.LogPageMotionFailure(error);
+        });
     }
 
-    private void ResetPageMotion()
+    private void ResetPageMotion() => InteractionMotion.StopPage(PageContent);
+
+    private object PageMotionEvidence() => new
     {
-        if (pageMotionFailed) return;
-        try
-        {
-            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
-            visual.StopAnimation("Opacity"); visual.Opacity = 1;
-            // Cold startup with animations off never registers Translation. Stopping
-            // an absent property throws E_INVALIDARG and must not prevent startup.
-            if (pageTranslationEnabled)
-            {
-                visual.StopAnimation("Translation");
-                visual.Properties.InsertVector3("Translation", System.Numerics.Vector3.Zero);
-            }
-        }
-        catch (Exception exception) { DisablePageMotion(exception); }
-    }
+        failed = pageMotionFailed, failure = pageMotionFailure, animationCount = pageAnimationCount,
+        opacity = Root.XamlRoot is null ? 1f : ElementCompositionPreview.GetElementVisual(PageContent).Opacity,
+        entrance = InteractionMotion.PageEvidence(PageContent)
+    };
 
-    private void DisablePageMotion(Exception exception)
-    {
-        pageMotionFailed = true;
-        pageMotionFailure = $"{exception.GetType().Name}: 0x{exception.HResult:X8}";
-        App.Instance?.LogPageMotionFailure(exception);
-        // Optional effects must not fail navigation, library initialization or exit.
-        // Restore each property independently; do not retry effects for this window.
-        try
-        {
-            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
-            try { visual.StopAnimation("Opacity"); } catch (Exception) { }
-            visual.Opacity = 1;
-        }
-        catch (Exception) { /* The composition target may itself be unavailable. */ }
-        if (pageTranslationEnabled)
-        {
-            try
-            {
-                var visual = ElementCompositionPreview.GetElementVisual(PageContent);
-                try { visual.StopAnimation("Translation"); } catch (Exception) { }
-                visual.Properties.InsertVector3("Translation", System.Numerics.Vector3.Zero);
-            }
-            catch (Exception) { /* Keep the static XAML page usable. */ }
-        }
-    }
-
-    private object PageMotionEvidence()
-    {
-        float? opacity = null;
-        System.Numerics.Vector3? translation = null;
-        if (Root.XamlRoot is not null)
-        {
-            var visual = ElementCompositionPreview.GetElementVisual(PageContent);
-            opacity = visual.Opacity;
-            if (pageTranslationEnabled && visual.Properties.TryGetVector3("Translation", out var position)
-                == Microsoft.UI.Composition.CompositionGetValueStatus.Succeeded) translation = position;
-        }
-        return new { translationEnabled = pageTranslationEnabled, failed = pageMotionFailed,
-            failure = pageMotionFailure, animationCount = pageAnimationCount, opacity,
-            translation = translation is { } value ? new { x = value.X, y = value.Y, z = value.Z } : null };
-    }
-
-    // Called before PageContent is replaced so the Gallery releases its native
-    // owner while still in the live tree. No-op unless the Test Gallery is shown.
     private void LeaveGallery()
     {
         if (gallery is not null && ReferenceEquals(PageContent.Content, gallery)) gallery.ReleaseBeforeLeave();
@@ -285,7 +276,7 @@ public sealed partial class MainWindow
     {
         if (visualFixtureTimer is null || visualStopped) return;
         gallery ??= new(materialPolicy?.EffectsAllowed == true, requestedGlass);
-        libraryPage.ReleaseStageBeforeLeave(); detailsPage.ReleaseStageBeforeLeave();
+        detailsPage.ReleaseStageBeforeLeave();
         PageContent.Content = gallery; galleryVisible = true;
         visualScreen = "VisualGallery";
         ApplyMaterialPolicy();
@@ -296,13 +287,13 @@ public sealed partial class MainWindow
     private object VisualEvidence() => new
     {
         contentLanguage = ContentLanguage.Current, direction, isolatedTest = visualFixtureTimer is not null, galleryVisible, visualScreen = galleryVisible ? visualScreen : ViewModel.Page.ToString(),
-        startup = new { ready = startupReady, failed = StartupHasFailed, libraryLoaded = ViewModel.IsLoaded, sessionsReady = Sessions.Ready }, pageMotion = PageMotionEvidence(),
+        startup = new { ready = startupReady, failed = StartupHasFailed, libraryLoaded = ViewModel.IsLoaded, sessionsReady = Sessions.Ready, loading = StartupSurface.Visibility == Visibility.Visible, firstFrame = firstStartupFrame, logoLightPlayed = startupLogoLightPlayed }, pageMotion = PageMotionEvidence(),
         material = materialPolicy?.Evidence(), gallery = gallery?.ResourceCounts, materialMode = materialMode.ToString(), effectiveMaterialMode = EffectiveMaterialMode.ToString(), controlledAdvanced,
         diagnosticsPolling = diagnosticsTimer is not null, backdrop = SystemBackdrop?.GetType().Name ?? "Solid",
         gameVideos = detailsPage.GameVideoEvidence,
         catalogPreparation = presentations.Metrics, stages = new { library = libraryPage.StageEvidence, details = detailsPage.StageEvidence, online = onlinePage.StageEvidence }, shell = ShellEvidence(),
         round3 = Round3Evidence(), managed = MaterialManagedEvidence(), displayBitmaps = Views.DisplayBitmaps.Evidence(images), bitmapSurfaces = SkipCaptureTreeProbe ? (int?)null : bitmapTreeProbe.Read(() => CountMaterialBitmaps(Root)), pendingNavigation = navigating, pendingDetails = ViewModel.IsDetailsLoading, staleCovers = SkipCaptureTreeProbe ? (int?)null : staleTreeProbe.Read(() => CountStaleCoverSources(Root)), captureTreeProbeSkipped = SkipCaptureTreeProbe,
-        updates = new { updates.SelectedChannel, updates.SupportsChannelSwitch, updates.InstallText, updates.IsChannelChange, updates.CurrentVersion, latest = updates.Latest?.Version, updates.Message, updates.Highlights, updates.CanCheck, updates.CanInstall, updates.CanCancel, updates.IsBusy, updates.Progress, badgeVisible = UpdateBadge.Visibility == Visibility.Visible },
+        updates = new { updates.SelectedChannel, updates.SupportsChannelSwitch, updates.InstallText, updates.IsChannelChange, updates.CurrentVersion, latest = updates.Latest?.Version, updates.Message, updates.Highlights, updates.CanCheck, updates.CanInstall, updates.CanCancel, updates.IsBusy, updates.Progress, badgeVisible = statusPage.HasNotice("app-update") },
         nextMoe = new { mode = nextMoeSettings.Status?.Mode.ToString(), nextMoeSettings.Status?.NeedsLogin, nextMoeSettings.TimeDirection, nextMoeSettings.StateDirection,
             nextMoeSettings.FolderDirection, nextMoeSettings.ReadRatings, nextMoeSettings.Automatic, nextMoeSettings.HasPending, nextMoeSettings.HasPreview, nextMoeSettings.PreviewSummary, nextMoeSettings.Message,
             rows = nextMoeSettings.Rows.Select(x => new { x.Title, x.Values, x.Explanation, x.Choice }) },
@@ -369,7 +360,6 @@ public sealed partial class MainWindow
                 case "capture": await CaptureRound3Async(root.GetProperty("value").GetString() ?? ""); break;
                 case "dialog": ShowRound3Dialog(); break;
                 case "closeDialog": round3Dialog?.Hide(); break;
-                case "timer": round3TimerOverride = root.GetProperty("value").GetString() ?? ""; break;
                 case "focusSearch": libraryPage.OpenSearch(); break;
                 case "editName":
                     var name = root.GetProperty("value").GetString() ?? "";
@@ -413,12 +403,12 @@ public sealed partial class MainWindow
                     await File.WriteAllTextAsync(Path.Combine(fixtureDirectory, "bangumi-evidence.json"), JsonSerializer.Serialize(detailsPage.BangumiEvidence));
                     if (!detailsPage.HasExclusiveContentBody) throw new InvalidOperationException("Details replacement bodies overlap.");
                     break;
-                case "checkUpdate": await Navigate(WorkspacePage.Settings); await updates.CheckAsync(); settingsPage.ShowUpdatesTest(); break;
+                case "checkUpdate": await Navigate(WorkspacePage.Settings); await updates.CheckAsync(); settingsPage.RevealUpdates(); break;
                 case "updateChannel":
                     if (!Enum.TryParse<AppUpdateChannel>(root.GetProperty("value").GetString(), false, out var requestedChannel) || !Enum.IsDefined(requestedChannel)) throw new InvalidDataException("Unknown channel");
                     await Navigate(WorkspacePage.Settings); settingsPage.ChooseUpdateChannelTest((int)requestedChannel);
                     for (var wait = 0; updates.IsBusy && wait < 100; wait++) await Task.Delay(20);
-                    settingsPage.ShowUpdatesTest(); break;
+                    settingsPage.RevealUpdates(); break;
                 case "automaticUpdate": await updates.CheckAutomaticallyAsync(); break;
                 case "personalFixture": await RunPersonalFixtureAsync(root.GetProperty("value").GetString()); break;
                 case "opticalProbe":
@@ -465,8 +455,11 @@ public sealed partial class MainWindow
     private void DisposeVisualSystem()
     {
         visualStopped = true;
-        libraryPage?.ReleaseStageBeforeLeave(); detailsPage?.ReleaseStageBeforeLeave(); onlinePage?.Cancel();
+        if (startupHomeFade is not null) HideStartupSurface();
+        ResetPageMotion();
+        libraryPage?.ReleaseContinueCover(); detailsPage?.ReleaseStageBeforeLeave(); onlinePage?.Cancel();
         Root.Loaded -= StartVisualFixture;
+        if (visualFixtureTimer is not null) CompositionTarget.Rendering -= RecordFirstStartupFrame;
         if (visualFixtureTimer is not null) { visualFixtureTimer.Stop(); visualFixtureTimer.Tick -= OnVisualFixture; }
         gallery?.Dispose(); gallery = null;
         materialPolicy?.Dispose(); materialPolicy = null;
@@ -497,15 +490,16 @@ public sealed partial class MainWindow
             body.Children.Add(Text(label + " · Test fixture", "MetadataTextStyle"));
             var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
             var facts = SessionVisualFacts(record, tracking, timing);
-            var brush = ResolveSessionBrush(facts.BrushKey);
+            var state = Text(presentation.State, "BodyTextStyle");
+            var brush = ResolveSessionBrush(facts.BrushKey, state.Foreground);
             line.Children.Add(new FontIcon { Glyph = facts.Glyph, FontSize = 18, Foreground = brush });
-            var state = Text(presentation.State, "BodyTextStyle"); state.Foreground = brush;
+            state.Foreground = brush;
             line.Children.Add(state);
             body.Children.Add(line); body.Children.Add(Text(presentation.Duration, "MetadataTextStyle"));
             stack.Children.Add(new Border { Style = (Style)Microsoft.UI.Xaml.Application.Current.Resources["SurfaceStyle"], Padding = new Thickness(16), Child = body });
         }
         LeaveGallery();
-        libraryPage.ReleaseStageBeforeLeave(); detailsPage.ReleaseStageBeforeLeave();
+        detailsPage.ReleaseStageBeforeLeave();
         PageContent.Content = new ScrollViewer { Content = stack, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
         galleryVisible = true; visualScreen = "SessionStateFixtures";
     }

@@ -8,6 +8,7 @@ public static class CatalogWorkReference
         id = ""; var input = value?.Trim();
         static bool Valid(string? x) => x is { Length: >= 1 and <= 20 } && x[0] is >= '1' and <= '9' && x.All(char.IsAsciiDigit);
         if (Valid(input)) { id = input!; return true; }
+        if (input is { Length: > 1 } && input[0] == '#' && Valid(input[1..])) { id = input[1..]; return true; }
         if (input is not { Length: <= 2048 } || input.Contains('%') || input.Contains('\\')
             || !Uri.TryCreate(input, UriKind.Absolute, out var uri) || uri.Scheme != "https" || !uri.IsDefaultPort
             || uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0 || input != uri.AbsoluteUri) return false;

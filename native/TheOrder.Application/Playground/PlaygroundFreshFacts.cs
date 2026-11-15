@@ -41,16 +41,17 @@ public sealed partial class PlaygroundService
     }
     private object CompactFacts(Run run, LibraryEntry entry)
     {
-        long sessionSeconds = entry.Sessions.Sum(s => s.Seconds);
+        var sessions = entry.RecordedSessions;
+        long sessionSeconds = sessions.Sum(s => s.Seconds);
         long manualSeconds = entry.ManualPlaytime.Where(m => !m.Undone).Sum(m => m.Seconds);
         return new
         {
             record = Record(run, entry, false), storedTotalSeconds = entry.TotalPlaySeconds,
             sumSessionStoredSeconds = sessionSeconds, activeManualAdjustmentSeconds = manualSeconds,
-            effectiveTotalSeconds = entry.EffectivePlaySeconds, totalSessionCount = entry.Sessions.Length,
-            recentSessions = entry.Sessions.OrderByDescending(s => Date(s.StartedAt)).Take(3)
+            effectiveTotalSeconds = entry.EffectivePlaySeconds, totalSessionCount = sessions.Length,
+            recentSessions = sessions.OrderByDescending(s => Date(s.StartedAt)).Take(3)
                 .Select(s => new { s.StartedAt, s.EndedAt, storedSeconds = s.Seconds }),
-            moreSessionsAvailable = entry.Sessions.Length > 3,
+            moreSessionsAvailable = sessions.Length > 3,
             notice = "未展示的session不代表没有记录；旧导入累计可能未逐次拆分。此处不含旧笔记或个人观点。"
         };
     }

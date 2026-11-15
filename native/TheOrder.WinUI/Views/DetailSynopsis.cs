@@ -22,7 +22,12 @@ internal sealed class DetailSynopsis : StackPanel
         Spacing = 10; MaxWidth = 860; HorizontalAlignment = HorizontalAlignment.Left;
         Children.Add(heading); Children.Add(prose); Children.Add(toggle);
         prose.IsTextTrimmedChanged += (_, _) => UpdateToggle();
-        toggle.Click += (_, _) => { expanded = !expanded; prose.MaxLines = expanded ? 0 : 7; UpdateToggle(); if (!expanded) StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false }); };
+        toggle.Click += (_, _) =>
+        {
+            expanded = !expanded; prose.MaxLines = expanded ? 0 : 7; UpdateToggle();
+            if (expanded) InteractionMotion.RevealContent(prose, .74f);
+            else StartBringIntoView(new BringIntoViewOptions { AnimationDesired = InteractionMotion.Enabled });
+        };
     }
     private void UpdateToggle() { toggle.Content = expanded ? "收起全文" : "展开全文"; toggle.Visibility = expanded || prose.IsTextTrimmed ? Visibility.Visible : Visibility.Collapsed; }
     internal void ExpandForFixture() => Expanded = true;

@@ -57,6 +57,7 @@ public sealed partial class PlaygroundService
         if (!Enum.IsDefined(o.Provider) || !Enum.IsDefined(o.Search) || !Enum.IsDefined(o.Spoiler) || o.Model.Length > 180
             || o.Model.Any(char.IsControl) || o.ReasoningEffort?.Length > 64 || o.SystemInstructions is null || o.SystemInstructions.Length > 8000
             || o.SystemInstructions.Any(c => char.IsControl(c) && c is not ('\r' or '\n' or '\t'))
+            || o.GameOverlayKey?.Length > 300 || o.GameOverlayKey?.Any(char.IsControl) == true
             || o.WorkProgress is null || o.WorkProgress.Count > 128
             || o.WorkProgress.Any(p => p.Key.Length is < 1 or > 1024 || p.Value.Length is < 1 or > 1000)
             || o.WorkProgress.Sum(p => p.Key.Length + p.Value.Length) > 12000) throw new ArgumentException("会话设置无效。");

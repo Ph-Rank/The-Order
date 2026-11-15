@@ -48,7 +48,7 @@ public sealed class GameToolsView : Grid
             entry.View.Visibility = entry.Key == key ? Visibility.Visible : Visibility.Collapsed;
             if (entry.Button is { } button) button.IsChecked = entry.Key == key;
         }
-        InteractionMotion.Reveal(entries[index].View);
+        if (IsLoaded) InteractionMotion.EnterPage(entries[index].View);
         PageSelected?.Invoke(key);
     }
     internal void SelectIndex(int index) { if (index < 0 || index >= entries.Count) throw new ArgumentOutOfRangeException(nameof(index)); Select(entries[index].Key); }

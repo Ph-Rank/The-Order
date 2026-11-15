@@ -67,6 +67,49 @@ public sealed class StatisticsDashboardTests
             lifecycle, lifecycle == SessionLifecycle.Open ? null : SessionReason.UserStoppedObservation, false, 1, Guid.NewGuid(), new(0, null), null) }] };
         var data = Build([game]); Assert.Equal(3600, data.UnknownSeconds); Assert.Empty(data.Days);
     }
+    [Fact] public void ProcessGoneContributesConfirmedTimeToDaysAndRanking()
+    {
+        var game = Game();
+        var sameDay = ProcessGone("same-day", "2026-10-17T14:00:00Z", "2026-10-17T15:30:00Z", 4500);
+        var overnight = ProcessGone("overnight", "2026-10-18T15:30:00Z", "2026-10-18T16:30:00Z", 3000);
+        game = game with { Sessions = [.. game.Sessions, sameDay, overnight], TotalPlaySeconds = 11100 };
+        var zone = TimeZoneInfo.CreateCustomTimeZone("Synthetic+8", TimeSpan.FromHours(8), "test", "test");
+
+        var data = Build([game], zone: zone);
+        Assert.Equal(11100, data.LifetimeSeconds);
+        Assert.Equal(11100, data.PeriodSeconds);
+        Assert.Equal(11100, Assert.Single(data.Games).Seconds);
+        Assert.Equal(0, data.UnknownSeconds);
+        Assert.Equal(11100, data.Trend.Sum(x => x.Seconds));
+        Assert.Collection(data.Days,
+            day => { Assert.Equal(Today, day.Date); Assert.Equal(5100, day.Seconds); Assert.True(day.Estimated); },
+            day => { Assert.Equal(Today.AddDays(-1), day.Date); Assert.Equal(1500, day.Seconds); Assert.True(day.Estimated); },
+            day => { Assert.Equal(Today.AddDays(-2), day.Date); Assert.Equal(4500, day.Seconds); Assert.False(day.Estimated); });
+    }
+
+    [Theory]
+    [InlineData(null, "2026-10-19T12:00:00Z")]
+    [InlineData("2026-10-19T10:00:00Z", null)]
+    [InlineData("2026-10-19T10:00:00Z", "2026-10-19T09:00:00Z")]
+    [InlineData("2026-10-19T10:00:00Z", "2026-10-19T10:30:00Z")]
+    public void ProcessGoneWithMissingOrImplausibleAccountingBoundsRemainsUndated(string? start, string? cutoff)
+    {
+        var game = Game() with { Sessions = [ProcessGone("partial", start, cutoff, 3600)] };
+        var data = Build([game]);
+        Assert.Equal(3600, data.LifetimeSeconds);
+        Assert.Equal(3600, data.UnknownSeconds);
+        Assert.Empty(data.Days);
+        Assert.Empty(data.Games);
+    }
+
+    private static PlaySession ProcessGone(string id, string? start, string? cutoff, long seconds)
+    {
+        DateTimeOffset? startedAt = start is null ? null : DateTimeOffset.Parse(start);
+        return new NativeSession(1, "a", "i", startedAt, startedAt ?? DateTimeOffset.Parse("2026-10-19T10:00:00Z"),
+            null, cutoff is null ? null : DateTimeOffset.Parse(cutoff), seconds * NativeSession.TicksPerSecond,
+            SessionLifecycle.Incomplete, SessionReason.ProcessGone, false, 1, Guid.NewGuid(), new(0, null), null).Project(id);
+    }
+
     [Fact] public void SameTitleDifferentIdsAndMultipleInstallationsAreNotMergedOrCountedTwice()
     {
         var first = Game() with { Installations = [new("i1", @"C:\synthetic\one", null, []), new("i2", @"C:\synthetic\two", null, [])] };
@@ -116,7 +159,22 @@ public sealed class StatisticsDashboardTests
         var scale = StatisticsChartScale.For([0, seconds, -seconds / 2]);
         Assert.Equal(divisor, scale.Divisor); Assert.True(scale.Maximum >= seconds); Assert.True(scale.Minimum <= -seconds / 2d);
         Assert.True(double.IsFinite(scale.Step) && scale.Step > 0); Assert.InRange((scale.Maximum - scale.Minimum) / scale.Step, 1, 6);
+        Assert.Equal(0, scale.Step % scale.Divisor);
     }
+
+    [Theory]
+    [InlineData(1, 1, 1)]
+    [InlineData(60, 60, 60)]
+    [InlineData(28800, 10800, 32400)]
+    [InlineData(36000, 18000, 36000)]
+    public void ChartScaleUsesFewWholeUnitTicks(long seconds, double step, double maximum)
+    {
+        var scale = StatisticsChartScale.For([0, seconds]);
+        Assert.Equal(0, scale.Minimum);
+        Assert.Equal(step, scale.Step);
+        Assert.Equal(maximum, scale.Maximum);
+    }
+
     [Fact] public void ZeroChartHasFiniteScaleWithoutInventingActivity()
     { var scale = StatisticsChartScale.For([0, 0]); Assert.Equal(0, scale.Minimum); Assert.True(scale.Maximum > 0); Assert.True(scale.Step > 0); }
     [Fact] public async Task ViewModelIgnoresLatePriorPeriodEvenWhenBuilderIgnoresCancellation()

@@ -17,6 +17,17 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
     private readonly CatalogPresentationService presentations;
     private CatalogContentView? workContent;
     private ICatalogReleaseReader? releasesReader;
+    private (GameVideoReader Reader, IMediaIdentityDecisions Decisions)? videoServices;
+    private GameVideoView? gameVideos;
+
+    internal void ConfigureGameVideos(GameVideoReader reader, IMediaIdentityDecisions decisions) => videoServices = (reader, decisions);
+    internal void SuspendGameVideos() => gameVideos?.Suspend();
+
+    private void DisposeGameVideos()
+    {
+        gameVideos?.Dispose();
+        gameVideos = null;
+    }
     private Func<long>? releasesAuth;
     public void ConfigureReleases(ICatalogReleaseReader reader, Func<long> auth) { releasesReader = reader; releasesAuth = auth; }
     private readonly IEntityCatalog entities;
@@ -24,6 +35,7 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
     private readonly Func<long> authGeneration;
     private readonly Func<LibrarySnapshot?> readLibrary;
     private readonly Stack<NavigationEntry> history = new();
+    private readonly Grid catalogPage = new();
     private readonly TextBlock title = new() { FontSize = 28, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock message = new() { TextWrapping = TextWrapping.Wrap };
     private readonly ProgressBar progress = new() { IsIndeterminate = true, Visibility = Visibility.Collapsed };
@@ -49,7 +61,7 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
     internal object? ShelfEvidence => current?.Kind == CatalogEntityKind.Tag && shelfMembership is not null
         ? new { loaded = seenWorks.Count, inShelf = shelfGrid?.Children.Count ?? 0, outside = worksGrid?.Children.Count ?? 0,
             more = cursor is not null, inShelfWorkIds = shelfWorkIds.ToArray(), outsideWorkIds = seenWorks.Except(shelfWorkIds).ToArray() } : null;
-    private Button? more;
+    private ScrollPageFooter? pageFooter;
     public IImagePipeline Images { get; }
     public Func<Task>? ReturnToSearch { get; set; }
     public Func<string, Task>? AddWishlist { get; set; }
@@ -82,12 +94,20 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
     public CatalogBrowserView(IOnlineCatalog catalog, IEntityCatalog entities, IImagePipeline images, IRemoteCoverRegistry registry, Func<long> authGeneration, CatalogPresentationService presentations, Func<LibrarySnapshot?> readLibrary)
     {
         this.presentations = presentations; this.catalog = catalog; this.entities = entities; Images = images; this.registry = registry; this.authGeneration = authGeneration; this.readLibrary = readLibrary;
-        RowSpacing = 16;
-        RowDefinitions.Add(new() { Height = GridLength.Auto }); RowDefinitions.Add(new() { Height = GridLength.Auto }); RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
-        var heading = new StackPanel { Spacing = 12 }; heading.Children.Add(title); Children.Add(heading);
-        var status = new StackPanel { Spacing = 8 }; status.Children.Add(progress); status.Children.Add(message); SetRow(status, 1); Children.Add(status);
+        catalogPage.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        catalogPage.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        catalogPage.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
+        title.Margin = new Thickness(0, 0, 0, 16);
+        catalogPage.Children.Add(title);
+        var status = new StackPanel { Spacing = 8, Margin = new(0, 0, 0, 16), Visibility = Visibility.Collapsed, Children = { progress, message } };
+        message.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) =>
+            status.Visibility = string.IsNullOrEmpty(message.Text) ? Visibility.Collapsed : Visibility.Visible);
+        SetRow(status, 1);
+        catalogPage.Children.Add(status);
         scroll = new() { Content = body, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalContentAlignment = HorizontalAlignment.Stretch };
-        SetRow(scroll, 2); Children.Add(scroll);
+        SetRow(scroll, 2);
+        catalogPage.Children.Add(scroll);
+        Children.Add(catalogPage);
         body.SizeChanged += (_, _) => QueueRestore();
         AddHandler(UIElement.PointerWheelChangedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler((_, _) => restoreTarget = null), true);
         AddHandler(UIElement.PointerPressedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler((_, _) => restoreTarget = null), true);
@@ -117,17 +137,26 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
         await LoadAsync(previous.Entity, null, restore: previous);
         return true;
     }
-    public void Reset() { Cancel(); history.Clear(); current = null; incoming = null; body.Children.Clear(); }
-    public void Cancel() { workContent?.DeactivateReleases(); generation++; restoreTarget = null; stop?.Cancel(); StopRelated(); hero?.ReleaseBeforeLeave(); hero = null; progress.Visibility = Visibility.Collapsed; }
+    internal Task ResumeAsync() => current is { } entity && stop?.IsCancellationRequested == true
+        ? LoadAsync(entity, null, restore: new(entity, incoming, scroll.VerticalOffset, null))
+        : Task.CompletedTask;
+
+    internal PageFadeEvidence? PageFade => InteractionMotion.PageEvidence(catalogPage);
+
+    public void Reset() { Cancel(); DisposeGameVideos(); history.Clear(); current = null; incoming = null; body.Children.Clear(); }
+    public void Cancel() { InteractionMotion.StopPage(catalogPage); pageFooter?.Update(null); SuspendGameVideos(); workContent?.DeactivateReleases(); generation++; restoreTarget = null; stop?.Cancel(); StopRelated(); hero?.ReleaseBeforeLeave(); hero = null; progress.Visibility = Visibility.Collapsed; }
 
     private async Task LoadAsync(CatalogEntityRef entity, WorkMetadata? loadedWork, bool refresh = false, NavigationEntry? restore = null)
     {
         Cancel(); stop?.Dispose(); stop = new(); var cancellation = stop.Token; var version = ++generation; var auth = authGeneration();
         restoreTarget = restore; catalogLoading = true;
         current = entity; title.Text = CatalogLanguage.Name(entity); title.Visibility = Visibility.Visible;
-        body.Children.Clear(); seenWorks.Clear(); seenCursors.Clear(); shelfWorkIds.Clear(); cursor = null; worksGrid = null; shelfGrid = null; shelfMembership = null; more = null;
-        AddIncomingRelation();
-        message.Text = UiText.Get("正在读取资料…"); progress.Visibility = Visibility.Visible; scroll.ChangeView(null, 0, null);
+        DisposeGameVideos();
+        body.Children.Clear(); seenWorks.Clear(); seenCursors.Clear(); shelfWorkIds.Clear(); cursor = null; worksGrid = null; shelfGrid = null; shelfMembership = null; pageFooter = null;
+        message.Text = UiText.Get("正在读取资料…");
+        progress.Visibility = Visibility.Visible;
+        scroll.ChangeView(null, 0, null, true);
+        InteractionMotion.EnterPage(catalogPage);
         bool Accept() => version == generation && !cancellation.IsCancellationRequested && auth == authGeneration();
         try
         {
@@ -140,17 +169,27 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
                 currentPresentation = cached;
                 current = entity with { Id = work.Id, Name = work.Title }; title.Text = work.Title;
                 var banner = new BannerView(Images, registry) { Browse = e => OpenAsync(e) }; hero = banner; banner.SetPolicy(stageAllowed, stageContrast, stageMode); banner.SetPresentation(cached); title.Visibility = Visibility.Collapsed;
-                if (AddWishlist is not null) { var add = new Button { Content = UiText.Get("加入愿望单") }; add.Click += async (_, _) => { if (auth != authGeneration()) { message.Text = UiText.Get("凭据已改变，请重新读取。"); return; } await AddWishlist(work.Id); }; body.Children.Add(add); }
                 body.Children.Add(banner);
+                if (AddWishlist is not null) { var add = new Button { Content = UiText.Get("加入愿望单") }; add.Click += async (_, _) => { if (auth != authGeneration()) { message.Text = UiText.Get("凭据已改变，请重新读取。"); return; } await AddWishlist(work.Id); }; body.Children.Add(add); }
                 var content = Content();
                 content.ShowRelatedWorks = relationsReader is null;
+                var supplemental = new ContentControl { HorizontalContentAlignment = HorizontalAlignment.Stretch, IsTabStop = false };
+                content.SupplementalHost = supplemental;
+                if (videoServices is { } video)
+                {
+                    gameVideos = new GameVideoView();
+                    gameVideos.Configure(video.Reader, video.Decisions);
+                    gameVideos.SetSource(GameVideoSource.FromCatalog(cached.Work));
+                    content.BeforeTags = gameVideos;
+                }
                 workContent = content; content.Sources = SourceLinks(cached.Work, banner.Choice); content.SetWork(cached.Work, work.Title, collapseFacts: true); body.Children.Add(content);
                 // A readable title is not identity evidence. Resolve related
                 // media only from the untouched provider detail snapshot.
                 ShowRelated(cached.Work, auth);
                 if (restore?.Related is { } state) relatedWorks?.RestoreBrowsing(state);
-                message.Text = UiText.Get("在线资料 · 未自动添加到书架");
-                if (CatalogPresentationService.NeedsPreparation(cached)) { message.Text += UiText.Get(" · 图片正在后台准备"); presentations.Queue([work.Id],priority:true); }
+                body.Children.Add(supplemental);
+                message.Text = "";
+                if (CatalogPresentationService.NeedsPreparation(cached)) presentations.Queue([work.Id], priority: true);
             }
             else
             {
@@ -158,19 +197,27 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
                 current = detail.Entity; title.Text = CatalogLanguage.Name(detail.Entity);
                 if (detail.Entity.ImageUrl is { } url) body.Children.Add(new CoverPresenter { SourceKey = registry.Register(url, "entity"), Width = 180, Height = 220, PreserveEntireImage = true, HorizontalAlignment = HorizontalAlignment.Left });
                 if (!detail.Facts.IsEmpty) body.Children.Add(new TextBlock { Text = string.Join("\n", detail.Facts), TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
+                ContentLanguageInfo? originalInfo = null;
                 if (detail.Description.Length > 0)
                 {
                     var selected = ContentLanguage.Catalog(new("NextMoe", entity.Kind.ToString(), entity.Id), "synopsis", detail.Introductions, detail.Description,
                         detail.Entity.Names?.FirstOrDefault(x => x.Source == "original")?.Language);
                     body.Children.Add(new MarkdownView { Text = selected.Text, Images = Images, Registry = registry, OpenLink = OpenLinkAsync });
-                    var originalInfo = new ContentLanguageInfo(); originalInfo.Show(selected); body.Children.Add(originalInfo);
+                    originalInfo = new(); originalInfo.Show(selected);
                 }
-                body.Children.Add(EntitySources(detail));
-                if (!detail.Related.IsEmpty) { var links = new TagFlowPanel(); foreach (var item in detail.Related) links.Children.Add(item.Kind == CatalogEntityKind.Trait ? CatalogTagChip.Create(CatalogLanguage.Name(item), item, e => OpenAsync(e)) : EntityLink(item)); body.Children.Add(links); }
+                if (!detail.Related.IsEmpty)
+                {
+                    var links = new TagFlowPanel { HorizontalSpacing = 6, VerticalSpacing = 6 };
+                    foreach (var item in detail.Related)
+                        links.Children.Add(item.Kind == CatalogEntityKind.Trait
+                            ? CatalogTagChip.Create(CatalogLanguage.Name(item), item, e => OpenAsync(e))
+                            : EntityLink(item));
+                    body.Children.Add(links);
+                }
                 if (entity.Kind == CatalogEntityKind.Trait)
                 {
                     body.Children.Add(new TextBlock { Text = UiText.Get("相关角色"), FontSize = 22 }); worksGrid = new(); body.Children.Add(worksGrid);
-                    more = new Button { Content = UiText.Get("加载下一页"), Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Left }; more.Click += async (_, _) => await LoadMoreAsync(); body.Children.Add(more);
+                    pageFooter = new() { LoadNext = LoadMoreAsync }; body.Children.Add(pageFooter);
                     await AppendCharactersAsync(detail.Entity, null, version, auth, cancellation);
                 }
                 else if (entity.Kind != CatalogEntityKind.Person)
@@ -188,16 +235,20 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
                         body.Children.Add(owned); body.Children.Add(outside); UpdateShelfGroups();
                     }
                     else { body.Children.Add(new TextBlock { Text = UiText.Get("相关作品"), FontSize = 22 }); worksGrid = new(); body.Children.Add(worksGrid); }
-                    more = new Button { Content = UiText.Get("加载下一页"), Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Left }; more.Click += async (_, _) => await LoadMoreAsync(); body.Children.Add(more);
+                    pageFooter = new() { LoadNext = LoadMoreAsync }; body.Children.Add(pageFooter);
                     await AppendWorksAsync(detail.Entity, null, version, auth, cancellation);
                 }
-                if (Accept()) message.Text = entity.Kind == CatalogEntityKind.Tag ? UiText.Format($"已加载 {seenWorks.Count} 部相关作品") : UiText.Get("目录资料");
+                if (!Accept()) return;
+                if (originalInfo?.Visibility == Visibility.Visible) body.Children.Add(originalInfo);
+                body.Children.Add(EntitySources(detail));
+                message.Text = "";
             }
+            if (Accept()) InteractionMotion.EnterPage(catalogPage);
         }
         catch (OperationCanceledException) { if (version == generation) message.Text = UiText.Get("读取已取消。"); }
         catch (OnlineException e) { if (Accept()) Failure(e.Message, entity); }
         catch (Exception e) { if (Accept()) { App.TraceVisualFailure(e); Failure(UiText.Get("资料未能读取，请重试。"), entity); } }
-        finally { if (version == generation) { catalogLoading = false; progress.Visibility = Visibility.Collapsed; if (auth != authGeneration()) { StopRelated(); body.Children.Clear(); AddIncomingRelation(); message.Text = UiText.Get("凭据已改变，请重新读取资料。"); } QueueRestore(); } }
+        finally { if (version == generation) { catalogLoading = false; progress.Visibility = Visibility.Collapsed; if (auth != authGeneration()) { StopRelated(); body.Children.Clear(); message.Text = UiText.Get("凭据已改变，请重新读取资料。"); } QueueRestore(); } }
     }
 
     internal async void RefreshPrepared(string id)
@@ -208,10 +259,10 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
             var cached = await presentations.GetAsync(id, cancellation: token);
             if (version != generation || token.IsCancellationRequested || auth != authGeneration()) return;
             currentPresentation = cached;
+            gameVideos?.SetSource(GameVideoSource.FromCatalog(cached.Work));
             hero.SetPresentation(cached);
             if (workContent is { } content) { content.Sources = SourceLinks(cached.Work, cached.Banner); content.SetWork(cached.Work, cached.Work.Title, collapseFacts: true); }
             UpdateRelated(cached.Work, auth);
-            message.Text = cached.Prepared ? UiText.Get("在线资料 · 未自动添加到书架") : UiText.Get("图片准备未完成，可通过来源中的刷新重试");
         } catch (OperationCanceledException) { } catch (Exception e) { App.TraceVisualFailure(e); }
     }
     private void Failure(string text, CatalogEntityRef entity) { message.Text = text; var retry = new Button { Content = UiText.Get("重试"), HorizontalAlignment = HorizontalAlignment.Left }; retry.Click += async (_, _) => await LoadAsync(entity, null); body.Children.Add(retry); }
@@ -226,7 +277,7 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
         {
             var url = reference.Url!;
             var name = reference.Source switch { "vndb" => "VNDB", "bangumi" => "Bangumi", _ => reference.Source };
-            var link = new HyperlinkButton { Content = name, Tag = url, Padding = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Left };
+            var link = new ExternalLinkButton { Content = name, Tag = url };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(link, "CatalogEntitySource-" + reference.Source);
             ToolTipService.SetToolTip(link, url);
             link.Click += async (_, _) => await OpenSourceAsync(url);
@@ -245,14 +296,16 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
         refresh.Click += async (_, _) => await LoadAsync(reference, null, true, new(reference, incoming, scroll.VerticalOffset, relatedWorks?.CaptureBrowsing()));
         source.Children.Add(refresh);
         if (artwork?.ReferenceTitle is { } title) source.Children.Add(new TextBlock { Text = UiText.Get("横幅 CG · ") + title + UiText.Get("（关联版本）"), TextWrapping = TextWrapping.Wrap });
-        var row = new TagFlowPanel();
-        foreach (var link in CandidateDetailLinks.From(work)) { var b = new HyperlinkButton { Content = link.Title, Padding = new Thickness(0, 0, 16, 0) }; b.Click += async (_, _) => await OpenSourceAsync(link.Url); row.Children.Add(b); }
-        source.Children.Add(row);
+        else if (artwork?.Kind == ArtworkSources.VndbPromoKind) source.Children.Add(new TextBlock { Text = UiText.Get("横幅 · VNDB 发行宣传图"), TextWrapping = TextWrapping.Wrap });
+        var row = new TagFlowPanel { HorizontalSpacing = 8, VerticalSpacing = 6 };
+        foreach (var link in CandidateDetailLinks.From(work)) { var b = new ExternalLinkButton { Content = link.Title }; b.Click += async (_, _) => await OpenSourceAsync(link.Url); row.Children.Add(b); }
+        if (row.Children.Count > 0) source.Children.Add(row);
+        if (CreateIncomingRelation() is { } relationship) source.Children.Add(relationship);
         return new SmoothExpander { Header = UiText.Get("资料与图片来源"), Content = source, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, IsExpanded = false };
     }
-    private void AddIncomingRelation()
+    private SmoothExpander? CreateIncomingRelation()
     {
-        if (incoming is not { } relation) return;
+        if (incoming is not { } relation) return null;
         var label = string.IsNullOrWhiteSpace(relation.Label) ? UiText.Get("关联作品") : relation.Label;
         var heading = new TextBlock
         {
@@ -262,7 +315,6 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
         };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(heading, "CatalogIncomingRelation");
         var evidence = new StackPanel { Spacing = 8 };
-        evidence.Children.Add(new TextBlock { Text = UiText.Get("游戏资料 · KunGal"), TextWrapping = TextWrapping.Wrap });
         var raw = new StackPanel { Spacing = 8 };
         raw.Children.Add(new TextBlock
         {
@@ -275,7 +327,7 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
         });
         if (IncomingSourceUrl(relation.SourceUrl) is { } url)
         {
-            var source = new HyperlinkButton { Content = UiText.Get("KunGal 作品页 ↗"), Padding = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Left };
+            var source = new ExternalLinkButton { Content = UiText.Get("KunGal 作品页") };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(source, "CatalogIncomingSource");
             source.Click += async (_, _) => await OpenSourceAsync(url);
             evidence.Children.Add(source);
@@ -287,8 +339,8 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
             HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch
         };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(details, "CatalogIncomingEvidence");
-        var section = new StackPanel { Spacing = 8 }; section.Children.Add(heading); section.Children.Add(details);
-        body.Children.Add(section);
+        evidence.Children.Insert(0, heading);
+        return details;
     }
     private static string? IncomingSourceUrl(string? value)
     {
@@ -313,13 +365,12 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
     }
     private async Task LoadMoreAsync()
     {
-        if (current is null || cursor is null || stop is null || more is null || !more.IsEnabled) return;
-        more.IsEnabled = false; var version = generation; var auth = authGeneration(); var cancellation = stop.Token;
+        if (current is null || cursor is null || stop is null || stop.IsCancellationRequested || catalogLoading) return;
+        var version = generation; var auth = authGeneration(); var cancellation = stop.Token;
         try { if (current.Kind == CatalogEntityKind.Trait) await AppendCharactersAsync(current, cursor, version, auth, cancellation); else await AppendWorksAsync(current, cursor, version, auth, cancellation); }
         catch (OperationCanceledException) { }
         catch (OnlineException e) { if (version == generation && auth == authGeneration()) message.Text = e.Message; }
         catch (Exception) { if (version == generation) message.Text = UiText.Get("更多作品未能读取，请重试。"); }
-        finally { if (version == generation && more is not null) more.IsEnabled = true; }
     }
     private async Task AppendWorksAsync(CatalogEntityRef entity, string? next, long version, long auth, CancellationToken cancellation)
     {
@@ -332,19 +383,20 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
             var button = new Button { Content = card, Padding = new Thickness(0), Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new Thickness(0), Margin = new Thickness(0, 0, 16, 20) }; button.Click += async (_, _) => await OpenAsync(new(CatalogEntityKind.Work, work.Id, work.Title));
             if (shelfGrid is not null && shelfMembership?.Contains(work) == true) { shelfWorkIds.Add(work.Id); shelfGrid.Children.Add(button); }
             else worksGrid.Children.Add(button);
+            if (next is not null) InteractionMotion.RevealContent(button, .7f);
         }
         cursor = page.NextCursor is { } candidate && !seenCursors.Contains(candidate) && seenWorks.Count < 500 ? candidate : null;
-        if (more is not null) more.Visibility = cursor is null ? Visibility.Collapsed : Visibility.Visible;
+        pageFooter?.Update(cursor);
         if (shelfGrid is not null) { UpdateShelfGroups(); message.Text = UiText.Format($"已加载 {seenWorks.Count} 部相关作品"); }
-        else if (seenWorks.Count == 0) body.Children.Add(new TextBlock { Text = UiText.Get("此项尚未收录关联作品。") });
+        else if (seenWorks.Count == 0 && cursor is null) body.Children.Add(new TextBlock { Text = UiText.Get("此项尚未收录关联作品。") });
     }
     private void UpdateShelfGroups()
     {
         if (shelfGrid is null || worksGrid is null) return;
         shelfHeading.Text = UiText.Format($"已在书架 · {shelfGrid.Children.Count}");
         outsideHeading.Text = UiText.Format($"未在书架 · {worksGrid.Children.Count}");
-        shelfEmpty.Text = cursor is null ? UiText.Get("已加载的相关作品中没有已入库作品。") : UiText.Get("当前已加载结果中没有已入库作品，可继续加载。");
-        outsideEmpty.Text = cursor is null ? UiText.Get("已加载的相关作品均已在书架。") : UiText.Get("当前已加载结果均已在书架，可继续加载。");
+        shelfEmpty.Text = cursor is null ? UiText.Get("已加载的相关作品中没有已入库作品。") : UiText.Get("目前已载入的结果中没有已入库作品。");
+        outsideEmpty.Text = cursor is null ? UiText.Get("已加载的相关作品均已在书架。") : UiText.Get("目前已载入的作品均已在书架。");
         shelfEmpty.Visibility = shelfGrid.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         outsideEmpty.Visibility = worksGrid.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -360,10 +412,11 @@ public sealed partial class CatalogBrowserView : Grid, IImageHost
             card.Children.Add(new TextBlock { Text = character.Name, TextAlignment = TextAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch, TextWrapping = TextWrapping.Wrap, MaxLines = 2 });
             var button = new Button { Content = card, Padding = new Thickness(0), Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new Thickness(0), Margin = new Thickness(0, 0, 12, 16) };
             button.Click += async (_, _) => await OpenAsync(character); worksGrid.Children.Add(button);
+            if (next is not null) InteractionMotion.RevealContent(button, .7f);
         }
         cursor = page.NextCursor is { } candidate && !seenCursors.Contains(candidate) && seenWorks.Count < 500 ? candidate : null;
-        if (more is not null) more.Visibility = cursor is null ? Visibility.Collapsed : Visibility.Visible;
-        if (seenWorks.Count == 0) body.Children.Add(new TextBlock { Text = UiText.Get("此项尚未收录关联角色。") });
+        pageFooter?.Update(cursor);
+        if (seenWorks.Count == 0 && cursor is null) body.Children.Add(new TextBlock { Text = UiText.Get("此项尚未收录关联角色。") });
     }
 
 }

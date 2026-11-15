@@ -77,7 +77,7 @@ public static class BannerSelection
                     var text = await textDetector.AnalyzeAsync(pixels, cancellation).ConfigureAwait(false);
                     cancellation.ThrowIfCancellationRequested();
                     if (!text.Available) { complete = false; assessments.Add(new(art.Url, art.Kind, art.Width, art.Height, "detector-unavailable")); continue; }
-                    if (ArtworkTextRules.ContainsOverlayText(text)) { assessments.Add(new(art.Url, art.Kind, art.Width, art.Height, "overlay-text")); continue; }
+                    if (ArtworkTextRules.ContainsOverlayText(text, allowTitleMark: art.Kind == ArtworkSources.VndbPromoKind)) { assessments.Add(new(art.Url, art.Kind, art.Width, art.Height, "overlay-text")); continue; }
                 }
                 if (!(textDetector is null ? Score(pixels, art.Width, art.Height) >= -.1 : HasSceneVariation(pixels)))
                 { assessments.Add(new(art.Url, art.Kind, art.Width, art.Height, "blank-or-interface")); continue; }

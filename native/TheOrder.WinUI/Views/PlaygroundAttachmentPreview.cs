@@ -62,6 +62,6 @@ internal static class PlaygroundAttachmentPreview
         }
         var dialog = new ContentDialog { XamlRoot = root, RequestedTheme = theme, Title = file.Name, Content = content, CloseButtonText = "关闭",
             Style = PlaygroundAppearance.Style("PGDialog"), CloseButtonStyle = PlaygroundAppearance.Style("PGGhostButton") };
-        PlaygroundAppearance.Scope(dialog); dialog.Resources["ContentDialogMaxWidth"] = 820d; await dialog.ShowAsync();
+        PlaygroundAppearance.Scope(dialog); dialog.Resources["ContentDialogMaxWidth"] = 820d; await dialog.ShowInShellAsync();
     }
 }

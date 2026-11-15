@@ -13,10 +13,9 @@ public sealed class MusicListeningView : Grid, IDisposable
 {
     private readonly Expander section = new SmoothExpander() { Header = "正版收听与购买", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel entries = new() { Spacing = 14 }, saved = new() { Spacing = 6 }, evidence = new() { Spacing = 8 };
-    private readonly StackPanel options = new() { Spacing = 12, Visibility = Visibility.Collapsed };
+    private readonly Expander sources = new SmoothExpander { Header = "资料与来源", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly TextBlock status = Text(13);
     private readonly Button load = Button("刷新入口"), cancel = Button("取消");
-    private readonly Button details = new() { Content = "资料与来源 ⌄" };
     private MusicListeningViewModel? model;
     private ContentDialog? dialog;
     private bool disposed;
@@ -24,20 +23,16 @@ public sealed class MusicListeningView : Grid, IDisposable
     {
         Visibility = Visibility.Collapsed;
         AutomationProperties.SetAutomationId(section, "MusicListeningExpand"); AutomationProperties.SetAutomationId(load, "MusicListeningLoad");
-        AutomationProperties.SetAutomationId(details, "MusicListeningDetails");
+        AutomationProperties.SetAutomationId(sources, "MusicListeningDetails");
         AutomationProperties.SetAutomationId(cancel, "MusicListeningCancel"); AutomationProperties.SetAutomationId(status, "MusicListeningStatus");
         AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite);
-        var toolbar = new TagFlowPanel { HorizontalSpacing = 10, VerticalSpacing = 6, Children = { details, cancel } };
-        options.Children.Add(load);
-        options.Children.Add(evidence);
-        var attribution = Text(12, "MusicBrainz 收录 · 地区及订阅条件以平台为准"); attribution.Opacity = .7;
-        section.Content = new StackPanel { Spacing = 12, Children = { status, entries, saved, toolbar, options, attribution } };
+        sources.Content = new StackPanel { Spacing = 12, Children = { load, evidence } };
+        section.Content = new StackPanel { Spacing = 12, Children = { status, entries, saved, cancel, sources } };
         Children.Add(section);
         section.Expanding += async (_, _) => { if (model is not null) await model.ExpandAsync(); };
         section.Collapsed += (_, _) => { if (model?.Busy == true) model.Cancel(); };
         load.Click += async (_, _) => { if (model is not null) await model.ExpandAsync(true); };
         cancel.Click += (_, _) => model?.Cancel();
-        details.Click += (_, _) => { options.Visibility = options.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible; details.Content = options.Visibility == Visibility.Visible ? "收起资料与来源 ⌃" : "资料与来源 ⌄"; };
     }
     public void Configure(IMusicListeningReader? reader)
     {
@@ -48,14 +43,19 @@ public sealed class MusicListeningView : Grid, IDisposable
     public void SetContext(MusicBrainzReference? reference)
     {
         if (disposed || model is null) { Visibility = Visibility.Collapsed; return; }
-        if (model.Reference != reference) { dialog?.Hide(); section.IsExpanded = false; options.Visibility = Visibility.Collapsed; details.Content = "资料与来源 ⌄"; }
+        if (model.Reference != reference) { dialog?.Hide(); section.IsExpanded = sources.IsExpanded = false; }
         model.SetContext(reference); Visibility = MusicOutlets.Reference(model.Reference) ? Visibility.Visible : Visibility.Collapsed;
     }
+    private MusicOutletResult? shownCurrent;
+    private MusicDigitalOutletResult? shownDigital;
     private void Changed(object? sender, PropertyChangedEventArgs args) => Render();
     private static bool Useful(MusicOutletLink value) => value.Kind != MusicOutletKind.Information;
     private void Render()
     {
         if (disposed || model is null) return;
+        var reveal = !ReferenceEquals(shownCurrent, model.Current) || !ReferenceEquals(shownDigital, model.Digital);
+        shownCurrent = model.Current;
+        shownDigital = model.Digital;
         status.Text = model.Message; status.Visibility = Visible(model.Busy || model.NeedsAttention);
         load.IsEnabled = model.CanLoad; cancel.Visibility = Visible(model.Busy);
         entries.Children.Clear(); saved.Children.Clear(); evidence.Children.Clear();
@@ -78,6 +78,7 @@ public sealed class MusicListeningView : Grid, IDisposable
         foreach (var note in new[] { model.Current?.Warning, model.Digital?.Warning }.OfType<string>().Distinct()) evidence.Children.Add(Text(12, note));
         if (model.Digital is not null) evidence.Children.Add(Text(12, "数字版入口属于同专辑组的其他发行物，曲目或母带可能不同；当前发行版保持不变。"));
         RenderSaved();
+        if (reveal && entries.Children.Count > 0) InteractionMotion.RevealContent(entries, .72f);
     }
     private void AddEdition(StackPanel body, MusicOutletSnapshot snapshot, string? heading, bool digital)
     {
@@ -112,8 +113,8 @@ public sealed class MusicListeningView : Grid, IDisposable
             foreach (var value in group)
             {
                 var name = PlatformName(value);
-                var content = Text(14, name + " ↗"); content.IsHitTestVisible = false;
-                var link = new Button { Content = content, CornerRadius = new(5), Padding = new(12, 5, 12, 5), MinHeight = 32, MaxWidth = 260, HorizontalContentAlignment = HorizontalAlignment.Left };
+                var content = Text(14, name); content.IsHitTestVisible = false;
+                var link = new ExternalLinkButton { Content = content, MaxWidth = 260 };
                 ToolTipService.SetToolTip(link, string.Join("\n", new[] { MusicOutlets.PurposeLabel(value), value.Regions.Length == 0 ? null : "地区 · " + string.Join(" / ", value.Regions), value.Url }.OfType<string>()));
                 AutomationProperties.SetAutomationId(link, "MusicOutlet-" + value.Entity.Id + "-" + value.Kind + "-" + name);
                 AutomationProperties.SetName(link, name + " · " + kind);
@@ -148,7 +149,7 @@ public sealed class MusicListeningView : Grid, IDisposable
         {
             if (!MediaUserLinkRules.Valid(choice) || choice.Target.Provider != "iTunes" || !AppleAlbumCandidate.TryAlbumUrl(choice.Note, choice.Target.Resource[6..], out var id) || id != choice.Target.Id) continue;
             var row = new TagFlowPanel { HorizontalSpacing = 10, VerticalSpacing = 6 };
-            var link = new HyperlinkButton { Content = new TextBlock { Text = choice.Title + " ↗", TextWrapping = TextWrapping.Wrap, IsHitTestVisible = false }, Padding = new(0), HorizontalAlignment = HorizontalAlignment.Left };
+            var link = new ExternalLinkButton { Content = new TextBlock { Text = choice.Title, TextWrapping = TextWrapping.Wrap, IsHitTestVisible = false } };
             ToolTipService.SetToolTip(link, "你保存的独立商店关联 · " + choice.Target.Resource[6..] + " · " + choice.Note);
             link.Click += async (_, _) => await Open(choice.Note); row.Children.Add(link);
             var remove = Button("移除"); remove.Click += async (_, _) =>
@@ -156,7 +157,7 @@ public sealed class MusicListeningView : Grid, IDisposable
                 var current = model; var reference = current?.Reference;
                 if (current is null || dialog is not null) return;
                 dialog = new() { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "移除这个商店关联？", Content = "当前发行版和其他资料保持。", PrimaryButtonText = "移除", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
-                try { if (await dialog.ShowAsync() == ContentDialogResult.Primary && ReferenceEquals(current, model) && current.Reference == reference) await current.RemoveAppleAsync(choice); }
+                try { if (await dialog.ShowInShellAsync() == ContentDialogResult.Primary && ReferenceEquals(current, model) && current.Reference == reference) await current.RemoveAppleAsync(choice); }
                 finally { dialog = null; }
             }; row.Children.Add(remove); saved.Children.Add(row);
         }
@@ -169,7 +170,7 @@ public sealed class MusicListeningView : Grid, IDisposable
     private static TextBlock Text(double size, string value = "") => new() { Text = value, FontSize = size, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
     private static Button Button(string value) => new() { Content = value, MinHeight = 32, CornerRadius = new(5), HorizontalAlignment = HorizontalAlignment.Left };
     private static Visibility Visible(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
-    internal object Evidence => new { reference = model?.Reference, expanded = section.IsExpanded, optionsExpanded = options.Visibility == Visibility.Visible,
+    internal object Evidence => new { reference = model?.Reference, expanded = section.IsExpanded, optionsExpanded = sources.IsExpanded,
         busy = model?.Busy, current = model?.Current, digital = model?.Digital, apple = model?.Apple, saved = model?.Choices?.Items, status = status.Text,
         statusVisible = status.Visibility == Visibility.Visible, sectionHeight = section.ActualHeight, contentRows = entries.Children.Count };
     public void Cancel() => model?.Cancel();

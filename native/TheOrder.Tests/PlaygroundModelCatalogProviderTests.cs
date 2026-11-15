@@ -28,14 +28,65 @@ public sealed class PlaygroundModelCatalogProviderTests
     }
 
     [Fact]
+    public async Task GoogleRefreshIncludesHydrogenAndCarbonFromNewCatalogPages()
+    {
+        using var fixture = new Fixture(PlaygroundProviderKind.Gemini,
+            Json(JsonNode.Parse("""{"models":[{"name":"models/gemini-3.8-flash"}]}""")!.AsObject()),
+            Json(JsonNode.Parse("""{"models":[{"name":"models/gemini-3.8-flash"},{"name":"models/gemini-4-hydrogen","displayName":"Gemini 4 Hydrogen","supportedGenerationMethods":["generateContent"]}],"nextPageToken":"carbon"}""")!.AsObject()),
+            Json(JsonNode.Parse("""{"models":[{"name":"models/gemini-4-carbon","displayName":"Gemini 4 Carbon","supported_actions":["interactions.create"]}]}""")!.AsObject()));
+        var first = await fixture.Provider.ListModelsAsync(fixture.Provider.DefaultEndpoint, default);
+        Assert.Equal("gemini-3.8-flash", Assert.Single(PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.Gemini, first)).Id);
+
+        var refreshed = await fixture.Provider.ListModelsAsync(fixture.Provider.DefaultEndpoint, default);
+        var chosen = PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.Gemini, refreshed);
+        Assert.Equal(new[] { "gemini-4-hydrogen", "gemini-4-carbon" }, chosen.Select(model => model.Id));
+        Assert.All(chosen, model =>
+        {
+            Assert.True(model.Capabilities.Verified && model.Capabilities.ImageInput && model.Capabilities.Search);
+            Assert.StartsWith("Gemini 4 ", model.Name);
+        });
+        Assert.Contains("xhigh", chosen[0].Capabilities.ReasoningEfforts);
+        Assert.DoesNotContain("xhigh", chosen[1].Capabilities.ReasoningEfforts);
+        Assert.Equal("?pageSize=100&pageToken=carbon", fixture.Handler.Requests[2].Uri.Query);
+    }
+
+    [Fact]
+    public async Task OpenAiRefreshUsesOnlyPublicDirectoryMetadataForAnUnfamiliarFamily()
+    {
+        using var fixture = new Fixture(PlaygroundProviderKind.OpenAI,
+            Json(JsonNode.Parse("""{"data":[{"id":"gpt-6.1-sol","created":1790000000}]}""")!.AsObject()),
+            Json(JsonNode.Parse("""{"data":[{"id":"gpt-6.1-sol","created":1790000000},{"id":"gpt-6-bel","created":1790010000},{"id":"gpt-6.1-bel","created":1790020000},{"id":"gpt-6.1-bel-2026-11-14","created":1790030000},{"id":"gpt-6.1-bel-audio","created":1790040000}]}""")!.AsObject()));
+        var first = await fixture.Provider.ListModelsAsync(fixture.Provider.DefaultEndpoint, default);
+        Assert.Equal("gpt-6.1-sol", Assert.Single(PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.OpenAI, first)).Id);
+        var refreshed = await fixture.Provider.ListModelsAsync(fixture.Provider.DefaultEndpoint, default);
+        var chosen = PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.OpenAI, refreshed);
+        Assert.Equal(new[] { "gpt-6.1-sol", "gpt-6.1-bel" }, chosen.Select(model => model.Id));
+        Assert.False(chosen[1].Capabilities.Verified);
+        Assert.All(fixture.Handler.Requests, request => { Assert.Equal(HttpMethod.Get, request.Method); Assert.Null(request.Body); });
+        Assert.Equal(2, fixture.Handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task DeepSeekDirectoryUsesOfficialNamesAndRejectsDeclaredNonTextOutput()
+    {
+        using var fixture = new Fixture(PlaygroundProviderKind.DeepSeek,
+            Json(JsonNode.Parse("""{"data":[{"id":"deepseek-v5-new-line","name":"DeepSeek V5 New Line","output_modalities":["text"]},{"id":"deepseek-v9-new-line","output_modalities":["image"]}]}""")!.AsObject()));
+        var result = await fixture.Provider.ListModelsAsync(fixture.Provider.DefaultEndpoint, default);
+        Assert.True(result[0].CatalogTextOutput);
+        Assert.False(result[1].CatalogTextOutput);
+        var chosen = Assert.Single(PlaygroundModelSelection.SelectLatest(PlaygroundProviderKind.DeepSeek, result));
+        Assert.Equal("DeepSeek V5 New Line", chosen.Name);
+    }
+
+    [Fact]
     public async Task ClaudeUsesAfterIdHasMoreAndCreationMetadataAcrossPages()
     {
         using var fixture = new Fixture(PlaygroundProviderKind.Claude,
-            Json(JsonNode.Parse("""{"data":[{"id":"claude-opus-5-5","display_name":"Claude fixture","created_at":"2026-09-21T00:00:00Z","lifecycle":"active"}],"has_more":true,"last_id":"claude-opus-5-5"}""")!.AsObject()),
+            Json(JsonNode.Parse("""{"data":[{"id":"claude-opus-5-5","display_name":"Claude fixture","created_at":"2026-09-21T00:00:00Z","lifecycle":"active","line":"opus"}],"has_more":true,"last_id":"claude-opus-5-5"}""")!.AsObject()),
             Json(JsonNode.Parse("""{"data":[{"id":"claude-sonnet-4-6","created_at":"2026-08-01T00:00:00Z"}],"has_more":false,"last_id":"claude-sonnet-4-6"}""")!.AsObject()));
         var result = await fixture.Provider.ListModelsAsync(fixture.Provider.DefaultEndpoint, default);
         Assert.Equal(2, result.Length); Assert.Equal("?limit=100&after_id=claude-opus-5-5", fixture.Handler.Requests[1].Uri.Query);
-        Assert.Equal(DateTimeOffset.Parse("2026-09-21T00:00:00Z"), result[0].CreatedAt); Assert.Equal("active", result[0].Lifecycle);
+        Assert.Equal(DateTimeOffset.Parse("2026-09-21T00:00:00Z"), result[0].CreatedAt); Assert.Equal("active", result[0].Lifecycle); Assert.Equal("opus", result[0].CatalogFamily);
         Assert.All(fixture.Handler.Requests, request => Assert.Equal(HttpMethod.Get, request.Method));
     }
 

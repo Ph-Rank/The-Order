@@ -47,6 +47,8 @@ public sealed record LibraryEntry(
     public ImmutableArray<string> GuidePaths { get; init; } = [];
     public MetadataMix? MetadataMix { get; init; }
     public ImmutableArray<MigrationOrigin> MigrationOrigins { get; init; } = [];
+    public ImmutableArray<PlaySession> RecordedSessions
+        => Sessions.RemoveAll(session => session.Native?.AwaitingRecordingMinimum == true);
     // Process accounting remains an immutable fact. Corrections are a separate, undoable ledger.
     public long EffectivePlaySeconds => checked(TotalPlaySeconds + ManualPlaytime.Where(x => !x.Undone).Sum(x => x.Seconds));
 }

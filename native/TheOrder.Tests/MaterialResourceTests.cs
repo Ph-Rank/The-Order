@@ -50,6 +50,25 @@ public sealed class MaterialResourceTests
     {
         var doc = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "material-fixtures", "DetailsPage.xaml"));
         var status = Assert.Single(doc.Descendants(), e => e.Attribute("AutomationProperties.AutomationId")?.Value == "DetailPersonalStatus");
-        Assert.Equal("{ThemeResource TextSecondaryBrush}", status.Attribute("Foreground")!.Value);
+        Assert.Equal("{StaticResource SecondaryTextStyle}", (string?)status.Attribute("Style"));
+        Assert.Null(status.Attribute("Foreground"));
+        var tokens = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "material-fixtures", "DesignTokens.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var style = Assert.Single(tokens.Descendants(), e => e.Attribute(x + "Key")?.Value == "SecondaryTextStyle");
+        var foreground = Assert.Single(style.Elements(), e => e.Attribute("Property")?.Value == "Foreground");
+        Assert.Equal("{ThemeResource TextSecondaryBrush}", (string?)foreground.Attribute("Value"));
+    }
+    [Fact] public void SharedFluentColorsResolveInsideTheirThemeDictionary()
+    {
+        var tokens = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "material-fixtures", "DesignTokens.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var themes = tokens.Descendants().Where(e => e.Name.LocalName == "ResourceDictionary" && e.Attribute(x + "Key")?.Value is "Light" or "Dark").ToArray();
+        Assert.Equal(2, themes.Length);
+        foreach (var theme in themes)
+        {
+            var brushes = theme.Elements().Where(e => e.Name.LocalName == "SolidColorBrush");
+            Assert.DoesNotContain(brushes, e => (string?)e.Attribute("Color") is { } value &&
+                value.StartsWith("{ThemeResource ", StringComparison.Ordinal) && !value.StartsWith("{ThemeResource SystemAccentColor", StringComparison.Ordinal));
+        }
     }
 }

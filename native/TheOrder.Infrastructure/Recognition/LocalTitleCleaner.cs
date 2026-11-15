@@ -18,8 +18,21 @@ public static class LocalTitleCleaner
 
     // File names additionally carry build bitness ("dracuriot64", "Season264"), which would
     // otherwise read as a different chapter number.
-    public static string Clean(string value, string source) => source is "executable-name" or "archive-name"
-        ? Bitness(Clean(value)) : Clean(value);
+    public static string Clean(string value, string source)
+    {
+        var title = Clean(value);
+        if (source is "executable-name" or "archive-name") return Bitness(title);
+        if (source is "folder" or "product-name" or "file-description" or "manual-title" or "config-title")
+        {
+            // The bundled VNDB v17909 row names this edition in full. Expand the known local
+            // shorthand before lookup, and let the normal title, index and release checks decide.
+            var key = TitleMatching.IndexKey(title);
+            if (key is "tsukihimer" or "月姬r" or "月姫r" ||
+                source == "file-description" && key is ("月姬r本地pc应用" or "月姫r本地pc應用"))
+                return TitleMatching.TsukihimeRemakeTitle;
+        }
+        return title;
+    }
     private static string Bitness(string value)
     {
         var result = TitleMatching.Rx(@"(?:[\s._-]*(?:x64|x86|win64|win32|amd64)|(?<=[\p{L}\d])[._-]?(?:64|32))$", true).Replace(value, "").Trim();

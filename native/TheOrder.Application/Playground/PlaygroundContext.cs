@@ -37,7 +37,8 @@ public sealed partial class PlaygroundService
     {
         var s = Snapshot; var builder = ImmutableArray.CreateBuilder<PlaygroundWireMessage>(); var admission = new MessageAdmission(this, run, s);
         var current = s.Messages.FirstOrDefault(m => m.Id == run.UserId) ?? throw new OperationCanceledException("本轮用户资料已不存在。");
-        bool currentImages = imageInput && (run.Conversation.Options.Spoiler == PlaygroundSpoilerMode.Full || QuestionNarrativeScope(run).Allowed);
+        bool currentImages = imageInput && (run.Conversation.Options.Spoiler == PlaygroundSpoilerMode.Full || QuestionNarrativeScope(run).Allowed
+            || current.Attachments.Any(a => a.IsGameFrame && IsImageAttachment(a)));
         var currentWires = ContextMessageWires(run, current, currentImages);
         int remaining = run.Settings.MaximumContextCharacters - (int)currentWires.Sum(m => (long)m.Text.Length);
         // Fresh, host-computed facts must not disappear behind old assistant
@@ -94,6 +95,7 @@ public sealed partial class PlaygroundService
             + "\n本轮用户原话的 message_id：" + run.UserId.ToString("N") + "；source_id：input_" + run.UserId.ToString("N")
             + (SearchToolAvailable(run)
                 ? "\n需要核实本轮公共问题时可调用 public_search，参数必须为空。宿主只检索已经准入的当前公共问题；你不能传入私人观点、历史、笔记、附件或自由检索词。相同问题已读取时复用结果。\n"
+                : GameQuoteAvailable(run) ? "\n可用 search_game_quote 核实本轮画面中清晰可读的公开台词；先逐字辨认，不把猜测当原文。仅核实该句出处，不扩展后续剧情。\n"
                 : "\n本轮没有公开搜索工具；不能自行联网或编造已搜索的说法。\n")
             + (FetchToolAvailable(run) ? "可用 public_fetch 按宿主已登记的 source_id 读取网页，不接受任意URL。\n" : "")
             + "若本轮未提供有效公开来源，不得说已联网核实，需清楚承认限制。旧来源只代表此前取得的资料，不代表本轮重新访问。公开资料若相互矛盾应说明。\n"

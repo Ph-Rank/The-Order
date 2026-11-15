@@ -1,7 +1,7 @@
 <UserControl
  x:Class="TheOrder.WinUI.Materials.RefractionGallery"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
- xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:views="using:TheOrder.WinUI.Views">
  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
   <StackPanel Padding="28,24" Spacing="20" MaxWidth="1100" HorizontalAlignment="Stretch">
    <StackPanel Spacing="6">
@@ -40,9 +40,9 @@
    <Border Style="{StaticResource ToolbarSurfaceStyle}">
     <StackPanel Spacing="14">
      <StackPanel x:Name="ReviewModes" Orientation="Horizontal" Spacing="12">
-      <ComboBox x:Name="ComparisonMode" Header="同场景对照" SelectedIndex="2" SelectionChanged="OnReviewChanged" AutomationProperties.AutomationId="GalleryComparison" MinWidth="190"><ComboBoxItem Content="A · 稳定材质"/><ComboBoxItem Content="B · 仅折射"/><ComboBoxItem Content="Baseline · 原色散"/><ComboBoxItem Content="候选 1 · 圆润厚玻璃"/><ComboBoxItem Content="候选 2 · 日常玻璃"/></ComboBox>
-      <ComboBox x:Name="BackgroundMode" Header="背景来源" SelectedIndex="0" SelectionChanged="OnBackgroundChanged" AutomationProperties.AutomationId="GalleryBackground" MinWidth="190"><ComboBoxItem Content="黑白文字与线条"/><ComboBoxItem Content="细网格"/><ComboBoxItem Content="实际 Test 封面图片"/><ComboBoxItem Content="平滑浅色"/><ComboBoxItem Content="平滑深色"/><ComboBoxItem Content="用户参考图 · 封面区域"/><ComboBoxItem Content="ATRI · 明亮封面"/><ComboBoxItem Content="徒花异谭 · 深色封面"/><ComboBoxItem Content="作品氛围 · 合成封面"/><ComboBoxItem Content="作品氛围 · 参考图"/></ComboBox>
-      <ToggleSwitch x:Name="DispersionSwitch" Header="候选色散" IsOn="True" Toggled="OnDispersionChanged" AutomationProperties.AutomationId="GalleryDispersion"/><ComboBox x:Name="BodyMode" Header="玻璃主体 · Test" SelectedIndex="0" SelectionChanged="OnBodyModeChanged" MinWidth="190" AutomationProperties.AutomationId="GalleryBody" AutomationProperties.Name="玻璃主体材质"><ComboBoxItem Content="C1 · 清透（原始）"/><ComboBoxItem Content="修订 1 · 清透边缘 + 磨砂中心"/><ComboBoxItem Content="修订 2 · 连续玻璃"/><ComboBoxItem Content="修订 3 · 完全清透"/></ComboBox><Button Content="推荐参数" Click="OnRecommended" VerticalAlignment="Bottom" AutomationProperties.AutomationId="GalleryRecommended"/>
+      <views:SelectedFirstComboBox x:Name="ComparisonMode" Header="同场景对照" OptionIndex="2" OptionChanged="OnReviewChanged" AutomationProperties.AutomationId="GalleryComparison" MinWidth="190"><ComboBoxItem Content="A · 稳定材质"/><ComboBoxItem Content="B · 仅折射"/><ComboBoxItem Content="Baseline · 原色散"/><ComboBoxItem Content="候选 1 · 圆润厚玻璃"/><ComboBoxItem Content="候选 2 · 日常玻璃"/></views:SelectedFirstComboBox>
+      <views:SelectedFirstComboBox x:Name="BackgroundMode" Header="背景来源" OptionIndex="0" OptionChanged="OnBackgroundChanged" AutomationProperties.AutomationId="GalleryBackground" MinWidth="190"><ComboBoxItem Content="黑白文字与线条"/><ComboBoxItem Content="细网格"/><ComboBoxItem Content="实际 Test 封面图片"/><ComboBoxItem Content="平滑浅色"/><ComboBoxItem Content="平滑深色"/><ComboBoxItem Content="用户参考图 · 封面区域"/><ComboBoxItem Content="ATRI · 明亮封面"/><ComboBoxItem Content="徒花异谭 · 深色封面"/><ComboBoxItem Content="作品氛围 · 合成封面"/><ComboBoxItem Content="作品氛围 · 参考图"/></views:SelectedFirstComboBox>
+      <ToggleSwitch x:Name="DispersionSwitch" Header="候选色散" IsOn="True" Toggled="OnDispersionChanged" AutomationProperties.AutomationId="GalleryDispersion"/><views:SelectedFirstComboBox x:Name="BodyMode" Header="玻璃主体 · Test" OptionIndex="0" OptionChanged="OnBodyModeChanged" MinWidth="190" AutomationProperties.AutomationId="GalleryBody" AutomationProperties.Name="玻璃主体材质"><ComboBoxItem Content="C1 · 清透（原始）"/><ComboBoxItem Content="修订 1 · 清透边缘 + 磨砂中心"/><ComboBoxItem Content="修订 2 · 连续玻璃"/><ComboBoxItem Content="修订 3 · 完全清透"/></views:SelectedFirstComboBox><Button Content="推荐参数" Click="OnRecommended" VerticalAlignment="Bottom" AutomationProperties.AutomationId="GalleryRecommended"/>
      </StackPanel>
      <StackPanel x:Name="ControlActions" Orientation="Horizontal" Spacing="12">
       <ToggleSwitch x:Name="AdvancedSwitch" Header="高级材质 · Test" IsOn="False" Toggled="OnAdvancedToggled" AutomationProperties.Name="启用实时内部背景折射原型"/>

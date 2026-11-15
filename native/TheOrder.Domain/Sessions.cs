@@ -19,7 +19,10 @@ public sealed record NativeSession(int Version, string GameId, string Installati
     SessionRecovery Recovery, string? RecoveryToken)
 {
     public const long TicksPerSecond = 10_000_000;
+    public const long MinimumRecordedTicks = 300 * TicksPerSecond;
     public const long MaximumTicks = 366L * 86400 * TicksPerSecond;
+    // Recovery checkpoints for new launches stay private to the timer until eligible.
+    public bool AwaitingRecordingMinimum { get; init; }
     public bool IsTerminal => Lifecycle is SessionLifecycle.Completed or SessionLifecycle.Incomplete or SessionLifecycle.LegacyUnknown;
     public PlaySession Project(string id)
     {
@@ -34,6 +37,7 @@ public sealed record NativeSession(int Version, string GameId, string Installati
     {
         if (Version != 1 || string.IsNullOrWhiteSpace(GameId) || GameId.Length > 200 || string.IsNullOrWhiteSpace(InstallationId)
             || InstallationId.Length > 200 || Accumulated100ns < 0 || Accumulated100ns > MaximumTicks
+            || AwaitingRecordingMinimum && Accumulated100ns >= MinimumRecordedTicks
             || Revision < 0 || Revision > 9_007_199_254_740_991 || WriterOwner == Guid.Empty || Recovery is null
             || Recovery.Count < 0 || Recovery.Count > 9_007_199_254_740_991
             || Recovery.Count == 0 && Recovery.LastAttemptId is not null || Recovery.Count > 0 && Recovery.LastAttemptId is null

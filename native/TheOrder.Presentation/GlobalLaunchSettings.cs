@@ -25,7 +25,7 @@ public sealed class GlobalLaunchSettings(IGlobalLaunchDefaultsStore store, Launc
             var loaded = await store.LoadAsync(); if (disposed) return;
             LaunchPolicy.Validate(loaded.Value); Saved = draft = loaded.Value; readOnly = loaded.ReadOnly;
             policy.Apply(Saved, !readOnly);
-            Message = loaded.Warning ?? "默认均为关闭。新游戏跟随全局；旧游戏保留原设置，可在游戏启动设置中恢复跟随全局。";
+            Message = loaded.Warning ?? "";
         } catch { readOnly = true; policy.Apply(new(), false); Message = "全局启动设置暂不可读取，原资料保留。继承设置的游戏暂停启动，请重试打开程序。"; }
         initialized = true; Notify();
     }
@@ -47,7 +47,7 @@ public sealed class GlobalLaunchSettings(IGlobalLaunchDefaultsStore store, Launc
             // Applying may wait for a synchronous OS creation already in progress;
             // leave the UI thread available throughout that short admission.
             await Task.Run(() => policy.Apply(value)); Saved = value;
-            Message = "已保存。继承设置的游戏下次启动时使用新选项；后台静音将在当前会话中生效。";
+            Message = "启动设置已保存。";
         } catch (InvalidDataException e) { Message = e.Message; }
         catch { Message = "启动设置未能保存，仍使用原设置。请重试。"; }
         finally { saving = false; if (!disposed) Notify(); }

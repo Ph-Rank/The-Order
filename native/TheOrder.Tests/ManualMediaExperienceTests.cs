@@ -105,6 +105,8 @@ public sealed class ManualMediaExperienceTests
     [InlineData("https://kungal.com/galgame/86/", "86")]
     [InlineData("https://api.nextmoe.dev/v2/catalog/works/86", "86")]
     [InlineData(" 86 ", "86")]
+    [InlineData("#86", "86")]
+    [InlineData(" #236199 ", "236199")]
     public void SupportedWorkLinksResolveToIdsWithoutBecomingRequestDestinations(string input, string expected)
     { Assert.True(CatalogWorkReference.TryParse(input, out var id)); Assert.Equal(expected, id); }
     [Theory]
@@ -120,6 +122,10 @@ public sealed class ManualMediaExperienceTests
     [InlineData("https://www.kungal.com:8443/galgame/86")]
     [InlineData("0")]
     [InlineData("00086")]
+    [InlineData("#0")]
+    [InlineData("#00086")]
+    [InlineData("#86/87")]
+    [InlineData("##86")]
     public void UnsafeOrUnsupportedWorkLinksAreRejected(string input) => Assert.False(CatalogWorkReference.TryParse(input, out _));
 
     [Fact]

@@ -18,7 +18,8 @@ public sealed class BookPublicationView : StackPanel, IDisposable
     private readonly TextBlock heading = Text(20), identity = Text(13), incoming = Text(13), message = Text(14), relationNotice = Text(13), searchNotice = Text(13), confirmation = Text(13);
     private readonly TextBlock chapterNotice = Text(13);
     private readonly TextBox queryTitle = new() { Header = "原标题", PlaceholderText = "书名", MaxLength = 200, HorizontalAlignment = HorizontalAlignment.Stretch }, queryIsbn = new() { Header = "ISBN（可选）", PlaceholderText = "输入 ISBN 精确查找", MaxLength = 40, HorizontalAlignment = HorizontalAlignment.Stretch };
-    private readonly Button back = Button("返回上一本"), cancel = Button("取消读取"), reloadSaved = Button("刷新已保存版本"), refreshRelations = Button("刷新关系"), search = Button("查找"), next = Button("查看更多版本"), confirm = Button("确认此出版版本"), refreshPreview = Button("刷新记录");
+    private readonly Button back = Button("返回上一本"), cancel = Button("取消读取"), reloadSaved = Button("刷新已保存版本"), refreshRelations = Button("刷新关系"), search = Button("查找"), confirm = Button("确认此出版版本"), refreshPreview = Button("刷新记录");
+    private readonly ScrollPageFooter next = new();
     private BookDetailsViewModel? model;
     private readonly BookReadingView reading = new();
     private AniListDetails? rootReadingAniList;
@@ -56,7 +57,7 @@ public sealed class BookPublicationView : StackPanel, IDisposable
         searchForm.RowDefinitions.Add(new() { Height = GridLength.Auto }); searchForm.RowDefinitions.Add(new() { Height = GridLength.Auto }); searchForm.RowDefinitions.Add(new() { Height = GridLength.Auto });
         search.VerticalAlignment = VerticalAlignment.Bottom; searchForm.Children.Add(queryTitle); searchForm.Children.Add(queryIsbn); searchForm.Children.Add(search);
         searchForm.SizeChanged += (_, _) => ArrangeSearchForm(); ArrangeSearchForm();
-        searchBody.Children.Add(searchForm); searchBody.Children.Add(Text(12, "有 ISBN 时优先按编号查找；确认前请核对卷次和版本。"));
+        searchBody.Children.Add(searchForm);
         searchBody.Children.Add(searchNotice); searchBody.Children.Add(candidateCards); searchBody.Children.Add(next);
         ndl.Content = searchBody; content.Children.Add(ndl); content.Children.Add(previewBody); content.Children.Add(confirmation);
         var publicationActions = Flow(); publicationActions.Children.Add(confirm); publicationActions.Children.Add(refreshPreview); content.Children.Add(publicationActions);
@@ -70,7 +71,7 @@ public sealed class BookPublicationView : StackPanel, IDisposable
         refreshRelations.Click += async (_, _) => { if (model is not null) await model.LoadRelationsAsync(true); };
         search.Click += async (_, _) => await SearchAsync(); queryTitle.KeyDown += async (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) { e.Handled = true; await SearchAsync(); } };
         queryIsbn.KeyDown += async (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) { e.Handled = true; await SearchAsync(); } };
-        next.Click += async (_, _) => await NextAsync();
+        next.LoadNext = NextAsync;
         confirm.Click += async (_, _) => { if (model is not null) await model.ConfirmAsync(); };
         refreshPreview.Click += async (_, _) => { if (model?.Preview is { } preview) await model.PreviewAsync(preview.Publication.Id, true); };
         foreach (var panel in new[] { relationCards, candidateCards }) panel.SizeChanged += (_, _) => Clamp(panel);
@@ -119,17 +120,38 @@ public sealed class BookPublicationView : StackPanel, IDisposable
         relations.Visibility = Visible(source.Identity.Provider == "Bangumi");
         relations.IsEnabled = ndl.IsEnabled = model.CanLoad;
         relationNotice.Text = model.Relations is { } r ? $"{r.Snapshot.Items.Count(x => x.Kind == BangumiRelationKind.Book)} 项关联 · Bangumi" + Cache(r.FromCache, r.IsStale, r.Warning)
-            : "按 Bangumi 关系浏览系列、单行本和篇章。";
-        if (!ReferenceEquals(shownRelations, model.Relations)) { shownRelations = model.Relations; RenderRelations(); }
+            : "";
+        relationNotice.Visibility = Visible(relationNotice.Text.Length > 0);
+        if (!ReferenceEquals(shownRelations, model.Relations))
+        {
+            shownRelations = model.Relations;
+            RenderRelations();
+            if (shownRelations is not null) InteractionMotion.RevealContent(relationCards, .72f);
+        }
         var refreshSaved = !ReferenceEquals(shownCandidates, model.Candidates)
             || !ReferenceEquals(shownBindings, model.Bindings) || !ReferenceEquals(shownPreview, model.Preview);
-        if (!ReferenceEquals(shownCandidates, model.Candidates)) { shownCandidates = model.Candidates; RenderCandidates(); }
+        if (!ReferenceEquals(shownCandidates, model.Candidates))
+        {
+            var candidates = model.Candidates;
+            var append = shownCandidates is { Length: > 0 } previous && previous.Length <= candidates.Length
+                && previous.SequenceEqual(candidates.Take(previous.Length));
+            var start = append ? shownCandidates!.Length : 0;
+            shownCandidates = candidates;
+            RenderCandidates(start);
+            if (!append && candidates.Length > 0) InteractionMotion.RevealContent(candidateCards, .72f);
+        }
         shownBindings = model.Bindings;
-        if (!ReferenceEquals(shownPreview, model.Preview)) { shownPreview = model.Preview; RenderPreview(); }
+        if (!ReferenceEquals(shownPreview, model.Preview))
+        {
+            shownPreview = model.Preview;
+            RenderPreview();
+            if (shownPreview is not null) InteractionMotion.EnterPage(previewBody);
+            else InteractionMotion.StopPage(previewBody);
+        }
         if (refreshSaved) RenderSaved();
         foreach (var button in relationCards.Children.OfType<Button>().Concat(candidateCards.Children.OfType<Button>()).Concat(savedActions)) button.IsEnabled = model.CanLoad;
         search.IsEnabled = queryTitle.IsEnabled = queryIsbn.IsEnabled = refreshRelations.IsEnabled = model.CanLoad;
-        next.Visibility = Visible(model.Search?.Page.NextStart is not null); next.IsEnabled = model.CanLoad;
+        next.Update(model.Search?.Page.NextStart, !model.CanLoad);
         searchNotice.Text = model.Search is { } result ? $"显示 {model.Candidates.Length} / {result.Page.Total} 条出版记录" + Cache(result.FromCache, result.IsStale, result.Warning) : "";
         searchNotice.Visibility = Visible(searchNotice.Text.Length > 0);
         confirm.Visibility = refreshPreview.Visibility = confirmation.Visibility = Visible(model.Preview is not null);
@@ -152,7 +174,7 @@ public sealed class BookPublicationView : StackPanel, IDisposable
                 if (b.RawFacts.Length > 0) rawBody.Children.Add(SectionTitle("Bangumi 原始字段"));
                 foreach (var item in b.RawFacts) Fact(rawBody, item.Name, item.Values);
             }
-            rawBody.Children.Add(SourceLink("Bangumi 书籍资料 ↗", bg.Url, false));
+            rawBody.Children.Add(SourceLink("Bangumi 书籍资料", bg.Url, false));
         }
         else
         {
@@ -161,14 +183,13 @@ public sealed class BookPublicationView : StackPanel, IDisposable
                 foreach (var group in ani.Staff.GroupBy(x => x.Role))
                     Fact(facts, RoleName(group.Key), group.Select(x => ContentLanguage.Person(x.Person, "Staff").Text).Distinct().ToArray());
                 Fact(facts, "开始日期", ani.Media.StartDate); Fact(facts, "卷 / 话数", string.Join(" · ", new[] { ani.Media.Volumes is > 0 ? $"{ani.Media.Volumes} 卷" : null, ani.Media.Chapters is > 0 ? $"{ani.Media.Chapters} 话" : null }.Where(x => x is not null)));
-                rawBody.Children.Add(SourceLink("AniList 书籍资料 ↗", ani.Media.Url, false));
+                rawBody.Children.Add(SourceLink("AniList 书籍资料", ani.Media.Url, false));
                 if (ani.Staff.Length > 0) rawBody.Children.Add(SectionTitle("人员职责原文"));
                 foreach (var group in ani.Staff.GroupBy(x => x.Role))
                     Fact(rawBody, group.Key, group.Select(x => x.Person.NativeName.Length > 0 ? x.Person.NativeName : x.Person.Name).Distinct().ToArray());
             }
             rawBody.Children.Add(Text(13, "尚无已确认的 Bangumi 对应编号，因此只展示当前 AniList 条目的书籍资料。"));
         }
-        rawBody.Children.Add(Text(12, "卷次与关系沿用来源标注；未标明的层级不按标题推断。"));
     }
     private void RenderRelations()
     {
@@ -182,10 +203,10 @@ public sealed class BookPublicationView : StackPanel, IDisposable
         }
         Clamp(relationCards);
     }
-    private void RenderCandidates()
+    private void RenderCandidates(int start)
     {
-        candidateCards.Children.Clear();
-        foreach (var item in model?.Candidates ?? [])
+        if (start == 0) candidateCards.Children.Clear();
+        foreach (var item in (model?.Candidates ?? []).Skip(start))
         {
             var description = string.Join(" · ", new[] { string.IsNullOrWhiteSpace(item.Volume) ? null : "卷次 " + item.Volume, string.IsNullOrWhiteSpace(item.PublicationDate) ? null : "出版 " + item.PublicationDate }.Where(x => x is not null));
             var button = Card(item.Title, description);
@@ -198,6 +219,7 @@ public sealed class BookPublicationView : StackPanel, IDisposable
             ToolTipService.SetToolTip(button, item.Title + "\nNDL " + item.Id);
             AutomationProperties.SetAutomationId(button, "BookPreview-" + item.Id);
             button.Click += async (_, _) => await PreviewVisualAsync(item.Id); candidateCards.Children.Add(button);
+            if (start > 0) InteractionMotion.RevealContent(button, .72f);
         }
         Clamp(candidateCards);
     }
@@ -232,15 +254,14 @@ public sealed class BookPublicationView : StackPanel, IDisposable
         Fact(previewBody, "出版日期", p.PublicationDate); Fact(previewBody, "出版社", p.Publishers); Fact(previewBody, "文库 / 丛书", p.BibliographicSeries);
         Fact(previewBody, "作者等（原文）", p.CreatorStatements); Fact(previewBody, "ISBN", p.Isbns); Fact(previewBody, "套装 ISBN", p.SetIsbns); Fact(previewBody, "语言", p.Languages.Select(LanguageName).ToArray());
         var source = new StackPanel { Spacing = 8 }; Fact(source, "NDL 编号", p.Id); Fact(source, "记录类型", p.IsAggregate ? "集合 / 汇总记录" : "独立出版物");
-        if (result.FromSearch) source.Children.Add(Text(12, "当前为检索结果；保存关联时会独立核验编号、版本与 ISBN。"));
-        source.Children.Add(Text(12, "NDL · " + p.License)); source.Children.Add(SourceLink("NDL 原始记录 ↗", p.Url, true));
+        source.Children.Add(Text(12, "NDL · " + p.License)); source.Children.Add(SourceLink("NDL 原始记录", p.Url, true));
         var provenance = Expand("此版本的资料来源"); provenance.Content = source; previewBody.Children.Add(provenance);
         var warning = Cache(result.FromCache, result.IsStale, result.Warning).Trim(' ', '·');
         if (warning.Length > 0) previewBody.Children.Add(Text(13, warning));
     }
-    private HyperlinkButton SourceLink(string text, string url, bool isNdl)
+    private ExternalLinkButton SourceLink(string text, string url, bool isNdl)
     {
-        var link = new HyperlinkButton { Content = text, Padding = new(0), HorizontalAlignment = HorizontalAlignment.Left };
+        var link = new ExternalLinkButton { Content = text };
         link.Click += async (_, _) =>
         {
             var expected = model?.Source?.Fingerprint; var version = model?.Version;
@@ -271,20 +292,7 @@ public sealed class BookPublicationView : StackPanel, IDisposable
         if (!disposed && ReferenceEquals(model, current) && current.Version == version && current.Expanded
             && current.Source?.Identity is { Provider: "Bangumi" } source && source.Id == id) FocusHeading();
     }
-    private async Task NextAsync()
-    {
-        if (model is null) return;
-        var source = model.Source?.Fingerprint; var previousCount = model.Candidates.Length;
-        var operation = model.NextAsync(); var generation = model.Version;
-        await operation;
-        if (disposed || model.Version != generation || model.Source?.Fingerprint != source || model.Candidates.Length <= previousCount) return;
-        var version = renderVersion;
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            if (disposed || model.Version != generation || model.Source?.Fingerprint != source || version != renderVersion || candidateCards.Children.ElementAtOrDefault(previousCount) is not Button target) return;
-            target.Focus(FocusState.Programmatic); target.StartBringIntoView();
-        });
-    }
+    private Task NextAsync() => model?.NextAsync() ?? Task.CompletedTask;
     public bool GoBack() { var result = model?.GoBack() == true; if (result) FocusHeading(); return result; }
     private void Bring(FrameworkElement element, Func<bool>? accept = null)
     {

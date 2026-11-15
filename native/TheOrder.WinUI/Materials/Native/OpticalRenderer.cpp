@@ -112,6 +112,7 @@ struct Renderer {
  ComPtr<ID3D11SamplerState> sampler; ComPtr<ID3D11ShaderResourceView> source;
  ComPtr<ID3D11Texture2D> sourceTexture;
  ComPtr<ID3D11Texture2D> frostTexture; ComPtr<ID3D11ShaderResourceView> frost;
+ ComPtr<ID3D11Texture2D> frameReadback;
  bool frostValid=false; // only for the current scene revision at the current source size
  UINT64 frostCreated=0, frostPasses=0;
  GallerySource scene;
@@ -185,7 +186,7 @@ extern "C" __declspec(dllexport) HRESULT OpticalUpload(void* handle,const BYTE* 
   ++resourceCounts[2];
  });
 }
-static HRESULT Draw(void* handle,UINT width,UINT height,const float* input,UINT count,bool background) noexcept {
+static HRESULT Draw(void* handle,UINT width,UINT height,const float* input,UINT count,bool background,bool cacheFrame=false) noexcept {
  if(!handle||!input||(count!=20&&count!=24&&count!=28)||width==0||height==0||width>8192||height>8192)return E_INVALIDARG;
  float p[28]={};std::memcpy(p,input,count*sizeof(float)); // legacy 20/24-float callers keep later fields 0
  if(!(p[17]>=0&&p[17]<=1)||!(p[23]>=0&&p[23]<=1))return E_INVALIDARG;
@@ -208,12 +209,47 @@ static HRESULT Draw(void* handle,UINT width,UINT height,const float* input,UINT 
  r->context->VSSetConstantBuffers(0,1,r->constants.GetAddressOf());r->context->PSSetConstantBuffers(0,1,r->constants.GetAddressOf());
  r->context->PSSetSamplers(0,1,r->sampler.GetAddressOf());
  ID3D11ShaderResourceView* views[2]={r->source.Get(),r->frostValid&&!background?r->frost.Get():nullptr};r->context->PSSetShaderResources(0,2,views);
- r->context->Draw(3,0);Check(r->chain->Present(1,0));
+ r->context->Draw(3,0);
+ if(cacheFrame) {
+  r->frameReadback.Reset();
+  ComPtr<ID3D11Resource> rendered;
+  r->target->GetResource(&rendered);
+  D3D11_TEXTURE2D_DESC desc={};
+  desc.Width=width;desc.Height=height;desc.MipLevels=1;desc.ArraySize=1;
+  desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.SampleDesc.Count=1;
+  desc.Usage=D3D11_USAGE_STAGING;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+  // A cache allocation failure must not affect presentation of the live frame.
+  if(SUCCEEDED(r->device->CreateTexture2D(&desc,nullptr,&r->frameReadback)))
+   r->context->CopyResource(r->frameReadback.Get(),rendered.Get());
+ }
+ Check(r->chain->Present(1,0));
  });
 }
 extern "C" __declspec(dllexport) HRESULT OpticalDraw(void* h,UINT w,UINT height,const float* p) noexcept { return Draw(h,w,height,p,20,false); }
 extern "C" __declspec(dllexport) HRESULT OpticalDrawBackground(void* h,UINT w,UINT height,const float* p) noexcept { return Draw(h,w,height,p,20,true); }
 extern "C" __declspec(dllexport) HRESULT OpticalDrawEx(void* h,UINT w,UINT height,const float* p,UINT count,BOOL background) noexcept { return Draw(h,w,height,p,count,background!=FALSE); }
+extern "C" __declspec(dllexport) HRESULT OpticalDrawForCache(void* h,UINT w,UINT height,const float* p,UINT count) noexcept {
+ if(static_cast<UINT64>(w)*height*4>24ULL*1024*1024)return E_INVALIDARG;
+ return Draw(h,w,height,p,count,false,true);
+}
+extern "C" __declspec(dllexport) HRESULT OpticalReadCachedFrame(void* h,BYTE* data,UINT length) noexcept {
+ if(!h)return E_INVALIDARG;
+ auto r=static_cast<Renderer*>(h);
+ if(!data&&length==0){r->frameReadback.Reset();return S_OK;}
+ if(!data||!r->frameReadback)return E_INVALIDARG;
+ D3D11_TEXTURE2D_DESC desc={};r->frameReadback->GetDesc(&desc);
+ if(static_cast<UINT64>(desc.Width)*desc.Height*4!=length)return E_INVALIDARG;
+ D3D11_MAPPED_SUBRESOURCE map={};
+ const HRESULT hr=r->context->Map(r->frameReadback.Get(),0,D3D11_MAP_READ,D3D11_MAP_FLAG_DO_NOT_WAIT,&map);
+ if(hr==DXGI_ERROR_WAS_STILL_DRAWING)return S_FALSE;
+ if(FAILED(hr))return hr;
+ const UINT rowBytes=desc.Width*4;
+ for(UINT y=0;y<desc.Height;y++)
+  std::memcpy(data+static_cast<size_t>(y)*rowBytes,static_cast<const BYTE*>(map.pData)+static_cast<size_t>(y)*map.RowPitch,rowBytes);
+ r->context->Unmap(r->frameReadback.Get(),0);
+ r->frameReadback.Reset();
+ return S_OK;
+}
 extern "C" __declspec(dllexport) HRESULT OpticalSceneBegin(void* handle,UINT w,UINT h,float scale,UINT color) noexcept {
  if(!handle||w==0||h==0||w>8192||h>8192||!std::isfinite(scale)||scale<=0)return E_INVALIDARG;
  return Guard([&]{auto r=static_cast<Renderer*>(handle);r->scene.Init(r->device.Get());

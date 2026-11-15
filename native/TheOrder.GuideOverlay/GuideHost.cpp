@@ -1,18 +1,37 @@
 #include "GuideFlowCanvas.hpp"
 #include "GuideLocalReader.hpp"
+#include "GuidePresentation.hpp"
+#include "GuideWindowCapture.hpp"
 #include <objidl.h>
 #include <gdiplus.h>
 #include <detours.h>
 #include <shellapi.h>
 #include <windowsx.h>
+#include <atomic>
 #include <memory>
+#include <imm.h>
+#pragma comment(lib,"imm32.lib")
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
 
 static guide::Connection connection;
+static guide::chat::Connection gameChat;
+static guide::chat::Canvas chatCanvas;
+static LONG paintedChat=-1,paintedDraft=-1,paintedEditor=-1;static ULONGLONG paintedCaret=0;
+static std::future<void> captureJob;
+static HWND chatInputHost=nullptr,chatEdit=nullptr;
+static WNDPROC chatEditOriginal=nullptr;
+static HFONT chatFont=nullptr;
+static HBRUSH chatEditBrush=nullptr;
+static bool syncingEdit=false;
+static bool chatVisible(){return connection.header&&connection.header->channel==3;}
 static DWORD targetPid = 0;
 static HWND gameWindow = nullptr, overlayWindow = nullptr;
+static guide::presentation::Surface presentation;
+// Only the window thread changes the rendering target. The input thread uses these snapshots.
+static std::atomic<HWND> inputGameWindow{},presentationWindow{},inputEditorWindow{};
+static bool captureExcluded=false;
 static int key = 0, hotkeyId = 701;
 static ULONGLONG nextKeyAttempt = 0;
 static bool registered = false, interactive = false;
@@ -35,13 +54,34 @@ static int inject(DWORD pid, LONG64 stamp, const std::wstring& path) {
     BOOL ok = DetourUpdateProcessWithDll(process, dlls, 1); DWORD error = GetLastError(); CloseHandle(process);
     return ok ? 0 : int(error ? error : 13);
 }
-static BOOL CALLBACK findWindow(HWND window, LPARAM) {
-    DWORD pid = 0; GetWindowThreadProcessId(window, &pid);
-    if (pid == targetPid && IsWindowVisible(window) && !GetWindow(window, GW_OWNER)) { gameWindow = window; return FALSE; } return TRUE;
+static bool gameCandidate(HWND window) {
+    DWORD pid=0;
+    GetWindowThreadProcessId(window,&pid);
+    return pid==targetPid&&guide::presentation::gameRoot(window)&&guide::presentation::available(window);
 }
-static bool front() {
-    DWORD pid = 0; GetWindowThreadProcessId(GetForegroundWindow(), &pid);
-    return pid == targetPid || GetForegroundWindow() == overlayWindow;
+static BOOL CALLBACK findWindow(HWND window, LPARAM) {
+    if(!gameCandidate(window))return TRUE;
+    gameWindow=window;
+    return FALSE;
+}
+static void bindGameWindow(HWND foreground) {
+    const bool current=gameCandidate(gameWindow);
+    const HWND root=GetAncestor(foreground,GA_ROOT);
+    // A disabled owner still anchors the reader while a modal window is open.
+    if((!current||IsWindowEnabled(gameWindow))&&gameCandidate(root))gameWindow=root;
+    else if(!current){gameWindow=nullptr;EnumWindows(findWindow,0);}
+    inputGameWindow.store(gameWindow);
+}
+static bool front(HWND foreground=GetForegroundWindow()) {
+    using guide::presentation::onSurface;
+    const HWND source=inputGameWindow.load();
+    if(!foreground||!IsWindowEnabled(source))return false;
+    return onSurface(source,foreground)||onSurface(overlayWindow,foreground)
+        ||onSurface(inputEditorWindow.load(),foreground)||onSurface(presentationWindow.load(),foreground);
+}
+static RECT targetBounds() {
+    if(presentation.window)return guide::presentation::readingBounds(presentation);
+    return guide::presentation::windowBounds(gameWindow);
 }
 // Only the owned foreground game/reader consumes input. The dedicated hook
 // thread posts a message; it never renders, reads documents, or logs key input.
@@ -52,21 +92,35 @@ static LRESULT CALLBACK keyboardInput(int code,WPARAM message,LPARAM value){
     bool up=message==WM_KEYUP||message==WM_SYSKEYUP,down=message==WM_KEYDOWN||message==WM_SYSKEYDOWN;
     if(up&&consumedKeys[keyCode]){consumedKeys[keyCode]=false;return 1;}
     if(!down)return CallNextHookEx(nullptr,code,message,value);
+    if(h->visible&&h->channel==3&&gameChat.h&&gameChat.h->focus)return CallNextHookEx(nullptr,code,message,value);
     if(consumedKeys[keyCode])return 1;
     int action=-1;
     const UINT modifiers=guide::activeModifiers();
     if(keyCode==DWORD(guide::shortcutKey(h->hotkey))&&guide::shortcutMatches(h->hotkey,modifiers)&&h->status!=2)action=hotkeyId;
-    if(h->visible&&modifiers==0){const int keys[]={VK_NEXT,VK_PRIOR,VK_RIGHT,VK_LEFT,VK_HOME,VK_END,VK_SPACE};for(int i=0;i<7;++i)if(keyCode==DWORD(keys[i]))action=hotkeyId+6+i;}
+    if(h->visible&&h->channel!=3&&modifiers==0){const int keys[]={VK_NEXT,VK_PRIOR,VK_RIGHT,VK_LEFT,VK_HOME,VK_END,VK_SPACE};for(int i=0;i<7;++i)if(keyCode==DWORD(keys[i]))action=hotkeyId+6+i;}
     if(action<0||!connection.live()||!front())return CallNextHookEx(nullptr,code,message,value);
     consumedKeys[keyCode]=true;PostMessageW(overlayWindow,WM_HOTKEY,WPARAM(action),0);return 1;
 }
+static LRESULT CALLBACK wheelInput(int code,WPARAM message,LPARAM value){
+    if(code==HC_ACTION&&message==WM_MOUSEWHEEL&&connection.header&&connection.header->visible&&front()
+        &&IsWindowVisible(overlayWindow)){
+        const auto* mouse=reinterpret_cast<const MSLLHOOKSTRUCT*>(value);
+        if(WindowFromPoint(mouse->pt)==overlayWindow&&PostMessageW(overlayWindow,WM_MOUSEWHEEL,
+            MAKEWPARAM(0,HIWORD(mouse->mouseData)),MAKELPARAM(mouse->pt.x,mouse->pt.y)))return 1;
+    }
+    return CallNextHookEx(nullptr,code,message,value);
+}
 static DWORD WINAPI keyboardLoop(LPVOID){
     MSG message{};PeekMessageW(&message,nullptr,WM_USER,WM_USER,PM_NOREMOVE);
-    HHOOK hook=SetWindowsHookExW(WH_KEYBOARD_LL,keyboardInput,GetModuleHandleW(nullptr),0);InterlockedExchange(&keyboardState,hook?1:-1);SetEvent(keyboardReady);
-    if(hook){while(GetMessageW(&message,nullptr,0,0)>0){TranslateMessage(&message);DispatchMessageW(&message);}UnhookWindowsHookEx(hook);}return 0;
+    HHOOK keys=SetWindowsHookExW(WH_KEYBOARD_LL,keyboardInput,GetModuleHandleW(nullptr),0);
+    HHOOK wheel=SetWindowsHookExW(WH_MOUSE_LL,wheelInput,GetModuleHandleW(nullptr),0);
+    InterlockedExchange(&keyboardState,keys?1:-1);SetEvent(keyboardReady);
+    if(keys||wheel)while(GetMessageW(&message,nullptr,0,0)>0){TranslateMessage(&message);DispatchMessageW(&message);}
+    if(keys)UnhookWindowsHookEx(keys);
+    if(wheel)UnhookWindowsHookEx(wheel);
+    return 0;
 }
 static void requestPaint() {
-    if (!gameWindow || !IsWindow(gameWindow)) { gameWindow = nullptr; EnumWindows(findWindow, 0); }
     if (gameWindow) RedrawWindow(gameWindow, nullptr, nullptr, RDW_INVALIDATE);
 }
 static Gdiplus::RectF drawText(Gdiplus::Graphics& graphics, const std::wstring& value, float x, float y, float width, float size, Gdiplus::Color color, bool bold = false, const wchar_t* family = L"Microsoft YaHei UI") {
@@ -93,7 +147,7 @@ static float savedReadingScroll=0,savedOverviewScroll=0;
 static bool draggingBody=false;
 static RECT bodyBox{},sideBox{};
 static int lastRoute=-1,lastStep=-1;static LONG lastRevision=-1;
-struct PaintStamp { LONG revision=-1,route=-1,step=-1,graph=-1,selected=-1,light=-1,dpi=0;RECT target{}; };
+struct PaintStamp { LONG revision=-1,route=-1,step=-1,graph=-1,selected=-1,channel=-1,light=-1,dpi=0;RECT target{}; };
 static PaintStamp painted;
 static float textHeight(Gdiplus::Graphics& g,const std::string& value,float width,float size,const wchar_t* family=L"Microsoft YaHei UI") {
     Gdiplus::Font font(family,size,Gdiplus::FontStyleRegular,Gdiplus::UnitPixel);
@@ -111,7 +165,8 @@ static void button(Gdiplus::Graphics& g,const std::wstring& label,float x,float 
     const float pad=(compactWindow?6.f:10.f)*scale;
     drawText(g,label,x+pad,y+4*scale,w-2*pad,(compactWindow?12.f:15.f)*scale,light?Gdiplus::Color(255,43,44,47):Gdiplus::Color(255,233,235,239));hit(x,y,w,h,action,argument);
 }
-static void tab(Gdiplus::Graphics& g,const wchar_t* label,float x,float y,float width,float scale,int page,bool active) {
+static void tab(Gdiplus::Graphics& g,const wchar_t* label,float x,float y,float width,float scale,int page,bool active,float height=0) {
+    if(!height)height=26*scale;
     const bool light=connection.header&&connection.header->lightTheme;
     const auto ink=light?Gdiplus::Color(255,43,46,51):Gdiplus::Color(255,233,236,241);
     const auto muted=light?Gdiplus::Color(255,102,108,118):Gdiplus::Color(255,164,172,186);
@@ -119,9 +174,9 @@ static void tab(Gdiplus::Graphics& g,const wchar_t* label,float x,float y,float 
     Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic());format.SetFormatFlags(format.GetFormatFlags()|Gdiplus::StringFormatFlagsNoWrap);
     Gdiplus::RectF measured;g.MeasureString(label,-1,&font,Gdiplus::PointF(0,0),&format,&measured);
     const float labelX=x+(width-measured.Width)/2;
-    Gdiplus::SolidBrush brush(active?ink:muted);g.DrawString(label,-1,&font,Gdiplus::PointF(labelX,y+4*scale),&format,&brush);
-    if(active){Gdiplus::Pen line(ink,2*scale);g.DrawLine(&line,labelX,y+22*scale,labelX+measured.Width,y+22*scale);}
-    hit(x,y,width,26*scale,2,page);
+    Gdiplus::SolidBrush brush(active?ink:muted);g.DrawString(label,-1,&font,Gdiplus::PointF(labelX,y+(height-measured.Height)/2),&format,&brush);
+    if(active){Gdiplus::Pen line(ink,2*scale);g.DrawLine(&line,labelX,y+height-3*scale,labelX+measured.Width,y+height-3*scale);}
+    hit(x,y,width,height,2,page);
 }
 static float tocScroll=0,tocMaximum=0;
 static RECT tocBox{};
@@ -142,31 +197,46 @@ struct FlowGdiPainter {
         g.MeasureString(label.c_str(),-1,&font,Gdiplus::RectF(x,y,width,100000),&format,&measured);float height=std::max(size*1.5f,measured.Height);
         if(draw){Gdiplus::SolidBrush brush(color(c));g.DrawString(label.c_str(),-1,&font,Gdiplus::RectF(x,y,width,height+size),&format,&brush);}return height;
     }
+    void draft(const std::string& value,guide::flow::Rect r,float size,guide::flow::Color c,const guide::chat::Header& h){
+        // Measure and draw with the same font/width on the output surface. The
+        // hidden source editor's line wrapping need not match the scaled UI.
+        auto label=wide(value);auto index=[&](LONG byte){return int(wide(value.substr(0,size_t(std::clamp(byte,0L,LONG(value.size()))))).size());};
+        int caret=std::clamp(index(h.caret),0,int(label.size())),a=index(h.selectionStart),b=index(h.selectionEnd);if(a>b)std::swap(a,b);
+        const bool active=h.focus!=0;std::wstring probe=label+L"\x200a";
+        Gdiplus::Font font(L"Microsoft YaHei UI",size,Gdiplus::FontStyleRegular,Gdiplus::UnitPixel);Gdiplus::StringFormat format;format.SetFormatFlags(Gdiplus::StringFormatFlagsMeasureTrailingSpaces);
+        Gdiplus::RectF layout(r.x,r.y,r.w,100000),at;Gdiplus::Region cursor;
+        bool after=caret>0&&caret<int(label.size())&&label[size_t(caret)]==L'\n';int mark=after?caret-1:caret;
+        Gdiplus::CharacterRange range(mark,1);format.SetMeasurableCharacterRanges(1,&range);
+        if(g.MeasureCharacterRanges(probe.c_str(),int(probe.size()),&font,layout,&format,1,&cursor)==Gdiplus::Ok)cursor.GetBounds(&at,&g);
+        if(at.Height<=0)at={r.x,r.y,0,size*1.5f};float dy=std::max(0.f,at.Y+at.Height-r.y-r.h);
+        auto saved=g.Save();g.SetClip(Gdiplus::RectF(r.x,r.y,r.w,r.h),Gdiplus::CombineModeIntersect);g.TranslateTransform(0,-dy);
+        if(active&&a!=b){Gdiplus::Region selection;Gdiplus::CharacterRange selected(a,b-a);format.SetMeasurableCharacterRanges(1,&selected);
+            if(g.MeasureCharacterRanges(probe.c_str(),int(probe.size()),&font,layout,&format,1,&selection)==Gdiplus::Ok){Gdiplus::SolidBrush highlight(Gdiplus::Color(90,87,150,204));g.FillRegion(&highlight,&selection);}}
+        Gdiplus::SolidBrush ink(color(c));g.DrawString(label.c_str(),int(label.size()),&font,layout,&format,&ink);
+        if(active&&GetTickCount64()/500%2==0){Gdiplus::Pen pen(color(c),std::max(1.f,size/15));float x=after?at.GetRight():at.X;g.DrawLine(&pen,x,at.Y,x,at.GetBottom());}
+        g.Restore(saved);
+    }
     void image(guide::flow::Rect r,const guide::Reading& page){
         static LONG revision=-1;static std::vector<BYTE> bgra;static std::unique_ptr<Gdiplus::Bitmap> bitmap;
         if(revision!=connection.header->sequence){bitmap.reset();bgra=page.rgba;for(size_t i=0;i<bgra.size();i+=4)std::swap(bgra[i],bgra[i+2]);bitmap=std::make_unique<Gdiplus::Bitmap>(page.width,page.height,page.width*4,PixelFormat32bppARGB,bgra.data());revision=connection.header->sequence;}
         if(bitmap){g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);g.DrawImage(bitmap.get(),Gdiplus::RectF(r.x,r.y,r.w,r.h));}
     }
 };
-static bool localVisible(){return connection.header&&connection.header->channel!=0;}
-static bool flowVisible(){return connection.header&&!localVisible()&&connection.header->graph&&!connection.document.flow.nodes.empty();}
+static bool localVisible(){return connection.header&&(connection.header->channel==1||connection.header->channel==2);}
+static bool flowVisible(){return connection.header&&connection.header->channel==0&&connection.header->graph&&!connection.document.flow.nodes.empty();}
 static void readFlow(){if(flowState.readRoute<0)return;auto* h=connection.header;h->route=flowState.readRoute;h->step=flowState.readStep;h->graph=0;lastStep=-1;flowState.readRoute=-1;bodyScroll=0;}
 static void paint(HWND window) {
     auto* h=connection.header;
     if(!h)return;
     auto& document=connection.document;
-    RECT target{};
-    if(!gameWindow||!GetWindowRect(gameWindow,&target)) {
-        MONITORINFO monitor{sizeof(monitor)};
-        GetMonitorInfoW(MonitorFromWindow(gameWindow,MONITOR_DEFAULTTOPRIMARY),&monitor);
-        target=monitor.rcMonitor;
-    }
+    RECT target=targetBounds();
+    if(!guide::presentation::area(target))return;
     auto layout=guide::reading::layout(float(target.right-target.left),float(target.bottom-target.top),float(h->dpi>0?h->dpi:96));
     const float s=layout.scale;
     const bool compact=layout.compact;compactWindow=compact;currentScale=s;
     const auto type=guide::reading::style(compact);
     const int width=int(layout.width),height=int(layout.height);
-    if(width<320||height<260)return;
+    if(width<300||height<220)return;
     h->panelWidth=width;h->panelHeight=height;h->bodyFontPx=LONG(type.body*s);
     h->showOriginal=showOriginal;h->readerBackend=2;h->visibleSteps=0;h->overflowRows=0;
     h->readingWidth=LONG(layout.readerWidth);h->navigationWidth=LONG(layout.sidebar);h->indexWidth=LONG(layout.tocWidth);
@@ -192,31 +262,40 @@ static void paint(HWND window) {
         const auto rule=light?Gdiplus::Color(32,95,100,111):Gdiplus::Color(30,185,191,202);
         Gdiplus::SolidBrush background(light?Gdiplus::Color(247,248,247,244):Gdiplus::Color(244,21,24,29));
         rounded(g,background,0,0,float(width),float(height),8*s);
-        const float outer=layout.inset;
+        const float outer=layout.inset,controlInset=layout.controlInset,controlWidth=width-2*controlInset;
         const bool attribution=h->channel==0&&!document.attribution.empty();
-        const auto heading=guide::reading::header(layout,document.reading.present,attribution);
+        const bool besideModes=attribution&&flowVisible()&&guide::reading::attributionBesideFlowModes(layout);
+        const int sources=guide::local::sourceCount(document,*h);
+        const auto heading=guide::reading::header(layout,sources,attribution&&!besideModes);
         layout.contentTop=heading.contentTop;
-        const float top=heading.top,closeWidth=48*s;
-        g.SetClip(Gdiplus::RectF(outer,top,heading.titleWidth,24*s));
-        drawText(g,wide(document.title),outer,top+2*s,heading.titleWidth,(compact?16.f:18.f)*s,ink,false,L"SimSun");
-        g.ResetClip();
-        if(attribution){g.SetClip(Gdiplus::RectF(outer,heading.attributionY,width-2*outer,14*s));
-            drawText(g,wide(document.attribution),outer,heading.attributionY,width-2*outer,11*s,muted);g.ResetClip();}
-        {FlowGdiPainter painter{g};painter.text("收起",{width-outer-closeWidth,top,closeWidth,24*s},13*s,
-            light?guide::flow::Color{43,44,47}:guide::flow::Color{233,235,239},true);hit(width-outer-closeWidth,top,closeWidth,24*s,0,0);}
+        const guide::flow::Color caption=light?guide::flow::Color{102,108,118}:guide::flow::Color{164,172,186};
+        FlowGdiPainter controls{g};
+        controls.text(document.title,{controlInset,heading.top,heading.titleWidth,heading.rowHeight},(compact?16.f:18.f)*s,
+            light?guide::flow::Color{43,46,51}:guide::flow::Color{233,236,241},false);
+        if(attribution&&!besideModes)
+            controls.text(document.attribution,{controlInset,heading.attributionY,controlWidth,14*s},11*s,caption,false);
+        button(g,L"收起",width-controlInset-heading.closeWidth,heading.top,heading.closeWidth,heading.rowHeight,s,0);
         Gdiplus::Pen divider(rule,s);
-        g.DrawLine(&divider,outer,heading.ruleY,width-outer,heading.ruleY);
-        if(document.reading.present){FlowGdiPainter painter{g};guide::local::sourceBar(painter,localState,document,h,{heading.sourceX,heading.sourceY,heading.sourceWidth,24*s},s,light);}
-        if(localVisible()) {
-            FlowGdiPainter painter{g};guide::local::render(painter,localState,document,h,{outer,layout.contentTop,width-2*outer,layout.contentBottom-layout.contentTop},s,light);
-            sideBox=tocBox=bodyBox={};sideMaximum=tocMaximum=maximumScroll=0;h->navigationWidth=h->indexWidth=0;h->readingWidth=LONG(width-2*outer);
+        g.DrawLine(&divider,controlInset,heading.ruleY,width-controlInset,heading.ruleY);
+        guide::local::sourceBar(controls,localState,h,
+            {heading.sourceX,heading.sourceY,heading.sourceWidth,heading.rowHeight},sources,s,light);
+        if(chatVisible()){
+            gameChat.refresh();
+            const bool nativeEditor=gameChat.h&&gameChat.h->focus&&!gameChat.injectedInput();
+            guide::chat::render(controls,chatCanvas,gameChat,{controlInset,layout.contentTop,controlWidth,layout.contentBottom-layout.contentTop},s,light,nativeEditor);
+            sideBox=tocBox=bodyBox={};sideMaximum=tocMaximum=maximumScroll=0;h->navigationWidth=h->indexWidth=0;h->layoutMode=5;
+        } else if(localVisible()) {
+            guide::local::render(controls,localState,document,h,{controlInset,layout.contentTop,controlWidth,layout.contentBottom-layout.contentTop},s,light);
+            sideBox=tocBox=bodyBox={};sideMaximum=tocMaximum=maximumScroll=0;h->navigationWidth=h->indexWidth=0;h->readingWidth=LONG(controlWidth);
             h->layoutMode=4;h->visibleSteps=LONG(document.reading.blocks.size());h->readingFirst=document.reading.page;h->bodyFontPx=LONG(16*s*localState.zoom);h->scrollY=LONG(localState.scrollY);h->visibleStage=LONG(localState.maximumY);h->flowZoom=LONG(localState.zoom*1000);h->readerAck=h->sequence;
         } else if(h->graph&&!document.flow.nodes.empty()) {
-            const float y=layout.contentTop;
-            tab(g,L"流程图",outer,y,80*s,s,1,true);tab(g,L"连续阅读",outer+96*s,y,96*s,s,0,false);
-            FlowGdiPainter painter{g};guide::flow::render(painter,flowState,document,{outer,y+30*s,width-2*outer,layout.contentBottom-y-30*s},s,light,h->route,h->sequence);
+            const float y=layout.contentTop,modes=guide::reading::flowModeHeight(layout),top=y+modes+2*s;
+            tab(g,L"流程图",controlInset,y,64*s,s,1,true,modes);
+            tab(g,L"连续阅读",controlInset+68*s,y,76*s,s,0,false,modes);
+            if(besideModes)controls.text(document.attribution,{controlInset+154*s,y,controlWidth-154*s,modes},11*s,caption,false);
+            guide::flow::render(controls,flowState,document,{controlInset,top,controlWidth,layout.contentBottom-top},s,light,h->sequence);
             h->flowNodes=LONG(flowState.activeNodes.size());h->flowEdges=LONG(flowState.activeEdges.size());h->flowSelected=flowState.selectedEdge;h->flowZoom=LONG(flowState.zoom*1000);
-            sideBox=tocBox=bodyBox={};sideMaximum=tocMaximum=maximumScroll=0;h->navigationWidth=h->indexWidth=0;h->readingWidth=LONG(width-2*outer);
+            sideBox=tocBox=bodyBox={};sideMaximum=tocMaximum=maximumScroll=0;h->navigationWidth=h->indexWidth=0;h->readingWidth=LONG(controlWidth);
         } else {
         int routeIndex=document.routes.empty()?-1:std::clamp(int(h->route),0,int(document.routes.size())-1);
         if(lastRoute!=routeIndex||lastRevision!=h->sequence) {
@@ -396,14 +475,91 @@ static void paint(HWND window) {
         }
     }
     POINT destination{target.left+LONG(layout.x),target.top+LONG(layout.y)},origin{};
+    if(chatVisible()&&gameChat.h){gameChat.h->imeX=destination.x+LONG(chatCanvas.input.x+12*s);gameChat.h->imeY=destination.y+LONG(chatCanvas.input.y+26*s);}
     SIZE size{width,height};BLENDFUNCTION blend{AC_SRC_OVER,0,255,AC_SRC_ALPHA};
-    UpdateLayeredWindow(window,screen,&destination,&size,memory,&origin,0,&blend,ULW_ALPHA);
+    const BOOL updated=UpdateLayeredWindow(window,screen,&destination,&size,memory,&origin,0,&blend,ULW_ALPHA);
     SelectObject(memory,previous);DeleteObject(image);DeleteDC(memory);ReleaseDC(nullptr,screen);
-    painted={h->sequence,h->route,h->step,h->graph,h->selected,h->lightTheme,h->dpi,target};
+    if(!updated)return;
+    painted={h->sequence,h->route,h->step,h->graph,h->selected,h->channel,h->lightTheme,h->dpi,target};
+    InterlockedIncrement(&h->renderedFrames);
+    paintedChat=gameChat.revision();paintedDraft=gameChat.h?gameChat.h->draftSequence:-1;paintedEditor=gameChat.h?gameChat.h->editorSequence:-1;paintedCaret=GetTickCount64()/500;
 }
-static void registerKeys(HWND window) {
+static std::string editText(){int n=GetWindowTextLengthW(chatEdit);std::wstring text(size_t(n)+1,L'\0');GetWindowTextW(chatEdit,text.data(),n+1);text.resize(size_t(n));int bytes=WideCharToMultiByte(CP_UTF8,0,text.data(),n,nullptr,0,nullptr,nullptr);std::string result(size_t(bytes),'\0');if(bytes)WideCharToMultiByte(CP_UTF8,0,text.data(),n,result.data(),bytes,nullptr,nullptr);return result;}
+static LRESULT CALLBACK chatEditProc(HWND window,UINT message,WPARAM wp,LPARAM lp){
+    auto* h=gameChat.h;
+    if(message==WM_KEYDOWN&&h&&front()){if(wp==VK_ESCAPE){h->focus=0;ShowWindow(chatInputHost,SW_HIDE);SetForegroundWindow(gameWindow);return 0;}
+        if(wp==VK_RETURN&&!((GetAsyncKeyState(VK_CONTROL)|GetAsyncKeyState(VK_SHIFT))&0x8000)){
+            // Let the IME confirm a candidate before treating Enter as send.
+            HIMC ime=ImmGetContext(window);LONG composing=ime?ImmGetCompositionStringW(ime,GCS_COMPSTR,nullptr,0):0;if(ime)ImmReleaseContext(window,ime);
+            if(composing<=0&&!gameChat.state.busy){auto text=editText();if(!text.empty()&&gameChat.request(1,0,text)){h->focus=0;ShowWindow(chatInputHost,SW_HIDE);SetForegroundWindow(gameWindow);}return 0;}
+        }}
+    if(message==WM_CHAR&&wp==L'\r'&&!((GetAsyncKeyState(VK_CONTROL)|GetAsyncKeyState(VK_SHIFT))&0x8000))return 0;
+    return CallWindowProcW(chatEditOriginal,window,message,wp,lp);
+}
+static LRESULT CALLBACK chatInputProc(HWND window,UINT message,WPARAM wp,LPARAM lp){
+    if(message==WM_ACTIVATE&&LOWORD(wp)==WA_INACTIVE&&gameChat.h)gameChat.h->focus=0;
+    if(message==WM_COMMAND&&HIWORD(wp)==EN_CHANGE&&!syncingEdit&&gameChat.h){auto text=editText();if(text.size()<guide::chat::inputBytes)gameChat.draft(text);return 0;}
+    if(message==WM_CTLCOLOREDIT){const bool light=connection.header&&connection.header->lightTheme;auto dc=reinterpret_cast<HDC>(wp);SetTextColor(dc,light?RGB(39,43,49):RGB(230,234,241));SetBkColor(dc,light?RGB(251,251,250):RGB(30,34,41));return reinterpret_cast<LRESULT>(chatEditBrush);}
+    if(message==WM_SIZE&&chatEdit){MoveWindow(chatEdit,0,0,LOWORD(lp),HIWORD(lp),TRUE);return 0;}
+    return DefWindowProcW(window,message,wp,lp);
+}
+static void syncChatEditor(){
+    const HWND foreground=GetForegroundWindow();
+    const bool active=front(foreground);
+    if(active&&gameChat.h&&gameChat.h->focus&&chatVisible()&&gameChat.injectedInput()&&foreground==overlayWindow)SetForegroundWindow(gameWindow);
+    auto* h=gameChat.h;
+    const bool wanted=active&&h&&h->focus&&connection.header->visible&&chatVisible()&&IsWindowVisible(overlayWindow)&&!gameChat.injectedInput();
+    if(!wanted){
+        if(chatInputHost&&IsWindowVisible(chatInputHost)){
+            ShowWindow(chatInputHost,SW_HIDE);
+            if(active&&foreground==chatInputHost&&IsWindowEnabled(gameWindow))SetForegroundWindow(gameWindow);
+        }
+        return;
+    }
+    bool newEditor=!chatInputHost;
+    if(newEditor){WNDCLASSW cls{};cls.lpfnWndProc=chatInputProc;cls.hInstance=GetModuleHandleW(nullptr);cls.lpszClassName=L"TheOrder.GameChatInput";cls.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32513));RegisterClassW(&cls);
+        chatInputHost=CreateWindowExW(WS_EX_TOPMOST|WS_EX_TOOLWINDOW,cls.lpszClassName,L"The Order · 对话输入",WS_POPUP,0,0,100,60,overlayWindow,nullptr,cls.hInstance,nullptr);
+        chatEdit=CreateWindowExW(0,L"EDIT",L"",WS_CHILD|WS_VISIBLE|ES_MULTILINE|ES_AUTOVSCROLL|ES_WANTRETURN,0,0,100,60,chatInputHost,nullptr,cls.hInstance,nullptr);
+        if(!chatEdit){if(chatInputHost)DestroyWindow(chatInputHost);chatInputHost=nullptr;h->focus=0;return;}
+        SendMessageW(chatEdit,EM_SETLIMITTEXT,4000,0);chatEditOriginal=reinterpret_cast<WNDPROC>(SetWindowLongPtrW(chatEdit,GWLP_WNDPROC,reinterpret_cast<LONG_PTR>(chatEditProc)));
+        inputEditorWindow.store(chatInputHost);
+    }
+    bool show=!IsWindowVisible(chatInputHost);auto text=wide(gameChat.draft());
+    if(show||newEditor){syncingEdit=true;SetWindowTextW(chatEdit,text.c_str());SendMessageW(chatEdit,EM_SETSEL,text.size(),text.size());syncingEdit=false;}
+    const float s=currentScale;POINT point{LONG(chatCanvas.input.x+10*s),LONG(chatCanvas.input.y+8*s)};ClientToScreen(overlayWindow,&point);
+    static int fontHeight=0;const int nextHeight=int(std::lround(15*s));
+    if(fontHeight!=nextHeight){
+        HFONT next=CreateFontW(-nextHeight,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,
+            CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Microsoft YaHei UI");
+        if(next){SendMessageW(chatEdit,WM_SETFONT,reinterpret_cast<WPARAM>(next),TRUE);if(chatFont)DeleteObject(chatFont);chatFont=next;fontHeight=nextHeight;}
+    }
+    static LONG theme=-1;const LONG nextTheme=connection.header->lightTheme;
+    if(theme!=nextTheme){
+        if(chatEditBrush)DeleteObject(chatEditBrush);
+        chatEditBrush=CreateSolidBrush(nextTheme?RGB(251,251,250):RGB(30,34,41));theme=nextTheme;
+        InvalidateRect(chatEdit,nullptr,TRUE);
+    }
+    SetWindowPos(chatInputHost,HWND_TOPMOST,point.x,point.y,std::max(40,int(chatCanvas.input.w-20*s)),std::max(28,int(chatCanvas.input.h-16*s)),SWP_NOACTIVATE|SWP_SHOWWINDOW);
+    if(show){SetForegroundWindow(chatInputHost);SetFocus(chatEdit);}
+}
+static void yieldOverlay(HWND window) {
+    auto* h=connection.header;
+    InterlockedExchange(&h->interactive,0);
+    InterlockedExchange64(&h->presentationPulse,0);
+    draggingBody=false;
+    flowState.cancel();
+    localState.dragging=false;
+    if(GetCapture()==window)ReleaseCapture();
+    if(gameChat.h)gameChat.h->focus=0;
+    if(chatInputHost&&IsWindowVisible(chatInputHost))ShowWindow(chatInputHost,SW_HIDE);
+    if(IsWindowVisible(window))ShowWindow(window,SW_HIDE);
+}
+static void CALLBACK gameForegroundChanged(HWINEVENTHOOK,DWORD,HWND,LONG object,LONG child,DWORD,DWORD) {
+    if(object==OBJID_WINDOW&&child==CHILDID_SELF&&connection.header&&!front())yieldOverlay(overlayWindow);
+}
+static void registerKeys(HWND window,bool foreground) {
     auto* h = connection.header; if (!h) return;
-    if (!front()) {
+    if (!foreground) {
         key = 0; nextKeyAttempt = 0; registered = false; h->status = 0; return;
     }
     if (key != h->hotkey || GetTickCount64() >= nextKeyAttempt) {
@@ -421,36 +577,80 @@ static LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wp, LPARAM 
     // wait cursors behind when the game did not replace them.
     if (message == WM_MOUSEACTIVATE) return MA_NOACTIVATE;
     if (message == WM_HOTKEY && h && front()) {
-        if (wp == WPARAM(hotkeyId)) connection.toggle();
+        if (wp == WPARAM(hotkeyId)) {
+            connection.toggle();
+            if(!h->visible){draggingBody=false;flowState.cancel();localState.dragging=false;if(GetCapture()==window)ReleaseCapture();}
+        }
         else if (h->visible) {
             if(wp>=WPARAM(hotkeyId+6)&&wp<WPARAM(hotkeyId+13)){
                 const int readingKeys[]={VK_NEXT,VK_PRIOR,VK_RIGHT,VK_LEFT,VK_HOME,VK_END,VK_SPACE};int input=readingKeys[wp-hotkeyId-6];
                 if(localVisible())localState.navigate(input,connection);
-                else if(connection.action(3)){if(input==VK_RIGHT)InterlockedIncrement(&h->step);else if(input==VK_LEFT)InterlockedDecrement(&h->step);else if(input==VK_HOME)bodyScroll=0;else if(input==VK_END)bodyScroll=maximumScroll;else if(input==VK_NEXT||input==VK_SPACE||input==VK_PRIOR){int direction=input==VK_PRIOR?-1:1;if(flowVisible()){flowState.panY-=direction*flowState.canvas.h*.85f;flowState.autoFit=false;}else bodyScroll=std::clamp(bodyScroll+direction*float(bodyBox.bottom-bodyBox.top)*.85f,0.f,maximumScroll);}}
+                else if(connection.navigate()){if(input==VK_RIGHT)InterlockedIncrement(&h->step);else if(input==VK_LEFT)InterlockedDecrement(&h->step);else if(input==VK_HOME)bodyScroll=0;else if(input==VK_END)bodyScroll=maximumScroll;else if(input==VK_NEXT||input==VK_SPACE||input==VK_PRIOR){int direction=input==VK_PRIOR?-1:1;if(flowVisible()){flowState.panY-=direction*flowState.canvas.h*.85f;flowState.autoFit=false;}else bodyScroll=std::clamp(bodyScroll+direction*float(bodyBox.bottom-bodyBox.top)*.85f,0.f,maximumScroll);}}
             }
         }
         requestPaint(); return 0;
     }
     if (message == WM_TIMER) {
         if (!connection.live()) { DestroyWindow(window); return 0; }
-        registerKeys(window); connection.refresh();
-        InterlockedExchange(&h->mouseSample,guide::mouseSample(h->visible&&front()&&(GetAsyncKeyState(VK_LBUTTON)&0x8000),GetTickCount64()));
-        if(!gameWindow||!IsWindow(gameWindow)){gameWindow=nullptr;EnumWindows(findWindow,0);}
-        if(!IsWindowVisible(window)&&gameWindow){RECT game{};if(GetWindowRect(gameWindow,&game))SetWindowPos(window,nullptr,(game.left+game.right)/2,(game.top+game.bottom)/2,0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);}
-        h->dpi=LONG(GetDpiForWindow(window));
-        if(h->visible)h->interactive=1;
-        bool visible = h->visible && front() && GetTickCount64() - ULONGLONG(h->rendererPulse) > 1300;
-        if (!visible) { ShowWindow(window, SW_HIDE); return 0; }
+        const HWND foregroundWindow=GetForegroundWindow();
+        bindGameWindow(foregroundWindow);
+        const auto previous=presentation.window;
+        presentation=guide::presentation::resolve(targetPid,gameWindow,previous);
+        presentationWindow.store(presentation.window);
+        const ULONGLONG now=GetTickCount64();
+        const RECT target=targetBounds();
+        const bool foreground=front(foregroundWindow);
+        if(!foreground)yieldOverlay(window);
+        const bool companion=foreground&&guide::presentation::area(target)
+            &&(presentation.window||guide::windowedPresentation(h,now)||!guide::rendererActive(h,now));
+        if(previous!=presentation.window){
+            draggingBody=false;flowState.cancel();localState.dragging=false;
+            if(GetCapture()==window)ReleaseCapture();
+            painted.revision=-1;requestPaint();
+        }
+        // Desktop Duplication can otherwise capture the reader recursively
+        // when the scaled image overlaps the low-resolution source window.
+        const bool exclude=presentation.screenCapture;
+        if(exclude!=captureExcluded&&SetWindowDisplayAffinity(window,exclude?WDA_EXCLUDEFROMCAPTURE:WDA_NONE))captureExcluded=exclude;
+        registerKeys(window,foreground); connection.refresh();if(gameChat.valid(h)){
+            gameChat.refresh();if(h->channel!=3||!h->visible)gameChat.h->focus=0;
+            if(gameChat.h->captureRequest!=gameChat.h->captureAck&&!guide::rendererActive(h,now,700)&&(!captureJob.valid()||captureJob.wait_for(std::chrono::milliseconds(0))==std::future_status::ready)){
+                if(captureJob.valid())captureJob.get();auto name=gameChat.name;auto request=gameChat.h->captureRequest;auto hwnd=gameWindow;auto pid=h->pid;auto created=h->created;
+                captureJob=std::async(std::launch::async,[name,hwnd,pid,created,request](){guide::chat::captureWindow(name,hwnd,pid,created,request);});}
+        }
+        InterlockedExchange(&h->mouseSample,guide::mouseSample(h->visible&&foreground&&(GetAsyncKeyState(VK_LBUTTON)&0x8000),now));
+        if(h->visible&&foreground)h->interactive=1;
+        if(!companion||!h->visible){
+            ShowWindow(window,SW_HIDE);
+            InterlockedExchange64(&h->presentationPulse,companion?(presentation.window?LONG64(now):-LONG64(now)):0);
+            syncChatEditor();return 0;
+        }
+        // A moved game may be on a monitor with a different scale. Query the
+        // physical target monitor before laying out or allocating the bitmap.
+        if(!IsWindowVisible(window)||!EqualRect(&target,&painted.target))
+            SetWindowPos(window,nullptr,target.left+(target.right-target.left)/2,target.top+(target.bottom-target.top)/2,
+                0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);
+        const UINT dpi=presentation.window?presentation.dpi:GetDpiForWindow(window);
+        h->dpi=LONG(dpi?dpi:96);
         if (interactive != bool(h->interactive)) {
             interactive = h->interactive != 0; LONG_PTR style = GetWindowLongPtrW(window, GWL_EXSTYLE);
             SetWindowLongPtrW(window, GWL_EXSTYLE, interactive ? style & ~WS_EX_TRANSPARENT : style | WS_EX_TRANSPARENT);
         }
-        RECT current{};bool moved=gameWindow&&GetWindowRect(gameWindow,&current)&&!EqualRect(&current,&painted.target);
-        if(!IsWindowVisible(window)||moved||painted.revision!=h->sequence||painted.route!=h->route||painted.step!=h->step||painted.graph!=h->graph||painted.selected!=h->selected||painted.light!=h->lightTheme||painted.dpi!=h->dpi)paint(window);
-        SetWindowPos(window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW); return 0;
+        bool moved=!EqualRect(&target,&painted.target);
+        if(!IsWindowVisible(window)||moved||painted.revision!=h->sequence||painted.route!=h->route||painted.step!=h->step||painted.graph!=h->graph||painted.selected!=h->selected||painted.channel!=h->channel||painted.light!=h->lightTheme||painted.dpi!=h->dpi||chatVisible()&&(paintedChat!=gameChat.revision()||gameChat.h&&(paintedDraft!=gameChat.h->draftSequence||paintedEditor!=gameChat.h->editorSequence||gameChat.h->focus&&paintedCaret!=GetTickCount64()/500)))paint(window);
+        // Painting can span the foreground change that opens a game dialog.
+        if(!front()){yieldOverlay(window);return 0;}
+        if(EqualRect(&target,&painted.target)){
+            InterlockedExchange64(&h->presentationPulse,presentation.window?LONG64(now):-LONG64(now));
+            SetWindowPos(window,HWND_TOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_SHOWWINDOW);
+        }
+        syncChatEditor();return 0;
     }
+    if((message==WM_MOUSEWHEEL||message==WM_LBUTTONDOWN||message==WM_LBUTTONUP||message==WM_MOUSEMOVE)&&!front())
+        return DefWindowProcW(window,message,wp,lp);
     if (message == WM_MOUSEWHEEL && h && h->visible) {
         POINT point{GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};ScreenToClient(window,&point);
+        if(chatVisible()&&chatCanvas.wheel({float(point.x),float(point.y)},float(GET_WHEEL_DELTA_WPARAM(wp))/WHEEL_DELTA)){paint(window);return 0;}
         if(localVisible()&&localState.wheel({float(point.x),float(point.y)},float(GET_WHEEL_DELTA_WPARAM(wp))/WHEEL_DELTA,&connection)){paint(window);return 0;}
         if(flowVisible()&&flowState.wheel({float(point.x),float(point.y)},float(GET_WHEEL_DELTA_WPARAM(wp))/WHEEL_DELTA)){paint(window);return 0;}
         float delta=(GET_WHEEL_DELTA_WPARAM(wp)<0?130.f:-130.f)*currentScale;
@@ -490,6 +690,7 @@ static LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wp, LPARAM 
     if(message==WM_LBUTTONUP&&h&&h->visible){
         POINT point{GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};
         if(localState.up({float(point.x),float(point.y)},connection)){if(h->visible)paint(window);return 0;}
+        if(chatVisible()&&chatCanvas.click({float(point.x),float(point.y)},gameChat)){paint(window);syncChatEditor();return 0;}
         for(const auto& item:hits)if(PtInRect(&item.box,point)){
             switch(item.action){
             case 0:h->visible=h->interactive=0;ShowWindow(window,SW_HIDE);break;
@@ -522,21 +723,33 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     LocalFree(argv); targetPid = pid;
     HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, pid);
     if (!process || guide::creation(process) != stamp || !connection.open(name) || connection.header->pid != LONG(pid) || connection.header->created != stamp) { if (process) CloseHandle(process); return 4; }
+    gameChat.open(name);
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     Gdiplus::GdiplusStartupInput input; ULONG_PTR token = 0; if (Gdiplus::GdiplusStartup(&token, &input, nullptr) != Gdiplus::Ok) return 5;
     auto cls=overlayClass(instance);RegisterClassW(&cls);
-    overlayWindow = CreateWindowExW(WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT,
+    DWORD windowStyle=WS_EX_TOPMOST|WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_TRANSPARENT;
+#ifdef GUIDE_CHAT_DESKTOP_FIXTURE
+    // A separately built fixture exposes this otherwise hidden tool window to
+    // desktop inspection. This macro is never set for distributed payloads.
+    windowStyle=(windowStyle&~WS_EX_TOOLWINDOW)|WS_EX_APPWINDOW;
+#endif
+    overlayWindow = CreateWindowExW(windowStyle,
         cls.lpszClassName, L"The Order · 游戏内攻略", WS_POPUP, 0, 0, 480, 700, nullptr, nullptr, instance, nullptr);
     if (!overlayWindow) { Gdiplus::GdiplusShutdown(token); CloseHandle(process); return 6; }
     keyboardReady=CreateEventW(nullptr,TRUE,FALSE,nullptr);keyboardThread=keyboardReady?CreateThread(nullptr,0,keyboardLoop,nullptr,0,&keyboardThreadId):nullptr;
     if(keyboardThread)WaitForSingleObject(keyboardReady,2000);else InterlockedExchange(&keyboardState,-1);
     if(keyboardReady){CloseHandle(keyboardReady);keyboardReady=nullptr;}
-    EnumWindows(findWindow, 0); SetTimer(overlayWindow, 1, 100, nullptr);
+    bindGameWindow(GetForegroundWindow());
+    const auto foregroundHook=SetWinEventHook(EVENT_SYSTEM_FOREGROUND,EVENT_SYSTEM_FOREGROUND,
+        nullptr,gameForegroundChanged,targetPid,0,WINEVENT_OUTOFCONTEXT);
+    SetTimer(overlayWindow, 1, 100, nullptr);
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0) {
         if (WaitForSingleObject(process, 0) == WAIT_OBJECT_0) { DestroyWindow(overlayWindow); break; }
         TranslateMessage(&message); DispatchMessageW(&message);
     }
+    if(foregroundHook)UnhookWinEvent(foregroundHook);
     if(keyboardThread){PostThreadMessageW(keyboardThreadId,WM_QUIT,0,0);if(WaitForSingleObject(keyboardThread,5000)!=WAIT_OBJECT_0)return 8;CloseHandle(keyboardThread);keyboardThread=nullptr;}
+    if(captureJob.valid())captureJob.get();if(chatInputHost)DestroyWindow(chatInputHost);if(chatFont)DeleteObject(chatFont);if(chatEditBrush)DeleteObject(chatEditBrush);
     connection.close(); CloseHandle(process); Gdiplus::GdiplusShutdown(token); return 0;
 }

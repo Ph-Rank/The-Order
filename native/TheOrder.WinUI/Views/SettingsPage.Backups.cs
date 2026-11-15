@@ -18,7 +18,7 @@ public sealed partial class SettingsPage
     private async Task<ContentDialogResult> ShowBackupDialogAsync(ContentDialog dialog)
     {
         backupDialog = dialog;
-        try { return await dialog.ShowAsync(); }
+        try { return await dialog.ShowInShellAsync(); }
         finally { if (ReferenceEquals(backupDialog, dialog)) backupDialog = null; }
     }
     private void OnBackupState(object? sender, PropertyChangedEventArgs e) => SynchronizeBackups();
@@ -67,10 +67,10 @@ public sealed partial class SettingsPage
     private async Task ShowRestorePreview(string source, bool savedSnapshot)
     {
         var generation = backupDialogGeneration;
-        var choice = new ComboBox { Header = "恢复方式", HorizontalAlignment = HorizontalAlignment.Stretch };
-        choice.Items.Add(new ComboBoxItem { Content = "添加缺失条目（保留现有作品及个人记录）" });
-        choice.Items.Add(new ComboBoxItem { Content = "恢复整份书架（覆盖当前书架及个人记录）" });
-        choice.SelectedIndex = 0;
+        var choice = new SelectedFirstComboBox { Header = "恢复方式", HorizontalAlignment = HorizontalAlignment.Stretch };
+        choice.Options.Add(new ComboBoxItem { Content = "添加缺失条目（保留现有作品及个人记录）" });
+        choice.Options.Add(new ComboBoxItem { Content = "恢复整份书架（覆盖当前书架及个人记录）" });
+        choice.OptionIndex = 0;
         var description = new TextBlock { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
         var scope = new TextBlock { Text = "备份包含作品资料、个人记录、安装位置和本地封面。不包含游戏文件、游戏存档、登录凭据、设置或自选横幅。恢复前会另存当前书架，自动云端同步会暂停。", TextWrapping = TextWrapping.Wrap };
         var content = new StackPanel { Spacing = 16, MaxWidth = 520 }; content.Children.Add(choice); content.Children.Add(description); content.Children.Add(scope);
@@ -79,9 +79,9 @@ public sealed partial class SettingsPage
         async Task Preview()
         {
             choice.IsEnabled = false; dialog.IsPrimaryButtonEnabled = false; description.Text = "正在校验备份…";
-            await Backups.PreviewAsync(source, savedSnapshot, (LibraryRestoreMode)choice.SelectedIndex);
+            await Backups.PreviewAsync(source, savedSnapshot, (LibraryRestoreMode)choice.OptionIndex);
             if (generation != backupDialogGeneration) return;
-            if (Backups.Preview is { } preview && preview.Mode == (LibraryRestoreMode)choice.SelectedIndex)
+            if (Backups.Preview is { } preview && preview.Mode == (LibraryRestoreMode)choice.OptionIndex)
             {
                 description.Text = preview.Mode == LibraryRestoreMode.AddMissing
                     ? $"当前 {preview.CurrentCount} 部；备份 {preview.BackupCount} 部。将添加 {preview.Added} 部，跳过 {preview.Skipped} 部重复作品。"
@@ -94,7 +94,7 @@ public sealed partial class SettingsPage
         }
         await Preview();
         if (generation != backupDialogGeneration) return;
-        choice.SelectionChanged += async (_, _) => { try { await Preview(); } catch { dialog.IsPrimaryButtonEnabled = false; ViewModel.ReportUnexpected(); } };
+        choice.OptionChanged += async (_, _) => { try { await Preview(); } catch { dialog.IsPrimaryButtonEnabled = false; ViewModel.ReportUnexpected(); } };
         if (await ShowBackupDialogAsync(dialog) == ContentDialogResult.Primary && generation == backupDialogGeneration && Backups.Preview is { } selected && RestoreLibrary is { } restore)
             await restore(selected);
     }

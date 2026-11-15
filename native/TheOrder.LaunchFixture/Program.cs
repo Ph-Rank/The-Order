@@ -50,6 +50,7 @@ internal static class Program
         { pid = Environment.ProcessId, cwd = Environment.CurrentDirectory, arguments = args.Skip(3).ToArray(), commandLine = System.Runtime.InteropServices.Marshal.PtrToStringUni(GetCommandLine()), startupFlags = startup.Flags, mode, started = DateTimeOffset.UtcNow, extensionPointsDisabled = applied == 1, compatibilityLayer = Environment.GetEnvironmentVariable("__COMPAT_LAYER") }));
         if (mode == "empty") return;
         if (mode == "gap-helper") { Spawn("child_game.exe", "game", name + "-game"); return; }
+        if (mode == "waiting-launcher") { Spawn("child_game.exe", "game", name + "-game", waitForChild: true); return; }
         if (mode is "launcher" or "chain" or "helper" or "multiple" or "quick-launcher")
         {
             bool observedHandoff = mode == "launcher" && args.Skip(3).Contains("--observed-handoff");
@@ -85,11 +86,16 @@ internal static class Program
         timer.Start();
         System.Windows.Forms.Application.Run(form);
         return;
-        void Spawn(string executable, string childMode, string childName)
+        void Spawn(string executable, string childMode, string childName, bool waitForChild = false)
         {
             var start = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, executable)) { UseShellExecute = false, WorkingDirectory = Environment.CurrentDirectory };
             start.ArgumentList.Add(root); start.ArgumentList.Add(childMode); start.ArgumentList.Add(childName);
             using var child = Process.Start(start);
+            if (waitForChild && child is not null)
+            {
+                var timeout = Stopwatch.StartNew();
+                while (!File.Exists(stopFile) && timeout.Elapsed < TimeSpan.FromSeconds(20) && !child.WaitForExit(50)) { }
+            }
         }
         bool WaitForObservation(string stage)
         {

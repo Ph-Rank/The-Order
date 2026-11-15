@@ -22,7 +22,16 @@
      </Border>
       <local:MarkdownView x:Name="RemoteRichFacts" Text="{x:Bind ViewModel.RemoteFacts, Mode=OneWay}" AutomationProperties.AutomationId="RecognitionRemoteFacts" />
      <ItemsControl ItemsSource="{x:Bind ViewModel.RemoteLinks, Mode=OneWay}" AutomationProperties.AutomationId="RecognitionRemoteLinks">
-      <ItemsControl.ItemTemplate><DataTemplate x:DataType="p:CandidateDetailLink"><StackPanel Spacing="4"><HyperlinkButton Content="{x:Bind Title}" Tag="{x:Bind Url}" Click="OnOpenLink" HorizontalAlignment="Left" /></StackPanel></DataTemplate></ItemsControl.ItemTemplate>
+      <ItemsControl.ItemTemplate>
+       <DataTemplate x:DataType="p:CandidateDetailLink">
+        <Grid Margin="0,0,0,4">
+         <HyperlinkButton Content="{x:Bind Title}" Tag="{x:Bind Url}" Click="OnOpenLink"
+                          Visibility="{x:Bind local:RecognitionReview.CatalogSourceVisibility(Url)}" />
+         <local:ExternalLinkButton Content="{x:Bind Title}" Tag="{x:Bind Url}" Click="OnOpenLink"
+                                   Visibility="{x:Bind local:RecognitionReview.BrowserSourceVisibility(Url)}" />
+        </Grid>
+       </DataTemplate>
+      </ItemsControl.ItemTemplate>
      </ItemsControl>
     </StackPanel>
 </Border>

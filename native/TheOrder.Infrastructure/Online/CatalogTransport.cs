@@ -48,6 +48,7 @@ public sealed class CatalogTransport(HttpClient client, ICredentialProvider cred
     TimeSpan? timeout = null, Func<TimeSpan, CancellationToken, Task>? delay = null, NextMoeRateCoordinator? rate = null)
 {
     public const int MaximumBytes = 8 * 1024 * 1024;
+    internal static readonly string UserAgent = $"TheOrder/{AppReleaseIdentity.Version} (+https://github.com/Ph-Rank/The-Order)";
     private readonly OnlineAuthContext auth = (credentials as IOnlineAuthContextSource)?.AuthContext ?? new();
     internal Action<OnlineAcceptanceStage>? AcceptanceProbe { get; set; }
     internal Func<TimeSpan>? OperationElapsed { get; set; }
@@ -66,14 +67,15 @@ public sealed class CatalogTransport(HttpClient client, ICredentialProvider cred
     }
     public async Task<JsonDocument> GetAsync(string path, IReadOnlyDictionary<string, string> query, RequestBudget budget)
     {
-        var secret = await credentials.ReadAsync(budget.Token).ConfigureAwait(false);
-        var access = credentials as INextMoeAccess;
-        if (string.IsNullOrEmpty(secret) && access is null) throw new OnlineException(OnlineFailure.NoCredential);
-        if (secret is not null && (secret.Length > (access is null ? 4096 : 16384) || secret.Any(c => c < 0x21 || c > 0x7e))) throw new OnlineException(OnlineFailure.InvalidCredential);
-        var mode = access is null ? NextMoeAccessMode.ApiKey : (await access.StatusAsync(budget.Token).ConfigureAwait(false)).Mode;
-        // This transport only serves the official public catalog. Never admit personal/token endpoints here.
-        if (!path.StartsWith("catalog/", StringComparison.Ordinal) || path.Contains("..", StringComparison.Ordinal)
+        // The public news list is anonymous, even when the catalog uses a saved key or account.
+        var news = path == "news";
+        if ((!news && !path.StartsWith("catalog/", StringComparison.Ordinal)) || path.Contains("..", StringComparison.Ordinal)
             || path.Contains('\\') || path.Contains('?') || path.Contains('#') || path.Contains(':')) throw new OnlineException(OnlineFailure.InvalidRequest);
+        var access = news ? null : credentials as INextMoeAccess;
+        var secret = news ? null : await credentials.ReadAsync(budget.Token).ConfigureAwait(false);
+        if (!news && string.IsNullOrEmpty(secret) && access is null) throw new OnlineException(OnlineFailure.NoCredential);
+        if (secret is not null && (secret.Length > (access is null ? 4096 : 16384) || secret.Any(c => c < 0x21 || c > 0x7e))) throw new OnlineException(OnlineFailure.InvalidCredential);
+        var mode = news ? NextMoeAccessMode.Anonymous : access is null ? NextMoeAccessMode.ApiKey : (await access.StatusAsync(budget.Token).ConfigureAwait(false)).Mode;
         bool refreshed = false;
         var uri = new Uri(endpoint, path + "?" + string.Join("&", query.Select(k => Uri.EscapeDataString(k.Key) + "=" + Uri.EscapeDataString(k.Value))));
         while (true)
@@ -83,6 +85,7 @@ public sealed class CatalogTransport(HttpClient client, ICredentialProvider cred
             budget.Check();
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             if (secret is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret);
+            request.Headers.UserAgent.ParseAdd(UserAgent);
             request.Headers.Accept.Add(new("application/json"));
             var elapsed = Stopwatch.StartNew(); var requestId = Guid.NewGuid();
             HttpResponseMessage response;

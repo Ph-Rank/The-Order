@@ -56,8 +56,8 @@ public sealed partial class ArtworkStage : Grid
         get => detachedPlate;
         set { if (value == detachedPlate) return; detachedPlate = value; SetPresentationReady(false); Invalidate(immediate: true); }
     }
-    public int SourceWidth => originalLandscape?.Width ?? 0;
-    public int SourceHeight => originalLandscape?.Height ?? 0;
+    public int SourceWidth => originalLandscape?.Width ?? indexedFrame?.Layout.ArtworkWidth ?? 0;
+    public int SourceHeight => originalLandscape?.Height ?? indexedFrame?.Layout.ArtworkHeight ?? 0;
     public event Action? SourceChanged;
     public event Action? PresentationChanged;
     public bool PresentationReady { get; private set; }
@@ -73,9 +73,12 @@ public sealed partial class ArtworkStage : Grid
     // A successful draw alone can precede the final XAML arrange. A hero reveals
     // its artwork and foreground together only when this geometry also matches.
     internal bool HasCurrentPresentation => PresentationReady && (coverKey is null || imageFailed
-        || Effective != "Glass" || DetachedPlate || loaded && !retirementPending && optical is not null
-        && panel.Visibility == Visibility.Visible && geometry == CurrentGeometry()
-        && Math.Abs(sceneWidth - ActualWidth) < .5 && Math.Abs(sceneHeight - ActualHeight) < .5
+        || Effective != "Glass" || DetachedPlate || loaded && !retirementPending
+        && (indexedFrameShown ? IndexedFrameFits()
+            : showingFrame is { } key ? key == CurrentFrameKey()
+            : optical is not null && panel.Visibility == Visibility.Visible && geometry == CurrentGeometry()
+            && sceneScale == (XamlRoot?.RasterizationScale ?? 1)
+            && Math.Abs(sceneWidth - ActualWidth) < .5 && Math.Abs(sceneHeight - ActualHeight) < .5)
         && (!double.IsFinite(Width) || Math.Abs(Width - ActualWidth) < .5)
         && (!double.IsFinite(Height) || Math.Abs(Height - ActualHeight) < .5));
     private void SetPresentationReady(bool value)
@@ -84,8 +87,9 @@ public sealed partial class ArtworkStage : Grid
         PresentationReady = value; PresentationChanged?.Invoke();
     }
     internal (bool Right, double Cost) SuggestPlacement(double width, double height)
-        => originalLandscape is null ? (false, 0) : BannerAesthetics.Placement(originalLandscape, width, height);
-    private string? pixelsKey, sceneKey, geometry;
+        => originalLandscape is { } artwork ? BannerAesthetics.Placement(artwork, width, height)
+            : (indexedFrame?.Layout.PlaceRight ?? false, 0);
+    private string? pixelsKey, sceneKey, drawnSceneKey, geometry;
     private double sceneWidth, sceneHeight, sceneScale;
     private bool loaded, allowed, highContrast, attached, initFailed, retirementPending;
     private UIElement? overlay;
@@ -151,7 +155,14 @@ public sealed partial class ArtworkStage : Grid
             // Refresh once after propagation, without a polling timer or a new image analysis.
             DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => Invalidate(immediate: true));
         };
-        SizeChanged += (_, _) => { ApplyClip(); if (optical is not null) DrawNow(); Invalidate(immediate: false); };
+        SizeChanged += (_, _) =>
+        {
+            ApplyClip();
+            if (optical is not null) DrawNow();
+            // The first real layout can already have decoded artwork. Use it
+            // immediately instead of waiting for the resize debounce.
+            Invalidate(immediate: coverKey is not null && !imageFailed && (!PresentationReady || requestedImageKey is null));
+        };
     }
     // Called by the window policy owner: effects allowed and window visible, plus the user's quality mode.
     public void SetPolicy(bool effectsAllowed, bool contrast, MaterialMode mode)
@@ -181,6 +192,7 @@ public sealed partial class ArtworkStage : Grid
     private void OnRootChanged(XamlRoot sender, XamlRootChangedEventArgs args) { if (sender.RasterizationScale != sceneScale) Invalidate(immediate: false); }
     private void OnLayoutUpdated(object? sender, object e)
     {
+        if ((indexedFrameShown && !IndexedFrameFits()) || (showingFrame is { } cached && cached != CurrentFrameKey())) { Refresh(); return; }
         if (optical is null || Plate is null || !loaded) return;
         if (Math.Abs(sceneWidth - ActualWidth) >= .5 || Math.Abs(sceneHeight - ActualHeight) >= .5) Refresh();
         else if (CurrentGeometry() != geometry) DrawNow();
@@ -188,7 +200,7 @@ public sealed partial class ArtworkStage : Grid
     private string CurrentGeometry()
     {
         var rect = PlateRect();
-        return $"{rect.X:F1}/{rect.Y:F1}/{rect.Width:F1}/{rect.Height:F1}/{ActualWidth:F1}/{ActualHeight:F1}";
+        return FormattableString.Invariant($"{rect.X:F1}/{rect.Y:F1}/{rect.Width:F1}/{rect.Height:F1}/{ActualWidth:F1}/{ActualHeight:F1}");
     }
     private Windows.Foundation.Rect PlateRect()
     {
@@ -238,7 +250,7 @@ public sealed partial class ArtworkStage : Grid
     }
     private string EffectiveMode() => highContrast ? "HighContrast" : Mode == MaterialMode.Opaque || !allowed ? "Opaque"
         : Mode == MaterialMode.Standard || (Mode == MaterialMode.Auto && initFailed) ? "Standard" : "Glass";
-    private void Refresh()
+    private void Refresh(bool allowColdDraw = false)
     {
         if (!loaded) return;
         // OpticalDestroy can fail to detach. Keep its owner for a later lifecycle retry,
@@ -246,12 +258,16 @@ public sealed partial class ArtworkStage : Grid
         if (retirementPending) { Release(); if (retirementPending) return; }
         Effective = EffectiveMode();
         if (Effective != "Glass" || DetachedPlate) Release();
+        if (indexedFrameShown && !IndexedFrameFits()) DiscardIndexedFrame();
         ComposeLandscape();
-        UpdateArtworkPolarity();
+        if (!indexedFrameShown) UpdateArtworkPolarity();
+        if (showingFrame is { } cached && cached != CurrentFrameKey()) { ClearCachedFrame(); SetPresentationReady(false); }
         ApplyLayers();
         if (coverKey is null || imageFailed)
         { SetPresentationReady(true); return; }
-        if (Effective is "Opaque" or "HighContrast") SetPresentationReady(true);
+        if (Effective == "HighContrast") SetPresentationReady(true);
+        if (Effective == "Glass" && !DetachedPlate && optical is null && ActualWidth >= 1
+            && (TryShowCachedFrame() || TryRestoreIndexedFrame(allowColdDraw))) return;
         if (pixels is null || pixelsKey != coverKey) { StartLoad(); return; }
         if (AdaptiveLandscape && loadedImageEdge < RequiredImageEdge()) StartLoad();
         if (Effective != "Glass" || DetachedPlate) { SetPresentationReady(true); return; }
@@ -259,6 +275,12 @@ public sealed partial class ArtworkStage : Grid
         {
             var scale = XamlRoot?.RasterizationScale ?? 1;
             if (ActualWidth < 1 || ActualHeight < 1) return;
+            if (TryShowCachedFrame()) return;
+            if (CacheRenderedFrame && optical is null)
+            {
+                if (TryLoadDiskFrame()) return;
+                if (!allowColdDraw) { QueueFirstGlassDraw(); return; }
+            }
             if (optical is null) { optical = new OpticalRenderer(panel); RenderersCreated++; sceneKey = null; }
             var key = $"{pixelsKey}/{ActualWidth:F0}/{ActualHeight:F0}/{scale}/{Variant}/{AmbientSigma}/{Polarity}/{ContainBackdrop}";
             if (key != sceneKey)
@@ -275,14 +297,19 @@ public sealed partial class ArtworkStage : Grid
     }
     private void DrawNow()
     {
-        if (optical is null || Plate is null || sceneWidth <= 0) return;
+        if (optical is null || Plate is null || sceneWidth <= 0
+            || Math.Abs(sceneWidth - ActualWidth) >= .5 || Math.Abs(sceneHeight - ActualHeight) >= .5
+            || sceneScale != (XamlRoot?.RasterizationScale ?? 1)) return;
         try
         {
             var rect = PlateRect();
-            if (rect.Width < 64 || rect.Height < 64) { panel.Visibility = Visibility.Collapsed; return; }
+            if (rect.Width < 64 || rect.Height < 64) { panel.Visibility = Visibility.Collapsed; geometry = null; return; }
             // The final title footprint can differ from the initial layout.
             // Rebuild only when it changes the readable polarity, not on idle.
             if (UpdateArtworkPolarity()) { Refresh(); return; }
+            var currentGeometry = CurrentGeometry();
+            if (geometry == currentGeometry && drawnSceneKey == sceneKey) { SetPresentationReady(true); return; }
+            if (TryShowCachedFrame()) return;
             var scale = (float)(XamlRoot?.RasterizationScale ?? 1);
             var lift = Polarity == StagePolarity.Lift; var clear = Variant == StageVariant.Clear;
             var flat = Variant == StageVariant.Unrefracted; var lightTint = clear || flat;
@@ -295,23 +322,38 @@ public sealed partial class ArtworkStage : Grid
             c[20] = c[21] = c[22] = lift ? 250 / 255f : 32 / 255f;
             c[23] = lightTint ? (lift ? .055f : .075f) : (lift ? .22f : .30f);
             c[24] = 1; c[25] = lightTint ? (lift ? .30f : .10f) : (lift ? .42f : .08f); c[26] = lift ? 1 : -1; c[27] = flat ? .04f : .20f;
-            optical.Draw((int)Math.Ceiling(ActualWidth * scale), (int)Math.Ceiling(ActualHeight * scale), c);
-            geometry = $"{rect.X:F1}/{rect.Y:F1}/{rect.Width:F1}/{rect.Height:F1}/{ActualWidth:F1}/{ActualHeight:F1}";
+            var (width, height) = FramePixelSize(scale);
+            var key = CurrentFrameKey();
+            if (pendingFrame != key) CancelFrameReadback();
+            var cacheFrame = key is { } cacheKey && ShouldCacheFrame(cacheKey, width, height);
+            optical.Draw(width, height, c, cacheFrame: cacheFrame);
+            geometry = currentGeometry;
+            drawnSceneKey = sceneKey;
             Draws++;
-            panel.Visibility = Visibility.Visible; fallbackArt.Visibility = Visibility.Collapsed; fallbackScrim.Visibility = Visibility.Collapsed;
-            if (Plate.Background is not SolidColorBrush { Color.A: 0 }) Plate.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            SetPresentationReady(true);
+            panel.Visibility = Visibility.Visible;
+            if (cacheFrame) QueueFrameReadback(key!.Value, width, height);
+            FinishGlassFrame();
         }
         catch (Exception exception) { Fail(exception); }
+    }
+    private void FinishGlassFrame()
+    {
+        fallbackArt.Visibility = fallbackScrim.Visibility = Visibility.Collapsed;
+        if (Plate is not null && Plate.Background is not SolidColorBrush { Color.A: 0 })
+            Plate.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+        SetPresentationReady(true);
     }
     private void StartLoad()
     {
         if (coverKey is null) return;
+        if (AdaptiveLandscape && (ActualWidth < 1 || ActualHeight < 1)) return;
         if (Images is null) { ImageFailed("unavailable"); return; }
         var key = coverKey;
         var edge = RequiredImageEdge();
         if (requestedImageKey == key && requestedImageEdge == edge) return;
         requestedImageKey = key; requestedImageEdge = edge;
+        if (TryRestoreFrameArtwork(key, edge)) return;
+        sourceRequests++;
         var lease = request.Begin(key);
         _ = LoadAsync(Images, key, edge, lease.Generation, lease.Cancellation);
     }
@@ -325,16 +367,20 @@ public sealed partial class ArtworkStage : Grid
             var result = await images.LoadAsync(key, edge, cancellation);
             if (!loaded || !request.IsCurrent(key, version) || coverKey != key) return;
             if (result.Pixels is not { } loadedPixels) { ImageFailed("unavailable"); return; }
-            pixels = loadedPixels; originalLandscape = AdaptiveLandscape ? loadedPixels : null; landscapeComposition = null; pixelsKey = key;
-            loadedImageEdge = edge; sceneKey = null;
-            SourceChanged?.Invoke();
-            ComposeLandscape();
-            if (!AdaptiveLandscape) Polarity = ContainBackdrop ? ActualTheme == ElementTheme.Light ? StagePolarity.Lift : StagePolarity.Deepen : MeanLuminance(loadedPixels) > .30 ? StagePolarity.Lift : StagePolarity.Deepen;
-            fallbackArt.Source = DisplayBitmaps.Get(images, pixels!);
-            Refresh();
+            AcceptPixels(key, edge, loadedPixels);
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception exception) { if (loaded && request.IsCurrent(key, version) && coverKey == key) ImageFailed(exception.GetType().Name); }
+    }
+    private void AcceptPixels(string key, int edge, RasterPixels loadedPixels)
+    {
+        pixels = loadedPixels; originalLandscape = AdaptiveLandscape ? loadedPixels : null; landscapeComposition = null; pixelsKey = key;
+        loadedImageEdge = edge; sceneKey = null;
+        SourceChanged?.Invoke();
+        ComposeLandscape();
+        if (!AdaptiveLandscape) Polarity = ContainBackdrop ? ActualTheme == ElementTheme.Light ? StagePolarity.Lift : StagePolarity.Deepen : MeanLuminance(loadedPixels) > .30 ? StagePolarity.Lift : StagePolarity.Deepen;
+        if (Images is { } images) fallbackArt.Source = DisplayBitmaps.Get(images, pixels!);
+        Refresh();
     }
     private void ImageFailed(string reason)
     {
@@ -399,10 +445,10 @@ public sealed partial class ArtworkStage : Grid
         // Transparency, energy saving and graphics fallback govern effects, not content.
         // Keep the decoded static picture when Acrylic/DirectX are unavailable.
         var art = Effective != "HighContrast" && fallbackArt.Source is not null && pixelsKey == coverKey;
-        var glassShowing = Effective == "Glass" && optical is not null && panel.Visibility == Visibility.Visible;
+        var glassShowing = Effective == "Glass" && (IsShowingCachedFrame || optical is not null && panel.Visibility == Visibility.Visible);
         fallbackArt.Visibility = art && !glassShowing ? Visibility.Visible : Visibility.Collapsed;
         fallbackScrim.Visibility = fallbackArt.Visibility;
-        if (AdaptiveLandscape)
+        if (AdaptiveLandscape && !NaturalLandscape)
         {
             // Keep the whole CG clear in the middle and blend its edges into the page palette.
             var color = (OwnedBrush(ref canvasBrush, "SolidBackgroundFillColorBase") as SolidColorBrush)?.Color
@@ -417,7 +463,7 @@ public sealed partial class ArtworkStage : Grid
         else fallbackScrim.Fill = new SolidColorBrush(Polarity == StagePolarity.Deepen ? Windows.UI.Color.FromArgb(0x8C, 0, 0, 0) : Windows.UI.Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF));
         if (NaturalLandscape) fallbackScrim.Visibility = Visibility.Collapsed;
         fallbackArt.Opacity = NaturalLandscape ? 1 : AdaptiveLandscape ? .90 : 1;
-        // Overlay theme first (R3), then surfaces: the plate must never resolve theme brushes under a stale theme.
+        // The plate's foreground and background use the same artwork polarity.
         var overArt = !DetachedPlate && (Effective is "Glass" or "Standard") && (art || glassShowing);
         ForegroundChanged?.Invoke(overArt ? new SolidColorBrush(Polarity == StagePolarity.Deepen ? Microsoft.UI.Colors.White : Windows.UI.Color.FromArgb(0xE4, 0, 0, 0)) : null);
         // Fluent layer/card colors are absent in the HighContrast dictionary.
@@ -430,8 +476,7 @@ public sealed partial class ArtworkStage : Grid
             // Standard: system in-app Acrylic, Fluent radius. Opaque/HC: card surface.
             Plate.CornerRadius = new CornerRadius(Variant == StageVariant.Unrefracted ? 18 : 8);
             Plate.Background = !DetachedPlate && Effective == "Standard" && art
-                ? new AcrylicBrush { TintColor = Polarity == StagePolarity.Deepen ? Windows.UI.Color.FromArgb(255, 32, 32, 32) : Windows.UI.Color.FromArgb(255, 250, 250, 250), TintOpacity = AdaptiveLandscape ? .32 : .55, TintLuminosityOpacity = AdaptiveLandscape ? .40 : .65,
-                    FallbackColor = Polarity == StagePolarity.Deepen ? Windows.UI.Color.FromArgb(255, 44, 44, 44) : Windows.UI.Color.FromArgb(255, 245, 245, 245) }
+                ? StandardPlate()
                 : Effective == "HighContrast" ? OwnedBrush(ref contrastBrush, "SystemColorWindowColor")
                 : OwnedBrush(ref contentBrush, "CardBackgroundFillColorDefault");
         }
@@ -444,8 +489,23 @@ public sealed partial class ArtworkStage : Grid
                 Plate.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         }
     }
-    // Stage-owned theme brushes. Shared app brushes must not be assigned here: the plate can carry a different
-    // RequestedTheme (polarity), and a shared brush's ThemeResource would be re-resolved for every user of it.
+    private AcrylicBrush? standardPlate;
+    private (StagePolarity Polarity, bool Adaptive) standardPlateKey;
+    private AcrylicBrush StandardPlate()
+    {
+        var key = (Polarity, AdaptiveLandscape);
+        if (standardPlate is not null && standardPlateKey == key) return standardPlate;
+        standardPlateKey = key;
+        var dark = Polarity == StagePolarity.Deepen;
+        return standardPlate = new AcrylicBrush
+        {
+            TintColor = dark ? Windows.UI.Color.FromArgb(255, 32, 32, 32) : Windows.UI.Color.FromArgb(255, 250, 250, 250),
+            TintOpacity = AdaptiveLandscape ? .32 : .55,
+            TintLuminosityOpacity = AdaptiveLandscape ? .40 : .65,
+            FallbackColor = dark ? Windows.UI.Color.FromArgb(255, 44, 44, 44) : Windows.UI.Color.FromArgb(255, 245, 245, 245)
+        };
+    }
+    // Keep dynamic brushes attached to their stage so reevaluation does not affect another surface.
     private Brush? layerBrush, contentBrush, contrastBrush, canvasBrush;
     private static Brush OwnedBrush(ref Brush? cache, string colorKey) => cache ??= (Brush)Microsoft.UI.Xaml.Markup.XamlReader.Load(
         $"<SolidColorBrush xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' Color='{{ThemeResource {colorKey}}}'/>");
@@ -456,8 +516,13 @@ public sealed partial class ArtworkStage : Grid
     }
     private void Release()
     {
+        CancelFirstGlassDraw();
+        CancelIndexedFrame();
+        CancelDiskLookup();
+        CancelFrameReadback();
+        ClearCachedFrame();
         panel.Visibility = Visibility.Collapsed;
-        var owner = optical; sceneKey = null; geometry = null; sceneWidth = 0;
+        var owner = optical; sceneKey = drawnSceneKey = geometry = null; sceneWidth = 0;
         if (owner is null) return;
         retirementPending = true;
         try { owner.Dispose(); optical = null; retirementPending = false; RenderersReleased++; }
@@ -474,6 +539,7 @@ public sealed partial class ArtworkStage : Grid
         backgroundColor = (Background as SolidColorBrush)?.Color.ToString(), plateColor = (Plate?.Background as SolidColorBrush)?.Color.ToString(),
         loaded, actualTheme = ActualTheme.ToString(), requestedTheme = RequestedTheme.ToString(), containBackdrop, adaptiveLandscape = AdaptiveLandscape, imageOpacity = fallbackArt.Opacity, decodeEdge = DecodeEdge, polarity = Polarity.ToString(), ambientSigma = AmbientSigma, allowed, highContrast, rendererActive = optical is not null, panelVisible = panel.Visibility == Visibility.Visible,
         sceneRevisions = SceneRevisions, draws = Draws, frostPasses = FrostPasses, renderersCreated = RenderersCreated, renderersReleased = RenderersReleased,
+        cachedFrames = frames.Count, frameCacheBytes = frameBytes, frameCacheHits = frameHits, diskFrameHits, indexedFrameHits, sourceRequests, showingCachedFrame = IsShowingCachedFrame,
         sourceBytes = optical?.SourceBytes ?? 0, frostBytes = optical?.FrostBytes ?? 0, coverLoaded = pixelsKey is not null && pixelsKey == coverKey, failure = LastFailure, attached, retirementPending
     }; } }
 }

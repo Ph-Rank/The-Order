@@ -40,6 +40,62 @@ public sealed class OnlineStateTests
         }
         public async ValueTask DisposeAsync() { await Online.DisposeAsync(); await Workspace.DisposeAsync(); await Offline.DisposeAsync(); http.Dispose(); Profile.Dispose(); }
     }
+    [Theory]
+    [InlineData("#86")]
+    [InlineData("https://www.kungal.com/galgame/86")]
+    [InlineData("https://api.nextmoe.dev/v2/catalog/works/86")]
+    public async Task ExplicitReferenceLoadsExactWorkWithoutTitleSearchOrLibraryMutation(string query)
+    {
+        await using var lab = new Lab(); await lab.Workspace.InitializeAsync();
+        Assert.True((await lab.Library.AddAsync("77", default)).IsCommitted);
+        var before = File.ReadAllBytes(lab.Profile.Main);
+        int details = 0;
+        lab.Catalog.Search = (_, _, _) => throw new InvalidOperationException("Must not search references as titles");
+        lab.Catalog.Detail = (id, _, _) => { details++; Assert.Equal("86", id); return Task.FromResult(Work(id) with { Developers = ["Studio"] }); };
+        lab.Online.Query = query; await lab.Online.SearchAsync(); await lab.Online.SearchAsync(true);
+        var card = Assert.Single(lab.Online.Items); Assert.Equal("86", card.Id); Assert.Equal("#86", card.CatalogNumber);
+        Assert.Equal("Studio", card.Subtitle); Assert.Equal(1, details); Assert.False(lab.Online.CanLoadMore);
+        Assert.Equal(before, File.ReadAllBytes(lab.Profile.Main));
+    }
+    [Theory][InlineData("1984")][InlineData("#Synthetic")]
+    public async Task NumericOrHashPrefixedGameTitleIsNotMisinterpretedAsAnId(string query)
+    {
+        await using var lab = new Lab();
+        lab.Catalog.Detail = (_, _, _) => throw new InvalidOperationException("Numeric titles remain searchable");
+        lab.Catalog.Search = (q, _, _) => { Assert.Equal(query, q); return Task.FromResult(new OnlinePage([Work("99", query)], null)); };
+        lab.Online.Query = query; await lab.Online.SearchAsync(); Assert.Equal("99", Assert.Single(lab.Online.Items).Id);
+    }
+    [Theory]
+    [InlineData("#0")]
+    [InlineData("https://evil.test/galgame/86")]
+    [InlineData("https://www.kungal.com/galgame/86?secret=example")]
+    [InlineData("http://www.kungal.com/galgame/86")]
+    public async Task InvalidReferenceDoesNotSendNetworkRequest(string query)
+    {
+        await using var lab = new Lab(); int requests = 0;
+        lab.Catalog.Search = (_, _, _) => { requests++; return Task.FromResult(new OnlinePage([], null)); };
+        lab.Catalog.Detail = (_, _, _) => { requests++; return Task.FromResult(Work()); };
+        lab.Online.Query = query; await lab.Online.SearchAsync();
+        Assert.Equal(0, requests); Assert.Empty(lab.Online.Items); Assert.Equal(OnlineState.Error, lab.Online.SearchState);
+    }
+    [Theory][InlineData(OnlineFailure.NotFound)][InlineData(OnlineFailure.Offline)]
+    public async Task DirectLookupFailureIsNotPresentedAsAnEmptySearch(OnlineFailure failure)
+    {
+        await using var lab = new Lab(); lab.Catalog.Detail = (_, _, _) => throw new OnlineException(failure);
+        lab.Online.Query = "#86"; await lab.Online.SearchAsync();
+        Assert.Empty(lab.Online.Items); Assert.NotEqual(OnlineState.Empty, lab.Online.SearchState);
+        Assert.Equal(new OnlineException(failure).Message, lab.Online.SearchMessage);
+    }
+    [Fact] public async Task LateDirectLookupCannotReplaceAChangedQuery()
+    {
+        await using var lab = new Lab(); var pending = new TaskCompletionSource<WorkMetadata>();
+        lab.Catalog.Detail = (_, _, _) => pending.Task;
+        lab.Catalog.Search = (_, _, _) => Task.FromResult(new OnlinePage([Work("2")], null));
+        lab.Online.Query = "#86"; var old = lab.Online.SearchAsync();
+        lab.Online.Query = "new title"; await lab.Online.SearchAsync();
+        pending.SetResult(Work()); await old;
+        Assert.Equal("2", Assert.Single(lab.Online.Items).Id); Assert.Equal(OnlineState.Loaded, lab.Online.SearchState);
+    }
     [Fact] public async Task RapidQueryLateCompletionCannotReplaceNewQuery()
     {
         await using var lab = new Lab(); var old = new TaskCompletionSource<OnlinePage>();
@@ -92,6 +148,23 @@ public sealed class OnlineStateTests
         lab.Catalog.Detail = (_, _, _) => throw new OnlineException(failure); var entry = Assert.Single((await lab.Offline.QueryAsync(new(), default)).Items);
         await Assert.ThrowsAsync<OnlineException>(() => lab.Library.RefreshAsync(entry.Id, default)); Assert.Equal(before, File.ReadAllBytes(lab.Profile.Main));
         lab.Catalog.Search = (_, _, _) => Task.FromResult(new OnlinePage([], null)); await lab.Online.SearchAsync(); Assert.Equal(OnlineState.Empty, lab.Online.SearchState);
+    }
+    [Fact] public async Task DiscoveryKeepsIdleAndCompletedSearchMessagesOnNavigation()
+    {
+        await using var lab = new Lab();
+        lab.Online.Leave();
+        Assert.Empty(lab.Online.SearchMessage);
+
+        lab.Catalog.Search = (_, _, _) => Task.FromResult(new OnlinePage([Work()], null));
+        lab.Online.Query = "sample";
+        Assert.Empty(lab.Online.SearchMessage);
+        await lab.Online.SearchAsync();
+        var message = lab.Online.SearchMessage;
+        lab.Online.Leave();
+
+        Assert.Equal(OnlineState.Loaded, lab.Online.SearchState);
+        Assert.Equal(message, lab.Online.SearchMessage);
+        Assert.Single(lab.Online.Items);
     }
     [Fact] public async Task CancelLeaveAndCloseCancelNetworkWithoutError()
     {

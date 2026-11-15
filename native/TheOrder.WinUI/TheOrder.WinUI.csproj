@@ -17,11 +17,19 @@
     <PublishSingleFile>false</PublishSingleFile>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets/Brand.Light.ico</ApplicationIcon>
+    <GitHubFeedbackClientId Condition="'$(GitHubFeedbackClientId)' == ''">Iv23liQYcS11mBJONubq</GitHubFeedbackClientId>
   </PropertyGroup>
+  <ItemGroup Condition="'$(GitHubFeedbackClientId)' != ''">
+    <AssemblyMetadata Include="GitHubFeedbackClientId" Value="$(GitHubFeedbackClientId)" />
+  </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Help/zh-Hans.md" LogicalName="TheOrder.UserGuide.zh-Hans.md" />
+    <EmbeddedResource Include="Help/Images/*.png" LogicalName="TheOrder.UserGuide.Images.%(Filename)%(Extension)" />
     <Content Include="Assets/GuideGraph/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Update="Assets/Brand.Light.ico;Assets/Brand.Dark.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Update="Assets/Brand.png;Assets/Brand.Light.png;Assets/Brand.Dark.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Update="Assets/StartupLogo.*.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Update="Assets/LoadingMark.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Update="Assets/KunGal.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../../LICENSE" Link="LICENSE-TheOrder.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="../TheOrder.GuideOverlay/payload/**/*" Exclude="../TheOrder.GuideOverlay/payload/**/*.lib;../TheOrder.GuideOverlay/payload/**/*.exp" Link="guide-overlay/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

@@ -30,7 +30,7 @@ public sealed partial class CatalogBrowserView
         mediaDetail?.Dispose(); mediaDetail = new();
         mediaDetail.Configure(subjects, Images, registry, OpenBangumiSourceAsync);
         mediaHost.Children.Clear(); mediaHost.Children.Add(mediaDetail);
-        if (!Children.Contains(mediaHost)) { SetRowSpan(mediaHost, 3); Children.Add(mediaHost); }
+        if (!Children.Contains(mediaHost)) Children.Add(mediaHost);
     }
     public void ConfigureMusic(IMusicBrainzReader music, IMusicBrainzEntityReader? entities = null) => mediaDetail?.ConfigureMusic(music, entities);
     public void ConfigureAniList(IAniListReader reader, IWatchLinkPreferencesStore? watchPreferences = null, IBangumiWatchLinksReader? watchReader = null) => mediaDetail?.ConfigureAniList(reader, watchPreferences, watchReader);
@@ -70,9 +70,10 @@ public sealed partial class CatalogBrowserView
     {
         if (mediaDetail is null || card.Bangumi is not { } item || currentWork is not { } work || stop?.IsCancellationRequested != false) return;
         restoreTarget = null; mediaReturnOffset = scroll.VerticalOffset; mediaActive = true;
-        relatedWorks?.SuspendNavigation(); hero?.ReleaseBeforeLeave();
-        foreach (var child in Children.Where(child => !ReferenceEquals(child, mediaHost))) child.Visibility = Visibility.Collapsed;
-        mediaHost.Visibility = Visibility.Visible;
+        relatedWorks?.SuspendNavigation(); hero?.ReleaseBeforeLeave(); SuspendGameVideos();
+        catalogPage.Visibility = Visibility.Collapsed;
+        InteractionMotion.StopPage(catalogPage);
+        InteractionMotion.EnterPage(mediaHost);
         mediaDetail.RelationLabel = card.Label; mediaDetail.RelationEvidence = card.Evidence;
         await mediaDetail.OpenAsync(item, work.Title, stop.Token);
     }
@@ -81,17 +82,21 @@ public sealed partial class CatalogBrowserView
     {
         if (!mediaActive) return;
         mediaDetail?.Deactivate(); mediaActive = false; mediaHost.Visibility = Visibility.Collapsed;
-        foreach (var child in Children.Where(child => !ReferenceEquals(child, mediaHost))) child.Visibility = Visibility.Visible;
+        InteractionMotion.StopPage(mediaHost);
+        catalogPage.Visibility = Visibility.Visible;
+        if (currentPresentation is not null) title.Visibility = Visibility.Collapsed;
         relatedWorks?.ResumeNavigation();
         if (current is not null) restoreTarget = new(current, incoming, mediaReturnOffset, relatedWorks?.CaptureBrowsing());
         QueueRestore();
         if (currentPresentation is { } cached) hero?.SetPresentation(cached);
+        InteractionMotion.EnterPage(catalogPage);
     }
 
     private void StopRelated()
     {
         mediaDetail?.Deactivate(); mediaActive = false; mediaHost.Visibility = Visibility.Collapsed;
-        foreach (var child in Children.Where(child => !ReferenceEquals(child, mediaHost))) child.Visibility = Visibility.Visible;
+        InteractionMotion.StopPage(mediaHost);
+        catalogPage.Visibility = Visibility.Visible;
         relatedWorks?.Dispose(); relatedWorks = null; currentWork = null; relatedIdentity = null; currentPresentation = null;
     }
     public void InvalidateBangumiAccess()
@@ -130,7 +135,7 @@ public sealed partial class CatalogBrowserView
             || !await Windows.System.Launcher.LaunchUriAsync(new Uri(url))) throw new InvalidOperationException("未能打开来源网页。");
     }
 
-    internal void DisposeRelated() { StopRelated(); mediaDetail?.Dispose(); mediaDetail = null; }
+    internal void DisposeRelated() { DisposeGameVideos(); StopRelated(); mediaDetail?.Dispose(); mediaDetail = null; }
     internal async Task RelatedFixtureAsync(string action, BangumiRelationKind? kind, string? id)
     {
         switch (action)

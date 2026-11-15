@@ -158,13 +158,13 @@ public sealed class KunGalRelatedWorksTests
         Assert.Equal(2, calls);
     }
     [Theory][InlineData(true)][InlineData(false)]
-    public async Task DiscoverAndTagLanesUseSameGlobalRuleWithoutChangingNsfwFilter(bool search)
+    public async Task DiscoverAndTagLanesIncludeUnclaimedCatalogGamesWithoutChangingMediaFilter(bool search)
     {
         using var http = new HttpClient(new Handler((_, _) => Task.FromResult(Json(JsonSerializer.Serialize(new
         { @object = "list", next_cursor = "cur_next", items = new[] { Row("1"), Row("2", "anime"), Row("3", site: null) } })))));
         var catalog = new NextMoeCatalog(new(http, new Credential(), new("https://api.nextmoe.dev/v2/")));
         var works = search ? (await catalog.SearchVisibleAsync("Synthetic", null, false, default)).Items :
             (await catalog.TagWorksVisibleAsync("99", null, false, default)).Works;
-        Assert.Equal("1", Assert.Single(works).Id);
+        Assert.Equal(new[] { "1", "3" }, works.Select(w => w.Id));
     }
 }

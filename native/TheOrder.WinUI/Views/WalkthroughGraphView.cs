@@ -53,7 +53,7 @@ internal sealed class WalkthroughGraphView : Grid, IDisposable
         if (disposed || !active || document is null || web is not null) return;
         int run=++generation; revision++; state="loading"; probe=null; nodes=edges=blockedRequests=0;
         message.Text="正在准备流程图…";loading.Visibility=Visibility.Visible;retry.Visibility=fallback.Visibility=Visibility.Collapsed;
-        var current=new WebView2 { HorizontalAlignment=HorizontalAlignment.Stretch, VerticalAlignment=VerticalAlignment.Stretch };
+        var current=new WebView2 { HorizontalAlignment=HorizontalAlignment.Stretch, VerticalAlignment=VerticalAlignment.Stretch, Opacity=0, IsHitTestVisible=false };
         web=current;browser.Children.Add(current);
         try
         {
@@ -96,7 +96,14 @@ internal sealed class WalkthroughGraphView : Grid, IDisposable
                     if (kind=="rendered") {
                         int n=request.GetProperty("nodes").GetInt32(),e=request.GetProperty("edges").GetInt32();
                         if (n<0 || n>WalkthroughFlowGraph.MaximumNodes || e<0 || e>WalkthroughFlowGraph.MaximumEdges) return;
-                        nodes=n;edges=e;state="ready";loading.Visibility=Visibility.Collapsed;return;
+                        nodes=n;edges=e;state="ready";loading.Visibility=Visibility.Collapsed;
+                        if (!current.IsHitTestVisible)
+                        {
+                            current.Opacity = 1;
+                            current.IsHitTestVisible = true;
+                            InteractionMotion.RevealContent(browser, .72f);
+                        }
+                        return;
                     }
                     if(kind=="display") { hideCollections=request.GetProperty("hideCollections").GetBoolean();return; }
                     string? id=request.GetProperty("edgeId").GetString();

@@ -10,6 +10,8 @@ using TheOrder.Platform.Windows;
 using TheOrder.Application;
 using TheOrder.Presentation;
 
+using TheOrder.WinUI.Views;
+
 namespace TheOrder.WinUI;
 
 public sealed partial class MainWindow
@@ -94,9 +96,9 @@ public sealed partial class MainWindow
         }
         else if (mode.StartsWith("select", StringComparison.Ordinal))
         {
-            if (target is not ComboBox choice || choice.Items.Count != 3) throw new InvalidOperationException("Three-state native launch choice required.");
+            if (target is not SelectedFirstComboBox choice || choice.Options.Count != 3) throw new InvalidOperationException("Three-state native launch choice required.");
             // A bounded control selection, distinguished from physical keyboard input.
-            choice.SelectedIndex = mode[^1] - '0';
+            choice.OptionIndex = mode[^1] - '0';
         }
         if (id == "GamePV" && mode == "inspect") await detailsPage.ProbeGameVideoForFixtureAsync();
         await Task.Delay(150);

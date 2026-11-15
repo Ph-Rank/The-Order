@@ -1,31 +1,51 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
- <!-- Revision 2: app keys are aliases of Fluent theme resources. No literal hue; the accent is the Windows accent. -->
+ <!-- Keep Fluent colors fixed within each theme dictionary. Controls still select their brush with ThemeResource. -->
  <ResourceDictionary.ThemeDictionaries>
   <ResourceDictionary x:Key="Light">
-   <SolidColorBrush x:Key="CanvasBrush" Color="{ThemeResource SolidBackgroundFillColorBase}"/><SolidColorBrush x:Key="LayerBrush" Color="Transparent"/>
-   <SolidColorBrush x:Key="ContentBrush" Color="{ThemeResource CardBackgroundFillColorDefault}"/><SolidColorBrush x:Key="ContentHoverBrush" Color="{ThemeResource CardBackgroundFillColorSecondary}"/>
-   <SolidColorBrush x:Key="TextPrimaryBrush" Color="{ThemeResource TextFillColorPrimary}"/><SolidColorBrush x:Key="TextSecondaryBrush" Color="{ThemeResource TextFillColorSecondary}"/><SolidColorBrush x:Key="TextTertiaryBrush" Color="{ThemeResource TextFillColorTertiary}"/>
-   <SolidColorBrush x:Key="StrokeBrush" Color="{ThemeResource CardStrokeColorDefault}"/><SolidColorBrush x:Key="DividerBrush" Color="{ThemeResource DividerStrokeColorDefault}"/>
+   <SolidColorBrush x:Key="CanvasBrush" Color="{StaticResource SolidBackgroundFillColorBase}"/><SolidColorBrush x:Key="LayerBrush" Color="Transparent"/>
+   <SolidColorBrush x:Key="ContentBrush" Color="{StaticResource CardBackgroundFillColorDefault}"/><SolidColorBrush x:Key="ContentHoverBrush" Color="{StaticResource CardBackgroundFillColorSecondary}"/>
+   <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextFillColorPrimary}"/><SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextFillColorSecondary}"/><SolidColorBrush x:Key="TextTertiaryBrush" Color="{StaticResource TextFillColorTertiary}"/>
+   <SolidColorBrush x:Key="StrokeBrush" Color="{StaticResource CardStrokeColorDefault}"/><SolidColorBrush x:Key="DividerBrush" Color="{StaticResource DividerStrokeColorDefault}"/>
    <SolidColorBrush x:Key="AccentBrush" Color="{ThemeResource SystemAccentColorDark2}"/><SolidColorBrush x:Key="AccentFillBrush" Color="{ThemeResource SystemAccentColorDark1}"/><SolidColorBrush x:Key="SelectionBrush" Color="{ThemeResource SystemAccentColorDark1}" Opacity="0.14"/>
-   <SolidColorBrush x:Key="WarningTextBrush" Color="{ThemeResource SystemFillColorCaution}"/><SolidColorBrush x:Key="ErrorTextBrush" Color="{ThemeResource SystemFillColorCritical}"/><SolidColorBrush x:Key="SuccessTextBrush" Color="{ThemeResource SystemFillColorSuccess}"/>
-   <SolidColorBrush x:Key="NeutralStatusBrush" Color="{ThemeResource SystemFillColorNeutral}"/><SolidColorBrush x:Key="RecoveryTextBrush" Color="{ThemeResource SystemFillColorNeutral}"/>
+   <SolidColorBrush x:Key="WarningTextBrush" Color="{StaticResource SystemFillColorCaution}"/><SolidColorBrush x:Key="ErrorTextBrush" Color="{StaticResource SystemFillColorCritical}"/><SolidColorBrush x:Key="SuccessTextBrush" Color="{StaticResource SystemFillColorSuccess}"/>
+   <SolidColorBrush x:Key="NeutralStatusBrush" Color="{StaticResource SystemFillColorNeutral}"/><SolidColorBrush x:Key="RecoveryTextBrush" Color="{StaticResource SystemFillColorNeutral}"/>
    <!-- Owned by MaterialPolicy (AlwaysUseFallback); Fluent in-app Acrylic values. -->
    <AcrylicBrush x:Key="NavigationSurfaceBrush" TintColor="#FCFCFC" TintOpacity="0" TintLuminosityOpacity="0.85" FallbackColor="#F9F9F9"/>
    <AcrylicBrush x:Key="ToolbarBrush" TintColor="#FCFCFC" TintOpacity="0" TintLuminosityOpacity="0.85" FallbackColor="#F9F9F9"/>
    <SolidColorBrush x:Key="BrandBadgeBrush" Color="#E5EBE7"/>
+   <SolidColorBrush x:Key="CalendarDayStroke" Color="#9A9A9A"/>
+   <SolidColorBrush x:Key="CalendarReleaseBadgeFill" Color="#DADADA"/>
+   <SolidColorBrush x:Key="CalendarReleaseBadgeInk" Color="#414141"/>
+   <StaticResource x:Key="HyperlinkButtonForeground" ResourceKey="TextPrimaryBrush"/>
+   <StaticResource x:Key="HyperlinkButtonForegroundPointerOver" ResourceKey="TextPrimaryBrush"/>
+   <StaticResource x:Key="HyperlinkButtonForegroundPressed" ResourceKey="TextSecondaryBrush"/>
+   <StaticResource x:Key="HyperlinkButtonForegroundDisabled" ResourceKey="TextFillColorDisabledBrush"/>
+   <StaticResource x:Key="HyperlinkForeground" ResourceKey="TextPrimaryBrush"/>
+   <StaticResource x:Key="HyperlinkForegroundPointerOver" ResourceKey="TextSecondaryBrush"/>
+   <StaticResource x:Key="HyperlinkForegroundPressed" ResourceKey="TextSecondaryBrush"/>
    <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="ToolbarBrush"/><StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="ToolbarBrush"/>
   </ResourceDictionary>
   <ResourceDictionary x:Key="Dark">
-   <SolidColorBrush x:Key="CanvasBrush" Color="{ThemeResource SolidBackgroundFillColorBase}"/><SolidColorBrush x:Key="LayerBrush" Color="Transparent"/>
-   <SolidColorBrush x:Key="ContentBrush" Color="{ThemeResource CardBackgroundFillColorDefault}"/><SolidColorBrush x:Key="ContentHoverBrush" Color="{ThemeResource CardBackgroundFillColorSecondary}"/>
-   <SolidColorBrush x:Key="TextPrimaryBrush" Color="{ThemeResource TextFillColorPrimary}"/><SolidColorBrush x:Key="TextSecondaryBrush" Color="{ThemeResource TextFillColorSecondary}"/><SolidColorBrush x:Key="TextTertiaryBrush" Color="{ThemeResource TextFillColorTertiary}"/>
-   <SolidColorBrush x:Key="StrokeBrush" Color="{ThemeResource CardStrokeColorDefault}"/><SolidColorBrush x:Key="DividerBrush" Color="{ThemeResource DividerStrokeColorDefault}"/>
+   <SolidColorBrush x:Key="CanvasBrush" Color="{StaticResource SolidBackgroundFillColorBase}"/><SolidColorBrush x:Key="LayerBrush" Color="Transparent"/>
+   <SolidColorBrush x:Key="ContentBrush" Color="{StaticResource CardBackgroundFillColorDefault}"/><SolidColorBrush x:Key="ContentHoverBrush" Color="{StaticResource CardBackgroundFillColorSecondary}"/>
+   <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextFillColorPrimary}"/><SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextFillColorSecondary}"/><SolidColorBrush x:Key="TextTertiaryBrush" Color="{StaticResource TextFillColorTertiary}"/>
+   <SolidColorBrush x:Key="StrokeBrush" Color="{StaticResource CardStrokeColorDefault}"/><SolidColorBrush x:Key="DividerBrush" Color="{StaticResource DividerStrokeColorDefault}"/>
    <SolidColorBrush x:Key="AccentBrush" Color="{ThemeResource SystemAccentColorLight3}"/><SolidColorBrush x:Key="AccentFillBrush" Color="{ThemeResource SystemAccentColorLight2}"/><SolidColorBrush x:Key="SelectionBrush" Color="{ThemeResource SystemAccentColorLight2}" Opacity="0.14"/>
-   <SolidColorBrush x:Key="WarningTextBrush" Color="{ThemeResource SystemFillColorCaution}"/><SolidColorBrush x:Key="ErrorTextBrush" Color="{ThemeResource SystemFillColorCritical}"/><SolidColorBrush x:Key="SuccessTextBrush" Color="{ThemeResource SystemFillColorSuccess}"/>
-   <SolidColorBrush x:Key="NeutralStatusBrush" Color="{ThemeResource SystemFillColorNeutral}"/><SolidColorBrush x:Key="RecoveryTextBrush" Color="{ThemeResource SystemFillColorNeutral}"/>
+   <SolidColorBrush x:Key="WarningTextBrush" Color="{StaticResource SystemFillColorCaution}"/><SolidColorBrush x:Key="ErrorTextBrush" Color="{StaticResource SystemFillColorCritical}"/><SolidColorBrush x:Key="SuccessTextBrush" Color="{StaticResource SystemFillColorSuccess}"/>
+   <SolidColorBrush x:Key="NeutralStatusBrush" Color="{StaticResource SystemFillColorNeutral}"/><SolidColorBrush x:Key="RecoveryTextBrush" Color="{StaticResource SystemFillColorNeutral}"/>
    <AcrylicBrush x:Key="NavigationSurfaceBrush" TintColor="#2C2C2C" TintOpacity="0.15" TintLuminosityOpacity="0.96" FallbackColor="#2C2C2C"/>
    <AcrylicBrush x:Key="ToolbarBrush" TintColor="#2C2C2C" TintOpacity="0.15" TintLuminosityOpacity="0.96" FallbackColor="#2C2C2C"/>
    <SolidColorBrush x:Key="BrandBadgeBrush" Color="#E5EBE7"/>
+   <SolidColorBrush x:Key="CalendarDayStroke" Color="#6D6D6D"/>
+   <SolidColorBrush x:Key="CalendarReleaseBadgeFill" Color="#575757"/>
+   <SolidColorBrush x:Key="CalendarReleaseBadgeInk" Color="#F0F0F0"/>
+   <StaticResource x:Key="HyperlinkButtonForeground" ResourceKey="TextPrimaryBrush"/>
+   <StaticResource x:Key="HyperlinkButtonForegroundPointerOver" ResourceKey="TextPrimaryBrush"/>
+   <StaticResource x:Key="HyperlinkButtonForegroundPressed" ResourceKey="TextSecondaryBrush"/>
+   <StaticResource x:Key="HyperlinkButtonForegroundDisabled" ResourceKey="TextFillColorDisabledBrush"/>
+   <StaticResource x:Key="HyperlinkForeground" ResourceKey="TextPrimaryBrush"/>
+   <StaticResource x:Key="HyperlinkForegroundPointerOver" ResourceKey="TextSecondaryBrush"/>
+   <StaticResource x:Key="HyperlinkForegroundPressed" ResourceKey="TextSecondaryBrush"/>
    <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="ToolbarBrush"/><StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="ToolbarBrush"/>
   </ResourceDictionary>
   <ResourceDictionary x:Key="HighContrast">
@@ -39,11 +59,14 @@
    <SolidColorBrush x:Key="NeutralStatusBrush" Color="{ThemeResource SystemColorWindowTextColor}"/><SolidColorBrush x:Key="RecoveryTextBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
    <SolidColorBrush x:Key="NavigationSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}"/><SolidColorBrush x:Key="ToolbarBrush" Color="{ThemeResource SystemColorWindowColor}"/>
    <SolidColorBrush x:Key="BrandBadgeBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+   <StaticResource x:Key="CalendarDayStroke" ResourceKey="StrokeBrush"/>
+   <StaticResource x:Key="CalendarReleaseBadgeFill" ResourceKey="TextPrimaryBrush"/>
+   <StaticResource x:Key="CalendarReleaseBadgeInk" ResourceKey="CanvasBrush"/>
    <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="{ThemeResource SystemColorWindowColor}"/><SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="{ThemeResource SystemColorWindowColor}"/>
   </ResourceDictionary>
  </ResourceDictionary.ThemeDictionaries>
  <x:Double x:Key="SpaceSmall">8</x:Double><x:Double x:Key="SpaceMedium">16</x:Double><x:Double x:Key="SpaceLarge">24</x:Double><x:Double x:Key="SectionSpacing">24</x:Double>
- <Thickness x:Key="PagePadding">32,20,32,20</Thickness><CornerRadius x:Key="CardRadius">8</CornerRadius><CornerRadius x:Key="FloatingRadius">8</CornerRadius>
+ <Thickness x:Key="PagePadding">32,0,32,20</Thickness><CornerRadius x:Key="CardRadius">8</CornerRadius><CornerRadius x:Key="FloatingRadius">8</CornerRadius>
  <x:Double x:Key="MotionPageMilliseconds">167</x:Double><x:Double x:Key="MotionShortMilliseconds">83</x:Double><x:Double x:Key="FocusStrokeWidth">2</x:Double>
  <!-- Fluent type ramp: Title 28/36, Subtitle 20/28, Body 14/20, Body Strong 14/20, Caption 12/16. -->
  <Style x:Key="PageTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource TitleTextBlockStyle}"><Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}"/><Setter Property="TextWrapping" Value="Wrap"/></Style>
@@ -53,15 +76,58 @@
  <Style x:Key="SecondaryTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextStyle}"><Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}"/></Style>
  <Style x:Key="MetadataTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}"><Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}"/></Style>
   <Style x:Key="CardTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}"><Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}"/><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="TextAlignment" Value="Center"/></Style>
-  <Style TargetType="HyperlinkButton" BasedOn="{StaticResource DefaultHyperlinkButtonStyle}"><Setter Property="FontSize" Value="15"/><Setter Property="MinHeight" Value="0"/><Setter Property="MinWidth" Value="0"/><Setter Property="Padding" Value="0"/><Setter Property="BorderThickness" Value="0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
+  <Style TargetType="HyperlinkButton" BasedOn="{StaticResource DefaultHyperlinkButtonStyle}"><Setter Property="FontSize" Value="15"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="MinHeight" Value="0"/><Setter Property="MinWidth" Value="0"/><Setter Property="Padding" Value="0"/><Setter Property="BorderThickness" Value="0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
   <Style x:Key="CatalogTagChipStyle" TargetType="Border"><Setter Property="Padding" Value="10,4"/><Setter Property="MinHeight" Value="28"/><Setter Property="CornerRadius" Value="6"/><Setter Property="Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}"/><Setter Property="BorderBrush" Value="{ThemeResource StrokeBrush}"/><Setter Property="BorderThickness" Value="1"/></Style>
   <Style x:Key="CatalogTagTextStyle" TargetType="TextBlock"><Setter Property="FontSize" Value="13"/><Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}"/><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="TextAlignment" Value="Center"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
+  <Style x:Key="CatalogThumbnailFrameStyle" TargetType="Border"><Setter Property="CornerRadius" Value="6"/><Setter Property="Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}"/></Style>
   <Style x:Key="CatalogCreditCardStyle" TargetType="Border"><Setter Property="Padding" Value="16,14"/><Setter Property="CornerRadius" Value="8"/><Setter Property="Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}"/><Setter Property="BorderBrush" Value="{ThemeResource StrokeBrush}"/><Setter Property="BorderThickness" Value="1"/></Style>
  <Style x:Key="SurfaceStyle" TargetType="Border"><Setter Property="Background" Value="{ThemeResource ContentBrush}"/><Setter Property="BorderBrush" Value="{ThemeResource StrokeBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="8"/></Style>
  <Style x:Key="ToolbarSurfaceStyle" TargetType="Border" BasedOn="{StaticResource SurfaceStyle}"/>
  <!-- Fluent subtle button: transparent at rest, subtle fill on hover/press (title-bar chip, command icons). -->
  <Style x:Key="SubtleButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
   <Setter Property="Background" Value="{ThemeResource SubtleFillColorTransparentBrush}"/><Setter Property="BorderBrush" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>
+ </Style>
+ <Style x:Key="ExternalLinkButtonStyle" TargetType="HyperlinkButton" BasedOn="{StaticResource DefaultHyperlinkButtonStyle}">
+  <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+  <Setter Property="Background" Value="{ThemeResource ContentBrush}" />
+  <Setter Property="BorderBrush" Value="{ThemeResource StrokeBrush}" />
+  <Setter Property="BorderThickness" Value="1" />
+  <Setter Property="CornerRadius" Value="7" />
+  <Setter Property="Padding" Value="10,4" />
+  <Setter Property="MinHeight" Value="32" />
+  <Setter Property="FontSize" Value="14" />
+  <Setter Property="Template">
+   <Setter.Value>
+    <ControlTemplate TargetType="HyperlinkButton">
+     <Border x:Name="LinkSurface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+             BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+      <VisualStateManager.VisualStateGroups>
+       <VisualStateGroup x:Name="CommonStates">
+        <VisualState x:Name="Normal" />
+        <VisualState x:Name="PointerOver">
+         <VisualState.Setters><Setter Target="LinkSurface.Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}" /></VisualState.Setters>
+        </VisualState>
+        <VisualState x:Name="Pressed">
+         <VisualState.Setters><Setter Target="LinkSurface.Background" Value="{ThemeResource SubtleFillColorTertiaryBrush}" /></VisualState.Setters>
+        </VisualState>
+        <VisualState x:Name="Disabled">
+         <VisualState.Setters><Setter Target="LinkSurface.Opacity" Value="0.55" /></VisualState.Setters>
+        </VisualState>
+       </VisualStateGroup>
+      </VisualStateManager.VisualStateGroups>
+      <Grid ColumnSpacing="7" VerticalAlignment="Center">
+       <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+       <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                         Foreground="{TemplateBinding Foreground}" VerticalAlignment="Center" />
+       <FontIcon Grid.Column="1" Glyph="&#xE8A7;" FontSize="13" VerticalAlignment="Center"
+                 Foreground="{ThemeResource TextSecondaryBrush}" AutomationProperties.AccessibilityView="Raw">
+        <FontIcon.RenderTransform><TranslateTransform Y="1.25" /></FontIcon.RenderTransform>
+       </FontIcon>
+      </Grid>
+     </Border>
+    </ControlTemplate>
+   </Setter.Value>
+  </Setter>
  </Style>
  <Style TargetType="ContentDialog" BasedOn="{StaticResource DefaultContentDialogStyle}"><Setter Property="TitleTemplate"><Setter.Value><DataTemplate><TextBlock Text="{Binding}" Style="{StaticResource SubtitleTextBlockStyle}"/></DataTemplate></Setter.Value></Setter></Style>
 </ResourceDictionary>

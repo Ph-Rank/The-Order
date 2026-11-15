@@ -33,12 +33,6 @@ public sealed partial class LibraryPage
         }
         return null;
     }
-    internal object NotificationEvidenceFixture() => new
-    {
-        recognitionVisible = RecognitionStatus.Visibility == Visibility.Visible,
-        recognitionText = RecognitionCounts.Text, recognitionMessage = RecognitionMessage.Text,
-        recognitionBusy = recognition?.HasRecognitionWork, recognitionTotal = recognition?.Progress.Total,
-        discoveryOpen = DiscoveryNotice.IsOpen, discoveryTitle = DiscoveryNotice.Title,
-        menuItems = activeCardMenu?.Items.OfType<MenuFlyoutItem>().Select(x => new { x.Text, x.IsEnabled }).ToArray()
-    };
+    internal object? ContextMenuEvidenceFixture() =>
+        activeCardMenu?.Items.OfType<MenuFlyoutItem>().Select(x => new { x.Text, x.IsEnabled }).ToArray();
 }

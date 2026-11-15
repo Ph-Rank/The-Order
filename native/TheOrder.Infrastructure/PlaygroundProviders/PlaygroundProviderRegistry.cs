@@ -40,7 +40,7 @@ internal sealed partial class NativePlaygroundProvider(PlaygroundProviderKind ki
         bool verified = Kind switch
         {
             PlaygroundProviderKind.OpenAI => model is "gpt-6-astra" or "gpt-6.1-sol" or "gpt-6.1-terra" or "gpt-6-luna" or "gpt-5.4" or "gpt-5.5",
-            PlaygroundProviderKind.Gemini => model is "gemini-4-argon" or "gemini-3.8-flash" or "gemini-3.6-flash",
+            PlaygroundProviderKind.Gemini => model is "gemini-4-hydrogen" or "gemini-4-carbon" or "gemini-4-argon" or "gemini-3.8-flash" or "gemini-3.6-flash",
             PlaygroundProviderKind.Claude => model is "claude-opus-5-5" or "claude-opus-5" or "claude-opus-4-6" or "claude-sonnet-4-6",
             PlaygroundProviderKind.Grok => model is "grok-4.7",
             PlaygroundProviderKind.DeepSeek => model is "deepseek-flash" or "deepseek-v4-pro",
@@ -59,7 +59,8 @@ internal sealed partial class NativePlaygroundProvider(PlaygroundProviderKind ki
                 _ => []
             } : Kind == PlaygroundProviderKind.DeepSeek && verified ? ["none", "low", "medium", "high", "max"]
                 : Kind == PlaygroundProviderKind.Grok && verified ? ["low", "medium", "high", "xhigh"]
-                : Kind == PlaygroundProviderKind.Gemini && verified ? ["low", "medium", "high"]
+                : Kind == PlaygroundProviderKind.Gemini && verified
+                    ? model == "gemini-4-hydrogen" ? ["low", "medium", "high", "xhigh"] : ["low", "medium", "high"]
                 : Kind == PlaygroundProviderKind.Claude && verified ? model is "claude-opus-5-5" or "claude-opus-5"
                     ? ["low", "medium", "high", "xhigh", "max"] : ["low", "medium", "high", "max"] : [],
             Notice = (Kind == PlaygroundProviderKind.Claude ? "请使用限定工作区的 API Key；未限定 Key 暂不支持 workspace header。" : "")

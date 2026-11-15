@@ -10,7 +10,7 @@ public sealed partial class PlaygroundView
 {
     private readonly ToggleSwitch searchMode = new() { OnContent = "", OffContent = "", MinWidth = 0 };
     private readonly ToggleSwitch spoilerMode = new() { OnContent = "", OffContent = "", MinWidth = 0 };
-    private readonly ComboBox effort = new() { HorizontalAlignment = HorizontalAlignment.Stretch, MinWidth = 0 };
+    private readonly SelectedFirstComboBox effort = new() { HorizontalAlignment = HorizontalAlignment.Stretch, MinWidth = 0 };
     private readonly CheckBox savedContext = new() { Content = "使用已授权的记录与记忆" };
     private readonly TextBlock connectionStatus = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock capabilitiesNotice = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
@@ -45,8 +45,8 @@ public sealed partial class PlaygroundView
         AutomationProperties.SetAutomationId(systemPrompt, "PlaygroundSystemInstructions"); AutomationProperties.SetName(systemPrompt, "编辑对话预设"); settings.Children.Add(systemPrompt);
 
         settings.Children.Add(Label("思考等级", 13)); PlaygroundAppearance.Apply(effort, "PGComboBox");
-        effort.ItemsSource = new[] { "低", "中", "高" };
-        effort.SelectionChanged += async (_, _) => { if (!synchronizing && effort.SelectedIndex >= 0) { Draft = Draft with { ReasoningEffort = new[] { "low", "medium", "high" }[effort.SelectedIndex] }; await RunAsync(ApplyOptionsAsync); } };
+        effort.OptionsSource = new[] { "低", "中", "高" };
+        effort.OptionChanged += async (_, _) => { if (!synchronizing && effort.OptionIndex >= 0) { Draft = Draft with { ReasoningEffort = new[] { "low", "medium", "high" }[effort.OptionIndex] }; await RunAsync(ApplyOptionsAsync); } };
         AutomationProperties.SetAutomationId(effort, "PlaygroundReasoningEffort"); settings.Children.Add(effort);
 
         settings.Children.Add(Divider());
@@ -139,7 +139,7 @@ public sealed partial class PlaygroundView
             var allowed = new[] { "low", "medium", "high" }.Where(x => capabilities.Verified && capabilities.ReasoningEfforts.Contains(x)).ToArray();
             string? selectedEffort = Draft.ReasoningEffort is { } saved && allowed.Contains(saved) ? saved : allowed.Contains("high") ? "high" : allowed.FirstOrDefault();
             if (Draft.ReasoningEffort != selectedEffort) Draft = Draft with { ReasoningEffort = selectedEffort };
-            effort.SelectedIndex = selectedEffort switch { "low" => 0, "medium" => 1, "high" => 2, _ => -1 };
+            effort.OptionIndex = selectedEffort switch { "low" => 0, "medium" => 1, "high" => 2, _ => -1 };
             effort.PlaceholderText = "模型默认"; effort.IsEnabled = allowed.Length != 0;
             effort.Visibility = Visibility.Visible;
         }
@@ -190,8 +190,8 @@ public sealed partial class PlaygroundView
         foreach (var pair in selectedWorks) Add(pair.Key, pair.Value);
         if (available.Count > 0)
         {
-            var choose = new ComboBox { Header = "选择需要讨论的作品", HorizontalAlignment = HorizontalAlignment.Stretch, DisplayMemberPath = "Title", ItemsSource = available.Select(x => new ProgressWork(x.Key, x.Title)).ToArray() };
-            choose.SelectionChanged += (_, _) => { if (choose.SelectedItem is ProgressWork work) Add(work.Key, ""); }; panel.Children.Add(choose);
+            var choose = new SelectedFirstComboBox { Header = "选择需要讨论的作品", HorizontalAlignment = HorizontalAlignment.Stretch, DisplayMemberPath = "Title", OptionsSource = available.Select(x => new ProgressWork(x.Key, x.Title)).ToArray() };
+            choose.OptionChanged += (_, _) => { if (choose.SelectedOption is ProgressWork work) Add(work.Key, ""); }; panel.Children.Add(choose);
         }
         else panel.Children.Add(Label("尚未授权本地记录，或当前没有可供选择的库内作品；不会枚举整库。", 12));
         panel.Children.Add(rows); panel.Children.Add(Label("清空一项进度可移除该作品的明确边界，之后按未知处理。", 12));
@@ -258,7 +258,7 @@ public sealed partial class PlaygroundView
             await OpenSourceAsync(new(origin.Id.ToString("N"), PlaygroundSourceKind.Memory, "记忆来源") { TargetId = origin.ConversationId.ToString(), MessageId = origin.MessageId.ToString(), WorkKey = origin.WorkKey, At = origin.CreatedAt });
         };
         await PopulateAsync();
-        try { await dialog.ShowAsync(); }
+        try { await dialog.ShowInShellAsync(); }
         finally { memoryOpen = false; memorySearchGeneration++; memorySearchTimer.Stop(); }
     }
     private static bool SameEndpoint(string a, string b)

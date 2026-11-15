@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -12,7 +13,7 @@ namespace TheOrder.WinUI.Startup;
 
 internal static class Composition
 {
-    public static NativeHost Create(LanguageSettings languages, LanguagePreferencesStore languageStore,
+    public static async Task<NativeHost> CreateAsync(LanguageSettings languages, LanguagePreferencesStore languageStore,
         ContentLanguageSettings contentLanguages, ContentLanguagePreferencesStore contentStore)
     {
         var configuration = new ConfigurationBuilder().AddEnvironmentVariables("THE_ORDER_NATIVE_").Build();
@@ -21,14 +22,26 @@ internal static class Composition
         services.AddSingleton<ILanguagePreferencesStore>(_ => languageStore);
         services.AddSingleton(contentLanguages);
         services.AddSingleton<IContentLanguagePreferencesStore>(_ => contentStore);
+        var lifecycleLog = Program.Profile is { } profile ? new NativeLifecycleLog(profile) : null;
         services.AddLogging(builder =>
         {
             builder.AddDebug().SetMinimumLevel(LogLevel.Information);
-            if (Program.Profile is { } profile) builder.AddProvider(new NativeLifecycleLog(profile));
+            if (lifecycleLog is not null) builder.AddProvider(lifecycleLog);
         });
         var nativeConfiguration = Program.Profile?.Configuration(configuration["DIAGNOSTICS"] == "1")
             ?? new NativeConfiguration(configuration["DATA_DIR"], configuration["DIAGNOSTICS"] == "1");
         services.AddSingleton(nativeConfiguration);
+        services.AddSingleton<IFeedbackCredentialStore, WindowsFeedbackCredentials>();
+        services.AddSingleton(p =>
+        {
+            var clientId = typeof(Composition).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+                .FirstOrDefault(item => item.Key == "GitHubFeedbackClientId")?.Value;
+            var http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+            {
+                Timeout = TimeSpan.FromSeconds(18), MaxResponseContentBufferSize = 65536
+            };
+            return new GitHubFeedbackClient(http, p.GetRequiredService<IFeedbackCredentialStore>(), clientId);
+        });
         services.AddSingleton<GitHubUpdateFeed>();
         var fixtureUpdates = Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test
             && configuration["VISUAL_TEST"] == "1" && configuration["UPDATE_FIXTURE"] == "1";
@@ -70,7 +83,8 @@ internal static class Composition
             if (!client.Capability.Loaded) throw new IOException(client.Capability.Message);
             if (!client.Capability.CanEdit) return null;
             return client.CreateSessionEngine(p.GetRequiredService<IFilesystemIdentity>(), p.GetRequiredService<IGameProcessPlatform>(),
-                p.GetRequiredService<ILaunchPositionStore>(), new WindowsSessionClock(), new WindowsSessionRecoveryTokens(nativeConfiguration), p.GetRequiredService<WindowsSessionPowerEvents>(), p.GetRequiredService<LaunchPolicy>());
+                p.GetRequiredService<ILaunchPositionStore>(), new WindowsSessionClock(), new WindowsSessionRecoveryTokens(nativeConfiguration), p.GetRequiredService<WindowsSessionPowerEvents>(), p.GetRequiredService<LaunchPolicy>(),
+                requireRecordingMinimum: true);
         }, () => p.GetRequiredService<OfflineLibraryClient>().CurrentSnapshot, (id, cancellation) => p.GetRequiredService<WindowsWalkthroughSessions>().PrepareForGameAsync(id, cancellation)));
         services.AddSingleton(p => new LaunchViewModel(p.GetRequiredService<ILaunchLibrary>(), p.GetRequiredService<AppSessionHost>()));
         services.AddSingleton<IScanFilesystem, WindowsScanFilesystem>();
@@ -172,6 +186,8 @@ internal static class Composition
         services.AddSingleton<ICatalogReleaseReader>(p => p.GetRequiredService<NextMoeCatalog>());
         services.AddSingleton<IEntityCatalog>(p => p.GetRequiredService<NextMoeCatalog>());
         services.AddSingleton<IContentFilteredCatalog>(p => p.GetRequiredService<NextMoeCatalog>());
+        services.AddSingleton<ICatalogDiscovery>(p => p.GetRequiredService<NextMoeCatalog>());
+        services.AddSingleton<DiscoveryFeedViewModel>();
         services.AddSingleton<CatalogBrowsePolicy>();
         services.AddSingleton<CatalogBrowseClient>();
         services.AddSingleton<ICatalogBrowsePreferencesStore, CatalogBrowsePreferencesStore>();
@@ -203,7 +219,9 @@ internal static class Composition
             p.GetRequiredService<IRecognitionReviewStorage>(), p.GetRequiredService<IRecognitionReviewCodec>(), p.GetRequiredService<IRecognitionEvidenceReader>(),
             p.GetRequiredService<IRecognitionRanker>(), p.GetRequiredService<IRecognitionCatalog>(), p.GetRequiredService<OnlineAuthContext>(), RecognitionFingerprint.Identity));
         services.AddSingleton<RecognitionViewModel>();
-        services.AddSingleton<IRemoteArtworkCache,IsolatedArtworkCache>();
+        services.AddSingleton<IsolatedArtworkCache>();
+        services.AddSingleton<IRemoteArtworkCache>(p => p.GetRequiredService<IsolatedArtworkCache>());
+        services.AddSingleton<IsolatedHeroFrameCache>();
         services.AddSingleton(p => new RemoteCoverSource(performanceImages ? p.GetRequiredService<PerformanceImageFixture>().Client : fixtureOnline ? p.GetRequiredService<SyntheticOnline>().Client : p.GetRequiredService<ImageNetwork>().Client,p.GetRequiredService<IRemoteArtworkCache>(),
             fixtureOnline || performanceImages ? null : p.GetRequiredService<PublicArtworkNetwork>().Client));
         services.AddSingleton<IRemoteCoverRegistry>(p => p.GetRequiredService<RemoteCoverSource>());
@@ -213,7 +231,10 @@ internal static class Composition
         services.AddSingleton(p => new OnlineViewModel(p.GetRequiredService<CatalogBrowseClient>(),
             p.GetRequiredService<ICredentialSettings>(), p.GetRequiredService<IRemoteCoverRegistry>(),
             p.GetRequiredService<OnlineLibraryClient>(), p.GetRequiredService<WorkspaceViewModel>()));
-        services.AddSingleton<IThumbnailDiskCache, IsolatedThumbnailCache>();
+        services.AddSingleton<IsolatedThumbnailCache>();
+        services.AddSingleton<IThumbnailDiskCache>(p => p.GetRequiredService<IsolatedThumbnailCache>());
+        services.AddSingleton<ImageCacheStorage>();
+        services.AddSingleton<WindowsClosePreference>();
         services.AddSingleton(new ImageOptions(MaximumEdge: ArtworkSizing.MaximumEdge));
         services.AddSingleton<IImagePipeline, ImagePipeline>();
         services.AddSingleton<ICatalogPresentationCache, IsolatedCatalogPresentationCache>();
@@ -227,9 +248,10 @@ internal static class Composition
         services.AddSingleton<ICoverRecommendationSource>(p => p.GetRequiredService<CatalogPresentationService>());
         services.AddSingleton<ICachedCoverRecommendationSource>(p => p.GetRequiredService<CatalogPresentationService>());
         services.AddSingleton<FilesViewModel>();
+        var holdPreferences = nativeConfiguration.Diagnostics && configuration["HOLD_PREFERENCES"] == "1";
         if (nativeConfiguration.Diagnostics)
         {
-            services.AddSingleton(new SyntheticScenario(configuration["HOLD_PREFERENCES"] == "1", configuration["HOLD_IMAGES"] == "1"));
+            services.AddSingleton(new SyntheticScenario(holdPreferences, configuration["HOLD_IMAGES"] == "1"));
             services.AddSingleton<IOfflineFilesClient>(p => p.GetRequiredService<SyntheticScenario>().Wrap(p.GetRequiredService<OfflineFilesClient>()));
             services.AddSingleton<IImageSourceProvider>(p => p.GetRequiredService<SyntheticScenario>().Wrap(p.GetRequiredService<CombinedCoverSources>()));
             services.AddSingleton<IClientTextRules>(p => p.GetRequiredService<SyntheticScenario>().Wrap(new LegacyClientTextRules()));
@@ -248,8 +270,11 @@ internal static class Composition
         services.AddSingleton<MainWindow>();
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
         // Resolution is confined to this composition root. Views and view models receive constructors.
+        // The synthetic hold is released from the window's diagnostics controls.
+        if (!holdPreferences) await provider.GetRequiredService<WorkspaceViewModel>().PrepareStartupThemeAsync();
         var mainWindow = provider.GetRequiredService<MainWindow>();
         mainWindow.ConfigureWalkthroughs(provider.GetRequiredService<IWalkthroughReader>(), provider.GetRequiredService<WindowsWalkthroughSessions>());
+        mainWindow.ConfigureFeedback(provider.GetRequiredService<GitHubFeedbackClient>(), lifecycleLog);
         return new(provider, mainWindow, provider.GetRequiredService<AppSessionHost>(), provider.GetRequiredService<IAppUpdateInstaller>(), provider.GetRequiredService<ILogger<NativeHost>>());
     }
 }

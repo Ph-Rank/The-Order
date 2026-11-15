@@ -13,9 +13,10 @@ public sealed class CatalogContentView : StackPanel,IImageHost
     public Func<string,Task>? OpenLink {get;set;}
     public UIElement? Sources { get; set; }
     public UIElement? BeforeTags { get; set; }
+    internal ContentControl? SupplementalHost { get; set; }
     public bool ShowRelatedWorks { get; set; } = true;
     private readonly CatalogReleasesView releases = new();
-    private readonly StackPanel supplemental = new() { Spacing = 4 };
+    private readonly StackPanel supplemental = new() { Spacing = 10 };
     private readonly SmoothExpander moreInformation = new() { Header = "更多资料", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private ContentLanguageInfo? languageInfo;
     private WorkMetadata? renderedWork;
@@ -76,7 +77,12 @@ public sealed class CatalogContentView : StackPanel,IImageHost
             await Images.LoadAsync(key,ThumbnailSizing.Edge(width,height,scale),token);
         }
     }
-    public CatalogContentView(){Spacing=22;moreInformation.Content=supplemental;SecondaryDisclosure.Apply(moreInformation);Unloaded+=(_,_)=>{if(!IsLoaded)releases.Deactivate();};}
+    public CatalogContentView()
+    {
+        Spacing = 22;
+        moreInformation.Content = supplemental;
+        Unloaded += (_, _) => { if (!IsLoaded) releases.Deactivate(); };
+    }
     private static TextBlock Text(string text,double size=15)=>new(){Text=text,FontSize=size,TextWrapping=TextWrapping.Wrap,IsTextSelectionEnabled=true};
     private static TextBlock Caption(string text,double size=14)=>new(){Text=text,FontSize=size,TextWrapping=TextWrapping.Wrap,TextAlignment=TextAlignment.Center,HorizontalAlignment=HorizontalAlignment.Stretch};
     private static StackPanel Section(string title)=>new(){Spacing=10,Children={new TextBlock{Text=title,FontSize=22,FontWeight=Microsoft.UI.Text.FontWeights.SemiBold}}};
@@ -90,6 +96,7 @@ public sealed class CatalogContentView : StackPanel,IImageHost
         RenderCount++;
         if (releasesWorkId != work?.Id) moreInformation.IsExpanded = false;
         supplemental.Children.Clear(); languageInfo = null;
+        if (SupplementalHost is { } host) host.Visibility = Visibility.Collapsed;
         releasesWorkId = work?.Id; releases.OpenLink = OpenLink; releases.SetSource(releasesWorkId);
         var rawWork = work;
         if (work is not null) work = CatalogLanguage.Project(work);
@@ -124,7 +131,7 @@ public sealed class CatalogContentView : StackPanel,IImageHost
         {
             var series = new TagFlowPanel { HorizontalSpacing = 6, VerticalSpacing = 4, Margin = new Thickness(0, 0, 0, -6) };
             var seriesLabel = Text(UiText.Get("系列 ·"), 14);
-            seriesLabel.Foreground = (Brush)Microsoft.UI.Xaml.Application.Current.Resources["TextSecondaryBrush"];
+            seriesLabel.Style = (Style)Microsoft.UI.Xaml.Application.Current.Resources["MetadataTextStyle"];
             series.Children.Add(seriesLabel);
             foreach (var entity in p.Series) series.Children.Add(Link(entity));
             AddSection(series);
@@ -139,10 +146,6 @@ public sealed class CatalogContentView : StackPanel,IImageHost
             }
         if (releasesReader is not null) supplemental.Children.Add(releases);
         var intro = Section(UiText.Get("简介"));
-        if (rawWork is not null && ContentLanguage.CatalogSynopsis(rawWork) is { Selected.IsMachine: true } selectedIntro)
-        {
-            var caption = Text(selectedIntro.Caption, 12); caption.Opacity = .7; intro.Children.Add(caption);
-        }
         var description = Markdown(string.IsNullOrWhiteSpace(work.Description) ? UiText.Get("暂无本版本简介。") : work.Description);
         description.MaxWidth = 860; description.HorizontalAlignment = HorizontalAlignment.Left;
         intro.Children.Add(description); AddSection(intro);
@@ -176,8 +179,21 @@ public sealed class CatalogContentView : StackPanel,IImageHost
             AddSection(tags);
         }
         var characters=p?.Characters??[..work.Characters.Select(c=>new CatalogCharacter(new(CatalogEntityKind.Character,c.Id,c.Name,ImageUrl:c.ImageUrl),c.OriginalName,c.Role,"none",[..c.VoiceActors.Select(n=>new CatalogEntityRef(CatalogEntityKind.CreditName,"",n))]))];
-        bool hasSpoilerExpander = false;
-        if(!characters.IsEmpty){var section=Section(UiText.Get("角色"));var safe=characters.Where(c=>c.Spoiler is "" or "none").ToArray();section.Children.Add(CharacterGrid(safe,work.FetchedAt));var hidden=characters.Where(c=>c.Spoiler is not ("" or "none")).ToArray();if(hidden.Length>0){hasSpoilerExpander = true;var expander=new SmoothExpander {Header=UiText.Format($"剧透角色（{hidden.Length}）"),HorizontalAlignment=HorizontalAlignment.Stretch,Margin=new Thickness(0,4,0,0)};expander.Expanding+=(_,_)=>{expander.Content??=CharacterGrid(hidden,work.FetchedAt);};section.Children.Add(expander);}AddSection(section);}
+        var creditSections = new StackPanel { Spacing = 10 };
+        if (!characters.IsEmpty)
+        {
+            var section = Section(UiText.Get("角色"));
+            var safe = characters.Where(character => character.Spoiler is "" or "none").ToArray();
+            if (safe.Length > 0) section.Children.Add(CharacterGrid(safe, work.FetchedAt));
+            AddSection(section);
+            var hidden = characters.Where(character => character.Spoiler is not ("" or "none")).ToArray();
+            if (hidden.Length > 0)
+            {
+                var spoilers = new SmoothExpander { Header = UiText.Format($"剧透角色（{hidden.Length}）"), HorizontalAlignment = HorizontalAlignment.Stretch };
+                spoilers.Expanding += (_, _) => spoilers.Content ??= CharacterGrid(hidden, work.FetchedAt);
+                creditSections.Children.Add(spoilers);
+            }
+        }
         if (p is { Credits.IsEmpty: false })
         {
             var credits = new CreditColumnsPanel();
@@ -200,23 +216,25 @@ public sealed class CatalogContentView : StackPanel,IImageHost
             }
             if (credits.Children.Count > 0)
             {
-                AddSection(new SmoothExpander {
-                    Header = UiText.Get("制作人员"),
-                    Content = credits,
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                    Margin = hasSpoilerExpander ? new Thickness(0, -12, 0, 0) : new Thickness(0)
+                creditSections.Children.Add(new SmoothExpander
+                {
+                    Header = UiText.Get("制作人员"), Content = credits,
+                    HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch
                 });
             }
         }
-        if (Sources is not null)
-        {
-            if (Sources is FrameworkElement sourcesElement) sourcesElement.Margin = new Thickness(0);
-            if (Sources is Expander disclosure) SecondaryDisclosure.Apply(disclosure);
-            supplemental.Children.Add(Sources);
-        }
+        if (creditSections.Children.Count > 0) AddSection(creditSections);
+        if (Sources is not null) supplemental.Children.Add(Sources);
         if(ShowRelatedWorks && p is {RelatedWorks.IsEmpty:false}){var related=Section(UiText.Get("相关作品"));related.Children.Add(RelatedGrid(p.RelatedWorks,work.FetchedAt));AddSection(related);}
-        if (supplemental.Children.Count > 0) AddSection(moreInformation);
+        if (supplemental.Children.Count > 0)
+        {
+            if (SupplementalHost is { } target)
+            {
+                if (!ReferenceEquals(target.Content, moreInformation)) target.Content = moreInformation;
+                target.Visibility = Visibility.Visible;
+            }
+            else AddSection(moreInformation);
+        }
         Remember(rawWork,personalName,collapseFacts);
     }
     private void Remember(WorkMetadata? work,string? name,bool facts)
@@ -228,7 +246,7 @@ public sealed class CatalogContentView : StackPanel,IImageHost
         {
             var card=new StackPanel {Width=146,Spacing=6};
             var picture=new CoverPresenter {Pipeline=Images,SourceKey=Registry?.Register(entity.ImageUrl,revision)??ImageSourceKeys.Remote(entity.ImageUrl,revision),ImageCornerRadius=6};artwork.Add(("related",picture));
-            card.Children.Add(new Border {Width=146,Height=196,CornerRadius=new CornerRadius(6),Background=(Brush)Microsoft.UI.Xaml.Application.Current.Resources["SubtleFillColorSecondaryBrush"],Child=picture});
+            card.Children.Add(new Border {Width=146,Height=196,Style=(Style)Microsoft.UI.Xaml.Application.Current.Resources["CatalogThumbnailFrameStyle"],Child=picture});
             var title=Caption(entity.Name);title.FontWeight=Microsoft.UI.Text.FontWeights.SemiBold;card.Children.Add(title);
             if(entity.Subtitle is {Length:>0}){var sub=Caption(entity.Subtitle,12);sub.Opacity=0.78;card.Children.Add(sub);}
             var button=new Button {Content=card,Padding=new Thickness(0),BorderThickness=new Thickness(0),Background=new SolidColorBrush(Microsoft.UI.Colors.Transparent),HorizontalContentAlignment=HorizontalAlignment.Stretch};
@@ -261,12 +279,10 @@ public sealed class CatalogContentView : StackPanel,IImageHost
                 var voices=CompactVoices(c);voices.Opacity=0.76;
                 var badge=new Border
                 {
+                    Style=(Style)Microsoft.UI.Xaml.Application.Current.Resources["CatalogCreditCardStyle"],
                     Width=172,
                     Padding=new Thickness(12,8,12,8),
                     CornerRadius=new CornerRadius(6),
-                    Background=(Brush)Microsoft.UI.Xaml.Application.Current.Resources["SubtleFillColorSecondaryBrush"],
-                    BorderBrush=(Brush)Microsoft.UI.Xaml.Application.Current.Resources["StrokeBrush"],
-                    BorderThickness=new Thickness(1),
                     Child=new StackPanel {Spacing=3,Children={button,voices}}
                 };
                 compact.Children.Add(badge);
@@ -280,8 +296,7 @@ public sealed class CatalogContentView : StackPanel,IImageHost
             {
                 Width=122,
                 Height=146,
-                CornerRadius=new CornerRadius(6),
-                Background=(Brush)Microsoft.UI.Xaml.Application.Current.Resources["SubtleFillColorSecondaryBrush"],
+                Style=(Style)Microsoft.UI.Xaml.Application.Current.Resources["CatalogThumbnailFrameStyle"],
                 Child=portrait
             });
             var charName=Caption(c.Entity.Name);charName.FontWeight=Microsoft.UI.Text.FontWeights.SemiBold;

@@ -254,6 +254,68 @@ public sealed class CatalogPreparationTests
         Assert.True(await service.PrepareAsync("200"));var entry=await service.GetAsync("200");Assert.True(entry.Prepared);Assert.Null(entry.Banner);
         int count=detector.Calls;Assert.True(await service.PrepareAsync("200"));Assert.Equal(count,detector.Calls);
     }
+    [Fact]
+    public async Task LegacyNoBannerCacheRetriesPromoAndRetainsTheSelectedArtworkAcrossRestart()
+    {
+        using var fixture = new ProfileFixture();
+        using var profile = fixture.Open();
+        var store = new IsolatedCatalogPresentationCache(profile.Configuration());
+        var original = Artwork() with { CoverUrl = "https://example.org/poster" };
+        await using var images = new Images();
+        await using (var seed = Service(new Catalog { Current = original }, images, store, new Detector { Dialogue = true }))
+            Assert.True(await seed.PrepareAsync("200"));
+        var legacy = (await store.ReadAsync("200", default))!;
+        var current = CachedCatalogWork.From(legacy.Work with { References = [new("vndb", "v26523", null)] });
+        await store.WriteAsync(legacy with { Current = current, Signature = CatalogPresentationService.Signature(current, legacy.Reference) }, default);
+
+        var catalog = new Catalog { Offline = true };
+        var detector = new Detector();
+        var promos = new PromoArtwork { Offline = true };
+        await using (var service = new CatalogPresentationService(catalog, images, new Registry(), store, () => detector, new OnlineAuthContext(), promos))
+        {
+            var cached = await service.GetAsync("200");
+            Assert.True(cached.Prepared);
+            Assert.Null(cached.Banner);
+            Assert.True(CatalogPresentationService.NeedsPreparation(cached));
+            Assert.Equal(0, promos.Calls);
+            Assert.False(await service.PrepareAsync("200"));
+            Assert.True(CatalogPresentationService.NeedsPreparation(await service.GetAsync("200")));
+            Assert.Equal(0, detector.Calls);
+
+            promos.Offline = false;
+            service.Queue(["200"], priority: true);
+            await service.WhenIdleAsync();
+            var updated = await service.GetAsync("200");
+            Assert.False(CatalogPresentationService.NeedsPreparation(updated));
+            Assert.Equal(ArtworkSources.VndbPromoKind, updated.Banner!.Kind);
+            Assert.Equal(original.CoverUrl, updated.Work.CoverUrl);
+            Assert.Equal(2, updated.BannerAssessments.Length);
+            Assert.Equal(1, detector.Calls);
+            Assert.Equal(2, promos.Calls);
+        }
+        await using var reopened = new CatalogPresentationService(catalog, images, new Registry(), store, () => detector, new OnlineAuthContext(), promos);
+        Assert.True(await reopened.PrepareAsync("200"));
+        Assert.Equal(PromoArtwork.Url, (await reopened.GetAsync("200")).Banner!.Url);
+        Assert.Equal(0, catalog.Calls);
+        Assert.Equal(1, detector.Calls);
+        Assert.Equal(2, promos.Calls);
+    }
+
+    private sealed class PromoArtwork : IPublicArtworkSource
+    {
+        public const string Url = "https://t.vndb.org/cv/01/1.jpg";
+        public int Calls;
+        public bool Offline;
+        public Task<ArtworkSupplement> ReadAsync(WorkMetadata work, CancellationToken cancellation)
+            => Task.FromResult(new ArtworkSupplement([], true));
+        public Task<ArtworkSupplement> ReadPromoAsync(WorkMetadata work, CancellationToken cancellation)
+        {
+            Calls++;
+            return Task.FromResult(Offline ? new ArtworkSupplement([], false) :
+                new ArtworkSupplement([new(Url, 1200, 675, ArtworkSources.VndbPromoKind)], true));
+        }
+    }
+
     [Fact] public async Task CancelledAnalysisNeverPublishesPreparedOrSelectedResult()
     {
         var entered=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

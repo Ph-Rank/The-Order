@@ -17,12 +17,33 @@ struct Header {
     volatile LONG64 rendererPulse, hostPulse; LONG pid; volatile LONG status; LONG64 created;
     volatile LONG command, argument, route, step, graph, hotkey; volatile LONG mouseSample; LONG selected;
     float opacity, fontSize; LONG flowNodes,flowEdges,flowSelected,flowZoom; LONG ownerPid, readerAck;
-    volatile LONG64 lastToggle; volatile LONG renderedFrames, gameFrames, injectResult, renderApi; LONG guideChannel, sourceFlags; BYTE reserved152[24]; volatile LONG channel, everOpened;
+    volatile LONG64 lastToggle; volatile LONG renderedFrames, gameFrames, injectResult, renderApi; LONG guideChannel, sourceFlags;
+    volatile LONG64 presentationPulse, windowedPulse, navigationPulse; volatile LONG channel, everOpened;
     volatile LONG panelWidth, panelHeight, bodyFontPx, visibleSteps, scrollY, showOriginal, readerBackend, lightTheme, dpi;
     volatile LONG readingWidth, navigationWidth, indexWidth, overflowRows, rowPitch, visibleStage, readingFirst, layoutMode, fontRoles;
 };
 static_assert(sizeof(Header) == 256 && offsetof(Header, lastToggle) == 120);
 static_assert(offsetof(Header,panelWidth)==184 && offsetof(Header,readerBackend)==208);
+static_assert(offsetof(Header,presentationPulse)==152 && offsetof(Header,windowedPulse)==160
+    && offsetof(Header,navigationPulse)==168);
+inline bool freshPulse(ULONGLONG pulse,ULONGLONG now,ULONGLONG age) {
+    return pulse!=0&&now>=pulse&&now-pulse<age;
+}
+inline bool rendererActive(Header* header,ULONGLONG now,ULONGLONG age=1300) {
+    return freshPulse(ULONGLONG(InterlockedCompareExchange64(&header->rendererPulse,0,0)),now,age);
+}
+inline bool windowedPresentation(Header* header,ULONGLONG now) {
+    return freshPulse(ULONGLONG(InterlockedCompareExchange64(&header->windowedPulse,0,0)),now,1300);
+}
+// A short lease gives the companion the physical display surface. The sign
+// distinguishes a scaler (source-side IME) from an ordinary window (native EDIT).
+enum class CompanionSurface { None, Window, Scaled };
+inline CompanionSurface companionSurface(Header* header,ULONGLONG now) {
+    const LONG64 lease=InterlockedCompareExchange64(&header->presentationPulse,0,0);
+    const ULONGLONG tick=lease<0?0ULL-ULONGLONG(lease):ULONGLONG(lease);
+    if(!freshPulse(tick,now,1000))return CompanionSurface::None;
+    return lease<0?CompanionSurface::Window:CompanionSurface::Scaled;
+}
 inline int shortcutKey(int shortcut){return shortcut&255;}
 inline UINT shortcutModifiers(int shortcut){return UINT(shortcut>>16)&7U;}
 inline UINT activeModifiers(){return ((GetAsyncKeyState(VK_MENU)&0x8000)?MOD_ALT:0U)
@@ -131,9 +152,9 @@ public:
         if(header->visible)InterlockedExchange(&header->everOpened,1);
     }
     bool request(int command,int argument){if(!header||header->command)return false;header->argument=argument;MemoryBarrier();InterlockedExchange(&header->command,command);return true;}
-    bool action(int index) {
-        if (!header || (index != 1 && index != 2 && index != 3)) return false;
-        auto* stamp = reinterpret_cast<volatile LONG64*>(reinterpret_cast<BYTE*>(header) + 144 + index * 8);
+    bool navigate() {
+        if (!header) return false;
+        auto* stamp = &header->navigationPulse;
         LONG64 now = static_cast<LONG64>(GetTickCount64()), previous = *stamp;
         return now - previous >= 220 && InterlockedCompareExchange64(stamp, now, previous) == previous;
     }

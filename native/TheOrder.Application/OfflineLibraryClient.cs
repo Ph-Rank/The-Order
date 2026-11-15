@@ -52,8 +52,9 @@ public sealed class OfflineLibraryClient(ITransactionalLibraryFactory factory, I
         catch (Exception e) when (Expected(e)) { return Failure(e); }
     }
     public SessionEngine CreateSessionEngine(IFilesystemIdentity filesystem, IGameProcessPlatform platform, ILaunchPositionStore positions,
-        ISessionClock clock, ISessionRecoveryTokens tokens, ISessionPowerEvents? power = null, LaunchPolicy? launchPolicy = null)
-        => new(Required(), filesystem, platform, positions, clock, tokens, power, launchPolicy: launchPolicy);
+        ISessionClock clock, ISessionRecoveryTokens tokens, ISessionPowerEvents? power = null, LaunchPolicy? launchPolicy = null,
+        bool requireRecordingMinimum = false)
+        => new(Required(), filesystem, platform, positions, clock, tokens, power, launchPolicy: launchPolicy, requireRecordingMinimum: requireRecordingMinimum);
     public Task<RecognitionEntrySnapshot> CaptureRecognitionAsync(string id, CancellationToken cancellation) => Required().CaptureRecognitionAsync(id, cancellation);
     public Task<bool> IsRecognitionCurrentAsync(RecognitionEntrySnapshot snapshot, CancellationToken cancellation) => Required().IsRecognitionCurrentAsync(snapshot, cancellation);
     public Task<ImmutableArray<string>> RecognitionTargetsAsync(ImmutableArray<string> selected, RecognitionMode mode, CancellationToken cancellation)
@@ -156,7 +157,7 @@ public sealed class OfflineLibraryClient(ITransactionalLibraryFactory factory, I
                 var fields = new[] { e.Name, e.Metadata?.Title ?? "", e.Metadata?.OriginalTitle ?? "" }.Concat(e.Metadata?.Aliases ?? []).Concat(e.Metadata?.Developers ?? [])
                     .Concat(e.Categories).Concat(combinedTags).Concat(e.Installations.Select(i => i.Folder));
                 var preferred = e.Installations.FirstOrDefault(i => i.Id == e.PreferredInstallationId) ?? (e.Installations.Length == 1 ? e.Installations[0] : null);
-                built.Add(new(new GameSummary(e.Id, e.Name, e.Status, e.PersonalRating, e.Favorite, string.Join(" · ", e.Categories.Concat(e.CustomTags).Take(4)), e.Installations.Length, e.EffectivePlaySeconds) { CoverKey = ImageSourceKeys.For(e), HasLocalCover = e.LocalCover is not null, CatalogWorkId = e.Metadata?.Id, AutomaticCover = e.LocalCover is null && (e.CoverChoice is null || e.CoverChoice.WorkId != e.Metadata?.Id), LastPlayedAt = e.LastPlayedAt, HasPlayHistory = e.Sessions.Length > 0 || e.EffectivePlaySeconds > 0 || e.PlayCount > 0 },
+                built.Add(new(new GameSummary(e.Id, e.Name, e.Status, e.PersonalRating, e.Favorite, string.Join(" · ", e.Categories.Concat(e.CustomTags).Take(4)), e.Installations.Length, e.EffectivePlaySeconds) { CoverKey = ImageSourceKeys.For(e), HasLocalCover = e.LocalCover is not null, CatalogWorkId = e.Metadata?.Id, AutomaticCover = e.LocalCover is null && (e.CoverChoice is null || e.CoverChoice.WorkId != e.Metadata?.Id), LastPlayedAt = e.LastPlayedAt, HasPlayHistory = !e.RecordedSessions.IsEmpty || e.EffectivePlaySeconds > 0 || e.PlayCount > 0 },
                     [.. fields.Select(text.NormalizeSearch)], e.Categories, combinedTags,
                     e.Installations.Length > 0 && string.IsNullOrEmpty(e.Metadata?.CoverUrl),
                     e.Installations.Length > 0 && (preferred?.Executable is null || !LaunchFileDiscovery.IsLaunchFile(preferred.Executable)), e.AddedAt, e.LastPlayedAt ?? ""));

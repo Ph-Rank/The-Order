@@ -11,12 +11,11 @@ namespace TheOrder.WinUI;
 public sealed partial class MainWindow
 {
     private ContentDialog? round3Dialog;
-    private string? round3TimerOverride;
     private object Round3Evidence() => new {
         assembly = typeof(MainWindow).Assembly.ManifestModule.ModuleVersionId,
         version = typeof(MainWindow).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
-        library = libraryPage.VisualLayoutEvidence(), timerWidth = SessionDuration.ActualWidth,
-        timerText = SessionDuration.Text, focus = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(Root.XamlRoot)?.GetType().Name,
+        library = libraryPage.VisualLayoutEvidence(),
+        focus = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(Root.XamlRoot)?.GetType().Name,
         textScale = new Windows.UI.ViewManagement.UISettings().TextScaleFactor,
         shell = "continuous canvas; independent toolbar; no enclosing glass", fixtureOnly = visualFixtureTimer is not null
     };
@@ -41,6 +40,6 @@ public sealed partial class MainWindow
         if (visualFixtureTimer is null) return;
         round3Dialog = new ContentDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme,
             Title = "操作确认 · Test", Content = "保持可读正文与系统键盘行为。取消返回原页面。", CloseButtonText = "取消", PrimaryButtonText = "确认" };
-        _ = round3Dialog.ShowAsync();
+        _ = round3Dialog.ShowInShellAsync();
     }
 }

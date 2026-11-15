@@ -16,7 +16,7 @@ public sealed partial class SettingsPage
     private async Task<ContentDialogResult> ShowManagerExportAsync(ContentDialog dialog)
     {
         managerExportDialog = dialog;
-        try { return await dialog.ShowAsync(); }
+        try { return await dialog.ShowInShellAsync(); }
         finally { if (ReferenceEquals(managerExportDialog, dialog)) managerExportDialog = null; }
     }
     private async void OnExportManager(object sender, RoutedEventArgs e)
@@ -29,13 +29,13 @@ public sealed partial class SettingsPage
         {
             if (PrepareBackupAction is { } prepare && !await prepare()) return;
             var managers = new[] { "potatovn", "vnite", "reinamanager", "playnite", "lunabox" };
-            var choice = new ComboBox { Header = "目标管理器", ItemsSource = managers.Select(MigrationFormats.Display).ToArray(), SelectedIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
+            var choice = new SelectedFirstComboBox { Header = "目标管理器", OptionsSource = managers.Select(MigrationFormats.Display).ToArray(), OptionIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
             var body = new StackPanel { Spacing = 16, MaxWidth = 520 }; body.Children.Add(choice);
             body.Children.Add(Text("保留现有 The Order 备份功能。兼容 ZIP 只包含游戏库和个人记录，不含游戏文件、存档、账号、脚本或插件。\n\n恢复通常会替换目标管理器的游戏库，请先备份目标库；不同格式无法表达的字段会在下一步说明。"));
             if (await ShowManagerExportAsync(new() { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = "导出兼容 ZIP",
                 Content = body, PrimaryButtonText = "查看导出预览", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close }) != ContentDialogResult.Primary
                 || revision != migrationGeneration || !IsLoaded) return;
-            var manager = managers[choice.SelectedIndex]; ManagerExportProgress.Visibility = Visibility.Visible;
+            var manager = managers[choice.OptionIndex]; ManagerExportProgress.Visibility = Visibility.Visible;
             ManagerExportMessage.Visibility = Visibility.Visible; ManagerExportMessage.Text = "正在生成兼容备份…";
             var package = await preview(manager, cancellation.Token);
             if (revision != migrationGeneration || !IsLoaded) return;

@@ -4,7 +4,7 @@ using TheOrder.Application;
 
 namespace TheOrder.Presentation;
 
-public enum WorkspacePage { Library, Details, Settings, Import, Installations, Online, Recognition, Statistics, Playground }
+public enum WorkspacePage { Library, Details, Settings, Import, Installations, Online, Recognition, Statistics, Playground, Status }
 public enum UnsavedChoice { Stay, Save, Discard }
 public enum PreferenceInitialization { Uninitialized, Loading, Ready, LoadFailed }
 public enum RefreshOutcome { None, Success, Failed, Superseded }
@@ -22,6 +22,7 @@ public sealed class WorkspaceViewModel(IOfflineLibraryClient client, IUiPreferen
     private string? pendingLayout, pendingSort;
     private Task<ClientResult>? saving;
     private Task preferenceSaves = Task.CompletedTask;
+    private Task<ClientPreferences>? startupPreferences;
     private bool loading, searching, detailsLoading, queryReadyDuringReload, disposed;
     private ImmutableArray<GameSummary> items = [];
     private IReadOnlyList<GameSummary> itemView = Array.Empty<GameSummary>();
@@ -116,6 +117,20 @@ public sealed class WorkspaceViewModel(IOfflineLibraryClient client, IUiPreferen
         Changed(nameof(Preferences)); Changed(nameof(SavedFilters)); Changed(nameof(Layout)); Changed(nameof(Theme));
         Changed(nameof(PreferenceState)); Changed(nameof(CanManageFilters)); ThemeChanged?.Invoke();
     }
+    // Called before the window exists. Reuse the validated read when the workspace opens.
+    public async Task PrepareStartupThemeAsync()
+    {
+        if (disposed || PreferenceState != PreferenceInitialization.Uninitialized) return;
+        try
+        {
+            var saved = await (startupPreferences ??= ReadPreferencesAsync());
+            if (!disposed && PreferenceState == PreferenceInitialization.Uninitialized && pendingTheme is null)
+                preferences = preferences with { Theme = saved.Theme };
+        }
+        catch (Exception) { /* InitializeAsync observes the same failure once the window can report it. */ }
+
+        async Task<ClientPreferences> ReadPreferencesAsync() => await preferencesStore.LoadAsync(lifetime.Token);
+    }
     public async Task InitializeAsync()
     {
         if (PreferenceState != PreferenceInitialization.Uninitialized) return;
@@ -124,7 +139,9 @@ public sealed class WorkspaceViewModel(IOfflineLibraryClient client, IUiPreferen
         if (disposed) return;
         try
         {
-            var loaded = await preferencesStore.LoadAsync(lifetime.Token);
+            var load = startupPreferences ?? preferencesStore.LoadAsync(lifetime.Token);
+            startupPreferences = null;
+            var loaded = await load;
             if (disposed) return;
             preferences = loaded with { Theme = pendingTheme ?? loaded.Theme, Layout = pendingLayout ?? loaded.Layout, Sort = pendingSort ?? loaded.Sort };
             PreferenceState = PreferenceInitialization.Ready;
@@ -276,6 +293,27 @@ public sealed class WorkspaceViewModel(IOfflineLibraryClient client, IUiPreferen
         if (!CanSave || draft is null) return Task.FromResult(new ClientResult(ClientOutcome.ReadOnly, IsReadOnly ? CapabilityMessage : UiText.Get("没有可保存的修改。")));
         var source = draft.Source; var input = draft.Input;
         return saving = RunMutationAsync(token => client.SaveAsync(source, input, token), source.Id);
+    }
+    // Library dialogs own their draft without changing the page or the detail selection.
+    public async Task<PersonalDraft?> LoadPersonalEditAsync(string id)
+    {
+        if (page != WorkspacePage.Library || !CanEdit || IsDirty) return null;
+        try
+        {
+            var details = await client.DetailsAsync(id, lifetime.Token);
+            return page == WorkspacePage.Library && CanEdit && !IsDirty ? new(details) : null;
+        }
+        catch (OperationCanceledException) { return null; }
+        catch (Exception) { if (!disposed) ReportUnexpected(); return null; }
+    }
+    public Task<ClientResult> SavePersonalEditAsync(PersonalDraft edit)
+    {
+        if (page != WorkspacePage.Library)
+            return Task.FromResult(new ClientResult(ClientOutcome.Conflict, UiText.Get("页面已变化，请返回书架后重新编辑。")));
+        if (!CanEdit || IsDirty)
+            return Task.FromResult(new ClientResult(ClientOutcome.ReadOnly, UiText.Get("请先处理个人资料草稿，或等待当前操作完成。")));
+        var source = edit.Source; var input = edit.Input;
+        return ExecuteFileMutationAsync(token => client.SaveAsync(source, input, token));
     }
     // Includes preprocessing, admission, durable commit and refresh. Close drains this whole task.
     private async Task<ClientResult> RunMutationAsync(Func<CancellationToken, Task<ClientResult>> mutation, string? detailId = null, bool preserveSelection = false)

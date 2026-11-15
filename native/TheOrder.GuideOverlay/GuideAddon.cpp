@@ -1,10 +1,68 @@
 #include "GuideFlowCanvas.hpp"
 #include "GuideLocalReader.hpp"
+#include "GuidePresentation.hpp"
+#include "GuideChat.hpp"
 #define ImTextureID ImU64
 #include <imgui.h>
 #include <reshade.hpp>
+#include <imm.h>
+#include <d3d9.h>
+#include <dxgi.h>
+#pragma comment(lib,"imm32.lib")
 
 static guide::Connection connection;
+static guide::chat::Connection gameChat;
+static guide::chat::Canvas chatCanvas;
+static char chatInput[guide::chat::inputBytes]{};
+static LONG chatDraftRevision=-1;
+static bool chatFocused=false;
+static HWND chatImeWindow=nullptr;
+static HIMC chatImeOwned=nullptr,chatImePrevious=nullptr;
+static int chatEditState(ImGuiInputTextCallbackData* data){
+    if(auto* h=gameChat.h;h&&(h->caret!=data->CursorPos||h->selectionStart!=data->SelectionStart||h->selectionEnd!=data->SelectionEnd)){
+        h->caret=data->CursorPos;h->selectionStart=data->SelectionStart;h->selectionEnd=data->SelectionEnd;InterlockedIncrement(&h->editorSequence);}
+    return 0;
+}
+static void chatIme(HWND window,bool focused){
+    if(!focused||chatImeWindow&&chatImeWindow!=window){if(chatImeOwned){ImmAssociateContext(chatImeWindow,chatImePrevious);ImmDestroyContext(chatImeOwned);}chatImeOwned=chatImePrevious=nullptr;chatImeWindow=nullptr;if(!focused)return;}
+    if(!chatImeWindow){chatImeWindow=window;HIMC existing=ImmGetContext(window);if(existing)ImmReleaseContext(window,existing);else{chatImeOwned=ImmCreateContext();chatImePrevious=ImmAssociateContext(window,chatImeOwned);}}
+    HIMC context=ImmGetContext(window);if(!context)return;
+    POINT pos{gameChat.h->imeX,gameChat.h->imeY};ScreenToClient(window,&pos);CANDIDATEFORM candidate{};candidate.dwStyle=CFS_CANDIDATEPOS;candidate.ptCurrentPos=pos;ImmSetCandidateWindow(context,&candidate);
+    COMPOSITIONFORM composition{};composition.dwStyle=CFS_POINT;composition.ptCurrentPos=pos;ImmSetCompositionWindow(context,&composition);ImmReleaseContext(window,context);
+}
+static void captureGameFrame(reshade::api::effect_runtime* runtime){
+    auto* h=gameChat.h;if(!h||h->captureRequest==h->captureAck)return;int request=h->captureRequest;
+    uint32_t width=0,height=0;runtime->get_screenshot_width_and_height(&width,&height);
+    using reshade::api::format;auto pixelFormat=reshade::api::format_to_default_typed(runtime->get_device()->get_resource_desc(runtime->get_current_back_buffer()).texture.format,0);
+    const bool bgra=pixelFormat==format::b8g8r8a8_unorm||pixelFormat==format::b8g8r8x8_unorm;
+    if(width<1||height<1||width>8192||height>8192||uint64_t(width)*height>20000000||(!bgra&&pixelFormat!=format::r8g8b8a8_unorm&&pixelFormat!=format::r8g8b8x8_unorm)){gameChat.failFrame(request);return;}
+    std::vector<BYTE> pixels(size_t(width)*height*4);
+    if(runtime->capture_screenshot(pixels.data()))gameChat.frame(request,pixels.data(),int(width),int(height),int(width*4),bgra);else gameChat.failFrame(request);
+    SecureZeroMemory(pixels.data(),pixels.size());
+}
+static void chatEditor(reshade::api::effect_runtime* runtime,guide::flow::Rect box,bool hidden){
+    auto* h=gameChat.h;if(!h)return;auto* main=connection.header;
+    InterlockedExchange64(&h->inputPulse,LONG64(GetTickCount64()));
+    LONG revision=h->draftSequence;
+    if(!(revision&1)&&revision!=chatDraftRevision){auto text=gameChat.draft();memcpy(chatInput,text.c_str(),std::min(text.size()+1,sizeof(chatInput)));chatInput[sizeof(chatInput)-1]=0;chatDraftRevision=revision;}
+    if(!h->focus){chatFocused=false;chatIme(static_cast<HWND>(runtime->get_hwnd()),false);return;}
+    if(!hidden){POINT at{LONG(box.x+12),LONG(box.y+26)};ClientToScreen(static_cast<HWND>(runtime->get_hwnd()),&at);h->imeX=at.x;h->imeY=at.y;}
+    chatIme(static_cast<HWND>(runtime->get_hwnd()),true);
+    // Exact zero makes ImGui skip the editor (including keyboard input). Keep
+    // layout active while every rendered alpha still rounds to zero in RGBA8.
+    if(hidden){ImGui::SetNextWindowPos({0,0});ImGui::SetNextWindowSize({400,120});ImGui::PushStyleVar(ImGuiStyleVar_Alpha,1.f/1024.f);ImGui::Begin("TheOrderChatKeyboard",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoMouseInputs);}
+    else ImGui::SetCursorScreenPos({box.x+8,box.y+6});
+    if(!chatFocused)ImGui::SetKeyboardFocusHere();
+    ImGui::PushStyleColor(ImGuiCol_FrameBg,{0,0,0,0});ImGui::PushStyleColor(ImGuiCol_FrameBgHovered,{0,0,0,0});ImGui::PushStyleColor(ImGuiCol_FrameBgActive,{0,0,0,0});
+    auto inputFlags=ImGuiInputTextFlags_EnterReturnsTrue|ImGuiInputTextFlags_CallbackAlways|(ImGui::GetIO().KeyShift?0:ImGuiInputTextFlags_CtrlEnterForNewLine);
+    bool enter=ImGui::InputTextMultiline("##GameChatInput",chatInput,sizeof(chatInput),hidden?ImVec2(380,90):ImVec2(std::max(30.f,box.w-16),std::max(25.f,box.h-12)),inputFlags,chatEditState);
+    ImGui::PopStyleColor(3);chatFocused=true;
+    std::string text(chatInput);if(text!=gameChat.draft()){gameChat.draft(text);chatDraftRevision=h->draftSequence;}
+    if(enter&&!gameChat.state.busy&&!text.empty()&&gameChat.request(1,0,text))h->focus=0;
+    if(ImGui::IsKeyPressed(ImGuiKey_Escape)){h->focus=0;chatFocused=false;}
+    if(hidden){ImGui::End();ImGui::PopStyleVar();}
+    if(main->visible)runtime->block_input_next_frame();
+}
 static bool attempted=false,keyDown=false,showOriginal=false;
 static bool readingKeysDown[7]{};
 static int selectedSource=-1,previousRoute=-1,previousStep=-1;
@@ -33,7 +91,6 @@ static ImFont* face(int role){
     if(role==1&&atlas->Fonts.Size>1)return atlas->Fonts[1];
     return nullptr;
 }
-static bool foreground(){DWORD pid=0;GetWindowThreadProcessId(GetForegroundWindow(),&pid);return pid==GetCurrentProcessId();}
 static bool plainKey(int key){return guide::activeModifiers()==0&&(GetAsyncKeyState(key)&0x8000);}
 static bool edge(bool value,bool& old){bool changed=value&&!old;old=value;return changed;}
 static float measure(const std::string& value,float width,float font,float scale,int role=0){
@@ -183,15 +240,16 @@ static void routeList(const guide::Document& document,int selected,float width,f
         ImGui::PopID();
     }
 }
-static bool tab(const char* label,bool active,float width,float scale) {
+static bool tab(const char* label,bool active,float width,float scale,float height=0) {
     const auto p=ImGui::GetCursorScreenPos();
-    const bool click=ImGui::InvisibleButton(label,ImVec2(width,26*scale));
+    if(!height)height=26*scale;
+    const bool click=ImGui::InvisibleButton(label,ImVec2(width,height));
     const bool hover=ImGui::IsItemHovered();
     const float font=13.f;ImGui::PushFont(nullptr,font*scale);const float labelWidth=ImGui::CalcTextSize(label).x;ImGui::PopFont();
     const float labelX=p.x+(width-labelWidth)/2;
-    if(active)ImGui::GetWindowDrawList()->AddLine(ImVec2(labelX,p.y+22*scale),ImVec2(labelX+labelWidth,p.y+22*scale),
+    if(active)ImGui::GetWindowDrawList()->AddLine(ImVec2(labelX,p.y+height-3*scale),ImVec2(labelX+labelWidth,p.y+height-3*scale),
         ImGui::ColorConvertFloat4ToU32(accent),2*scale);
-    ImGui::SetCursorScreenPos(ImVec2(labelX,p.y+4*scale));
+    ImGui::SetCursorScreenPos(ImVec2(labelX,p.y+(height-18*scale)/2));
     text(label,font,scale,active||hover?ink:muted);
     ImGui::SetCursorScreenPos(ImVec2(p.x+width,p.y));
     return click;
@@ -281,20 +339,89 @@ struct FlowImGuiPainter {
         ImGui::PushFont(nullptr,size);auto measured=ImGui::CalcTextSize(value.c_str(),nullptr,false,width);float height=std::max(size*1.5f,measured.y);
         if(draw){list->AddText(ImGui::GetFont(),size,{x,y},color(c),value.c_str(),nullptr,width);if(strong)list->AddText(ImGui::GetFont(),size,{x+.5f,y},color(c),value.c_str(),nullptr,width);}ImGui::PopFont();return height;
     }
+    void draft(const std::string& value,guide::flow::Rect r,float size,guide::flow::Color c,const guide::chat::Header&){clip(r);paragraph(value,r.x,r.y,r.w,size,c,false,true);unclip();}
     void image(guide::flow::Rect r,const guide::Reading&){if(localTexture.view.handle)list->AddImage(localTexture.view.handle,{r.x,r.y},{r.x+r.w,r.y+r.h});}
 };
 struct WindowScope{~WindowScope(){ImGui::End();ImGui::PopFont();ImGui::PopStyleColor(12);ImGui::PopStyleVar(8);}};
+static bool compositedWindow(reshade::api::effect_runtime* runtime) {
+    const HWND window=static_cast<HWND>(runtime->get_hwnd());
+    const auto native=runtime->get_native();
+    using reshade::api::device_api;
+    if(window&&native){
+        switch(runtime->get_device()->get_api()){
+        case device_api::d3d9:{
+            D3DPRESENT_PARAMETERS parameters{};
+            if(SUCCEEDED(reinterpret_cast<IDirect3DSwapChain9*>(native)->GetPresentParameters(&parameters)))
+                return parameters.Windowed!=FALSE;
+            break;
+        }
+        case device_api::d3d10:
+        case device_api::d3d11:
+        case device_api::d3d12:{
+            BOOL fullscreen=FALSE;
+            IDXGISwapChain* swapchain=nullptr;
+            if(SUCCEEDED(reinterpret_cast<IUnknown*>(native)->QueryInterface(IID_PPV_ARGS(&swapchain)))){
+                const HRESULT result=swapchain->GetFullscreenState(&fullscreen,nullptr);
+                swapchain->Release();
+                if(SUCCEEDED(result))return fullscreen==FALSE;
+            }
+            break;
+        }
+        default:break;
+        }
+    }
+    // A caption identifies a regular window even when the API cannot report
+    // fullscreen state. Keep renderer ownership for ambiguous fullscreen modes.
+    return (GetWindowLongPtrW(window,GWL_STYLE)&WS_CAPTION)==WS_CAPTION;
+}
 static void draw(reshade::api::effect_runtime* runtime){
     try{
-        if(!attempted){attempted=true;wchar_t name[128]{};DWORD n=GetEnvironmentVariableW(L"THE_ORDER_GUIDE_SESSION",name,128);if(n==0||n>=128||!connection.open(name))return;}
+        if(!attempted){attempted=true;wchar_t name[128]{};DWORD n=GetEnvironmentVariableW(L"THE_ORDER_GUIDE_SESSION",name,128);if(n==0||n>=128||!connection.open(name))return;gameChat.open(name);}
         auto* h=connection.header;auto& io=ImGui::GetIO();
         if(!h||h->pid!=LONG(GetCurrentProcessId())||h->created!=guide::creation(GetCurrentProcess())||!connection.refresh()){io.MouseDrawCursor=false;return;}
-        InterlockedExchange64(&h->rendererPulse,static_cast<LONG64>(GetTickCount64()));const bool front=foreground();
-        if(edge(front&&(GetAsyncKeyState(guide::shortcutKey(h->hotkey))&0x8000),keyDown)
+        const ULONGLONG now=GetTickCount64();
+        const HWND game=GetAncestor(static_cast<HWND>(runtime->get_hwnd()),GA_ROOT);
+        const HWND foreground=GetForegroundWindow();
+        const bool sourceEnabled=IsWindowEnabled(game);
+        const bool front=sourceEnabled&&guide::presentation::onSurface(game,foreground)&&guide::presentation::gameRoot(game);
+        static reshade::api::effect_runtime* checkedRuntime=nullptr;
+        static ULONGLONG checkedAt=0;
+        static bool windowed=false;
+        if(checkedRuntime!=runtime||!guide::freshPulse(checkedAt,now,150)){
+            checkedRuntime=runtime;checkedAt=now;windowed=compositedWindow(runtime);
+        }
+        InterlockedExchange64(&h->windowedPulse,windowed?LONG64(now):0);
+        InterlockedExchange64(&h->rendererPulse,LONG64(now));
+        const auto surface=guide::companionSurface(h,now);
+        const bool scaled=surface==guide::CompanionSurface::Scaled;
+        const bool companion=scaled||(windowed&&surface==guide::CompanionSurface::Window);
+        if(gameChat.valid(h)){
+            gameChat.refresh();captureGameFrame(runtime);
+            DWORD foregroundPid=0;
+            if(scaled)GetWindowThreadProcessId(foreground,&foregroundPid);
+            const bool scaledInput=scaled&&sourceEnabled&&(front||foregroundPid!=GetCurrentProcessId());
+            if(h->channel==3&&h->visible&&scaledInput)chatEditor(runtime,{},true);
+            else if(companion||!front||h->channel!=3||!h->visible){
+                InterlockedExchange64(&gameChat.h->inputPulse,0);
+                if(!sourceEnabled||h->channel!=3||!h->visible)gameChat.h->focus=0;
+                chatFocused=false;chatIme(static_cast<HWND>(runtime->get_hwnd()),false);
+            }
+        }
+        if(companion){
+            if(!scaled&&front&&h->visible)runtime->block_input_next_frame();
+            io.MouseDrawCursor=false;flowState.cancel();localState.dragging=false;
+            // Preserve a held key through a renderer handoff without a second toggle.
+            keyDown=(GetAsyncKeyState(guide::shortcutKey(h->hotkey))&0x8000)!=0;
+            const int keys[]={VK_NEXT,VK_PRIOR,VK_RIGHT,VK_LEFT,VK_HOME,VK_END,VK_SPACE};
+            for(int i=0;i<7;++i)readingKeysDown[i]=plainKey(keys[i]);
+            return;
+        }
+        const bool typing=gameChat.valid(h)&&h->channel==3&&h->visible&&gameChat.h->focus;
+        if(edge((GetAsyncKeyState(guide::shortcutKey(h->hotkey))&0x8000)!=0,keyDown)&&front&&!typing
             &&h->status!=2&&guide::shortcutMatches(h->hotkey,guide::activeModifiers()))connection.toggle();
-        const int readingKeys[]={VK_NEXT,VK_PRIOR,VK_RIGHT,VK_LEFT,VK_HOME,VK_END,VK_SPACE};for(int i=0;i<7;++i)if(edge(front&&h->visible&&plainKey(readingKeys[i]),readingKeysDown[i])){
-            if(h->channel!=0)localState.navigate(readingKeys[i],connection);
-            else if(connection.action(3)){if(readingKeys[i]==VK_RIGHT)InterlockedIncrement(&h->step);else if(readingKeys[i]==VK_LEFT)InterlockedDecrement(&h->step);else if(readingKeys[i]==VK_NEXT||readingKeys[i]==VK_SPACE)pageMotion=1;else if(readingKeys[i]==VK_PRIOR)pageMotion=-1;}
+        const int readingKeys[]={VK_NEXT,VK_PRIOR,VK_RIGHT,VK_LEFT,VK_HOME,VK_END,VK_SPACE};for(int i=0;i<7;++i)if(edge(plainKey(readingKeys[i]),readingKeysDown[i])&&front&&h->visible&&h->channel!=3&&!typing){
+            if(h->channel==1||h->channel==2)localState.navigate(readingKeys[i],connection);
+            else if(connection.navigate()){if(readingKeys[i]==VK_RIGHT)InterlockedIncrement(&h->step);else if(readingKeys[i]==VK_LEFT)InterlockedDecrement(&h->step);else if(readingKeys[i]==VK_NEXT||readingKeys[i]==VK_SPACE)pageMotion=1;else if(readingKeys[i]==VK_PRIOR)pageMotion=-1;}
         }
         io.MouseDrawCursor=false;if(!front||!h->visible){flowState.cancel();localState.dragging=false;return;}
         if((flowState.dragging||localState.dragging)&&guide::mouseReleasedAfter(h->mouseSample,pointerDownAt,GetTickCount64())&&!ImGui::IsMouseReleased(0)){flowState.cancel();localState.dragging=false;}
@@ -305,7 +432,9 @@ static void draw(reshade::api::effect_runtime* runtime){
         int routeIndex=d.routes.empty()?-1:std::clamp(int(h->route),0,int(d.routes.size())-1);h->route=std::max(0,routeIndex);
         const guide::Route* route=routeIndex<0?nullptr:&d.routes[routeIndex];
         int selected=route?std::clamp(int(h->step),0,std::max(0,int(route->steps.size())-1)):0;h->step=selected;
-        auto layout=guide::reading::layout(io.DisplaySize.x,io.DisplaySize.y,float(h->dpi>0?h->dpi:96));const float s=layout.scale;
+        const UINT dpi=GetDpiForWindow(static_cast<HWND>(runtime->get_hwnd()));
+        h->dpi=LONG(dpi?dpi:96);
+        auto layout=guide::reading::layout(io.DisplaySize.x,io.DisplaySize.y,float(h->dpi));const float s=layout.scale;
         compactWindow=layout.compact;
         h->panelWidth=LONG(layout.width);h->panelHeight=LONG(layout.height);h->bodyFontPx=LONG(guide::reading::style(compactWindow).body*s);h->showOriginal=showOriginal;h->readerBackend=1;
         h->readingWidth=LONG(layout.readerWidth);h->navigationWidth=LONG(layout.sidebar);h->indexWidth=LONG(layout.tocWidth);
@@ -337,43 +466,51 @@ static void draw(reshade::api::effect_runtime* runtime){
             ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0,0),io.DisplaySize,IM_COL32(0,0,0,light?40:70));
             list->AddRectFilled(p,end,light?IM_COL32(248,247,244,246):IM_COL32(21,23,27,240),8*s);list->AddRect(p,end,light?IM_COL32(90,92,98,45):IM_COL32(200,203,210,40),8*s,0,s);
             const bool attribution=h->channel==0&&!d.attribution.empty();
-            const auto heading=guide::reading::header(layout,d.reading.present,attribution);layout.contentTop=heading.contentTop;
-            const ImVec2 origin(p.x+layout.inset,p.y+heading.top);
-            ImGui::SetCursorScreenPos(ImVec2(origin.x,origin.y+2*s));
-            const float titleWidth=heading.titleWidth;
-            list->PushClipRect(origin,ImVec2(origin.x+titleWidth,origin.y+24*s),true);
-            text(d.title,compactWindow?16.f:18.f,s,ink,ImGui::GetCursorPosX()+titleWidth,2);
-            list->PopClipRect();
-            ImGui::SetCursorScreenPos(ImVec2(end.x-layout.inset-48*s,origin.y));
-            ImGui::PushFont(nullptr,13*s);if(ImGui::Button("收起",ImVec2(48*s,24*s)))h->visible=h->interactive=0;ImGui::PopFont();
-            if(attribution){ImGui::SetCursorScreenPos(ImVec2(origin.x,p.y+heading.attributionY));
-                list->PushClipRect(ImVec2(origin.x,p.y+heading.attributionY),ImVec2(end.x-layout.inset,p.y+heading.attributionY+14*s),true);
-                text(d.attribution,11.f,s,muted,ImGui::GetCursorPosX()+layout.width-2*layout.inset);list->PopClipRect();}
-            list->AddLine(ImVec2(origin.x,p.y+heading.ruleY),ImVec2(end.x-layout.inset,p.y+heading.ruleY),
-                light?IM_COL32(95,100,111,28):IM_COL32(185,191,202,28),s);
+            const bool besideModes=attribution&&h->graph&&!d.flow.nodes.empty()&&guide::reading::attributionBesideFlowModes(layout);
+            const int sources=guide::local::sourceCount(d,*h);
+            const auto heading=guide::reading::header(layout,sources,attribution&&!besideModes);layout.contentTop=heading.contentTop;
+            const ImVec2 origin(p.x+layout.controlInset,p.y+heading.top);
+            const float controlWidth=layout.width-2*layout.controlInset;
+            const float closeX=end.x-layout.controlInset-heading.closeWidth;
             FlowImGuiPainter localPainter{list};
-            if(d.reading.present){guide::local::sourceBar(localPainter,localState,d,h,{p.x+heading.sourceX,p.y+heading.sourceY,heading.sourceWidth,24*s},s,light);}
+            const guide::flow::Color caption=light?guide::flow::Color{102,108,118}:guide::flow::Color{164,172,186};
+            localPainter.text(d.title,{origin.x,origin.y,heading.titleWidth,heading.rowHeight},(compactWindow?16.f:18.f)*s,
+                light?guide::flow::Color{43,46,51}:guide::flow::Color{233,236,241},false);
+            ImGui::SetCursorScreenPos(ImVec2(closeX,origin.y));
+            ImGui::PushFont(nullptr,13*s);if(ImGui::Button("收起",ImVec2(heading.closeWidth,heading.rowHeight)))h->visible=h->interactive=0;ImGui::PopFont();
+            if(attribution&&!besideModes)
+                localPainter.text(d.attribution,{origin.x,p.y+heading.attributionY,controlWidth,14*s},11*s,caption,false);
+            list->AddLine(ImVec2(origin.x,p.y+heading.ruleY),ImVec2(end.x-layout.controlInset,p.y+heading.ruleY),
+                light?IM_COL32(95,100,111,28):IM_COL32(185,191,202,28),s);
+            guide::local::sourceBar(localPainter,localState,h,
+                {p.x+heading.sourceX,p.y+heading.sourceY,heading.sourceWidth,heading.rowHeight},sources,s,light);
             const float areaHeight=layout.contentBottom-layout.contentTop;
-            if(h->channel!=0) {
+            if(h->channel==3){
+                guide::chat::render(localPainter,chatCanvas,gameChat,{origin.x,p.y+layout.contentTop,controlWidth,areaHeight},s,light,gameChat.h&&gameChat.h->focus);
+                guide::Point mouse{io.MousePos.x,io.MousePos.y};if(ImGui::IsMouseReleased(0)){localState.up(mouse,connection);chatCanvas.click(mouse,gameChat);}if(io.MouseWheel)chatCanvas.wheel(mouse,io.MouseWheel);
+                chatEditor(runtime,chatCanvas.input,false);h->layoutMode=5;h->navigationWidth=h->indexWidth=0;
+            } else if(h->channel!=0) {
                 localTexture.update(runtime,d.reading,h->sequence);
-                guide::local::render(localPainter,localState,d,h,{origin.x,p.y+layout.contentTop,layout.width-2*layout.inset,areaHeight},s,light);
-                ImGui::SetCursorScreenPos({origin.x,p.y+layout.contentTop});ImGui::InvisibleButton("LocalReadingCanvas",{layout.width-2*layout.inset,areaHeight});
+                guide::local::render(localPainter,localState,d,h,{origin.x,p.y+layout.contentTop,controlWidth,areaHeight},s,light);
+                ImGui::SetCursorScreenPos({origin.x,p.y+layout.contentTop});ImGui::InvisibleButton("LocalReadingCanvas",{controlWidth,areaHeight});
                 guide::Point mouse{io.MousePos.x,io.MousePos.y};if(ImGui::IsMouseClicked(0)){pointerDownAt=GetTickCount64();localState.down(mouse);}if(ImGui::IsMouseDown(0))localState.move(mouse);if(ImGui::IsMouseReleased(0))localState.up(mouse,connection);
                 if(io.MouseWheel)localState.wheel(mouse,io.MouseWheel,&connection);
-                h->navigationWidth=h->indexWidth=0;h->readingWidth=LONG(layout.width-2*layout.inset);
+                h->navigationWidth=h->indexWidth=0;h->readingWidth=LONG(controlWidth);
                 h->layoutMode=4;h->visibleSteps=LONG(d.reading.blocks.size());h->readingFirst=d.reading.page;h->bodyFontPx=LONG(16*s*localState.zoom);h->scrollY=LONG(localState.scrollY);h->visibleStage=LONG(localState.maximumY);h->flowZoom=LONG(localState.zoom*1000);h->readerAck=h->sequence;h->overflowRows=d.reading.rgba.empty()?0:localTexture.view.handle?0:1;
             } else if(h->graph&&!d.flow.nodes.empty()) {
-                const ImVec2 toolbar(p.x+layout.inset,p.y+layout.contentTop);
-                ImGui::SetCursorScreenPos(toolbar);tab("流程图",true,80*s,s);
-                ImGui::SetCursorScreenPos(ImVec2(toolbar.x+96*s,toolbar.y));if(tab("连续阅读",false,96*s,s))h->graph=0;
-                FlowImGuiPainter painter{list};guide::flow::Rect area{toolbar.x,toolbar.y+30*s,layout.width-2*layout.inset,areaHeight-30*s};
-                guide::flow::render(painter,flowState,d,area,s,light,routeIndex,h->sequence);
+                const ImVec2 toolbar(origin.x,p.y+layout.contentTop);
+                const float modes=guide::reading::flowModeHeight(layout);
+                ImGui::SetCursorScreenPos(toolbar);tab("流程图",true,64*s,s,modes);
+                ImGui::SetCursorScreenPos(ImVec2(toolbar.x+68*s,toolbar.y));if(tab("连续阅读",false,76*s,s,modes))h->graph=0;
+                if(besideModes)localPainter.text(d.attribution,{toolbar.x+154*s,toolbar.y,controlWidth-154*s,modes},11*s,caption,false);
+                guide::flow::Rect area{toolbar.x,toolbar.y+modes+2*s,controlWidth,areaHeight-modes-2*s};
+                guide::flow::render(localPainter,flowState,d,area,s,light,h->sequence);
                 ImGui::SetCursorScreenPos({area.x,area.y});ImGui::InvisibleButton("GuideFlowCanvas",{area.w,area.h});
                 guide::Point mouse{io.MousePos.x,io.MousePos.y};
                 if(ImGui::IsMouseClicked(0)){pointerDownAt=GetTickCount64();flowState.down(mouse);}
                 if(ImGui::IsMouseDown(0))flowState.move(mouse);
                 if(ImGui::IsMouseReleased(0))flowState.up(mouse,d);
-                if(io.MouseWheel&&flowState.canvas.has(mouse))flowState.wheel(mouse,io.MouseWheel);
+                if(io.MouseWheel)flowState.wheel(mouse,io.MouseWheel);
                 if(pageMotion){flowState.panY-=pageMotion*flowState.canvas.h*.75f;flowState.autoFit=false;pageMotion=0;}
                 if(flowState.readRoute>=0){h->route=flowState.readRoute;h->step=flowState.readStep;h->graph=0;jumpRequested=true;flowState.readRoute=-1;}
                 h->flowNodes=LONG(flowState.activeNodes.size());h->flowEdges=LONG(flowState.activeEdges.size());h->flowSelected=flowState.selectedEdge;h->flowZoom=LONG(flowState.zoom*1000);
@@ -391,7 +528,8 @@ static void draw(reshade::api::effect_runtime* runtime){
                 if(d.sources.size()>1) {
                     ImGui::SetNextItemWidth(-1);int source=std::clamp(int(h->selected),0,int(d.sources.size())-1);
                     if(ImGui::BeginCombo("##source",d.sources[source].c_str())) {
-                        for(int i=0;i<int(d.sources.size());++i) {
+                        for(int row=0;row<int(d.sources.size());++row) {
+                            const int i = row == 0 ? source : row <= source ? row - 1 : row;
                             ImGui::PushID(i);
                             if(ImGui::Selectable(d.sources[i].c_str(),i==source)) {h->argument=i;MemoryBarrier();h->command=1;}
                             ImGui::PopID();
@@ -403,7 +541,8 @@ static void draw(reshade::api::effect_runtime* runtime){
                     ImGui::SetNextItemWidth(-1);
                     const auto label=guide::reading::routeName(*route)+(compactWindow?" · "+std::to_string(routeIndex+1)+"/"+std::to_string(d.routes.size()):"");
                     if(ImGui::BeginCombo("##route",label.c_str())) {
-                        for(int i=0;i<int(d.routes.size());++i){
+                        for(int row=0;row<int(d.routes.size());++row){
+                            const int i = row == 0 ? routeIndex : row <= routeIndex ? row - 1 : row;
                             ImGui::PushID(i);const auto item=d.routes[i].title+" → "+d.routes[i].to;
                             if(ImGui::Selectable(item.c_str(),i==routeIndex)) {h->route=i;h->step=0;h->graph=0;jumpRequested=true;}ImGui::PopID();}
                         ImGui::EndCombo();

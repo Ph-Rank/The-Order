@@ -225,7 +225,7 @@ public sealed partial class PlaygroundService : IAsyncDisposable
         var conversations = s.Conversations.Where(c => !c.Temporary).ToImmutableArray(); var ids = conversations.Select(c => c.Id).ToHashSet();
         var messages = s.Messages.Where(m => ids.Contains(m.ConversationId)).Select(m => m.Retention != PlaygroundRetention.Portable
             ? m with { Text = "本条公开检索答复仅保留在本次会话中，未写入长期上下文。", Attachments = [], Sources = [], SearchSuggestionsHtml = null }
-            : m with { SearchSuggestionsHtml = null }).ToImmutableArray();
+            : m with { SearchSuggestionsHtml = null, Attachments = PlaygroundGameFrames.WithoutPixels(m.Attachments) }).ToImmutableArray();
         var messageIds = messages.Select(m => m.Id).ToHashSet();
         return s with { Conversations = conversations, Messages = messages,
             Memories = s.Memories.Where(m => ids.Contains(m.ConversationId) && messageIds.Contains(m.MessageId)).ToImmutableArray(),

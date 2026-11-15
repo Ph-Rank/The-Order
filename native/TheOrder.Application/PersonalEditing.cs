@@ -41,14 +41,15 @@ public sealed partial class TransactionalLibrary
     public Task<GameDetails> DetailsAsync(string id, CancellationToken cancellation = default) => Enqueue(() =>
     {
         var e = Find(current.Entries, id); var personal = PersonalValues.From(e);
+        int recordedCount = e.RecordedSessions.Length;
         return Task.FromResult(new GameDetails(e.Id, personal, e.Metadata?.Title ?? UiText.Get("未关联作品资料"), e.Metadata?.OriginalTitle ?? "",
             e.Metadata is null ? UiText.Get("尚未关联目录作品") : UiText.Format($"目录作品 {e.Metadata.Id} · {string.Join(" / ", e.Metadata.Developers)}"),
             e.Installations.IsEmpty ? UiText.Get("愿望条目 · 尚无安装") : string.Join("\n", e.Installations.Select(i => $"{(i.Id == e.PreferredInstallationId ? UiText.Get("首选 · ") : "")}{i.Folder}\n{i.Executable ?? UiText.Get("尚未设置启动程序")}")),
-            UiText.Format($"累计 {e.EffectivePlaySeconds / 3600} 小时 {e.EffectivePlaySeconds % 3600 / 60} 分钟 · {e.PlayCount} 次 · {e.Sessions.Length} 条历史记录"),
+            UiText.Format($"累计 {e.EffectivePlaySeconds / 3600} 小时 {e.EffectivePlaySeconds % 3600 / 60} 分钟 · {e.PlayCount} 次 · {recordedCount} 条历史记录"),
             e.LocalCover is not null ? UiText.Get("个人本地封面 · 保存在书架资料中") : e.CoverChoice?.WorkId == e.Metadata?.Id && e.CoverChoice is not null ? UiText.Get("个人选择的作品封面") : e.Metadata?.CoverUrl is not null ? UiText.Get("自动推荐封面") : UiText.Get("暂无封面"),
             new(epoch, id, lifecycles[id].Generation, personal)) { WorkId = e.Metadata?.Id, Metadata = e.Metadata,
                 CoverKey = ImageSourceKeys.For(e), BackdropKey = ArtworkSources.Key(e), BackdropDescription = ArtworkSources.Description(e),
-                LastPlayedAt = e.LastPlayedAt, HasPlayHistory = e.Sessions.Length > 0 || e.EffectivePlaySeconds > 0 || e.PlayCount > 0,
+                LastPlayedAt = e.LastPlayedAt, HasPlayHistory = recordedCount > 0 || e.EffectivePlaySeconds > 0 || e.PlayCount > 0,
                 CoverToken = new(epoch, id, lifecycles[id].Generation, e.LocalCover, e.CoverChoice, e.Metadata?.Id) });
     }, cancellation);
 

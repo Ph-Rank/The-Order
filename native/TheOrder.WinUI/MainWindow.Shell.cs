@@ -13,8 +13,7 @@ using TheOrder.WinUI.Materials;
 
 namespace TheOrder.WinUI;
 
-// Revision 2 shell: Fluent TitleBar (back, pane, search, session indicator), Mica, keyboard model,
-// persisted material intent, library quick launch and live Windows accent updates.
+// Window caption, Mica, shell shortcuts and live Windows accent updates.
 public sealed partial class MainWindow
 {
     // Material choice is available in ordinary settings; Windows policy remains authoritative.
@@ -26,6 +25,7 @@ public sealed partial class MainWindow
     private bool materialInitialized;
     private string? materialPreferenceNotice;
     private MicaBackdrop? mica;
+    private ElementTheme? micaTheme;
     private readonly WindowCapabilities windowCapabilities = WindowCapabilities.Detect();
     private readonly WindowBackdropState windowBackdrop = new();
     private bool customTitleBar;
@@ -56,7 +56,6 @@ public sealed partial class MainWindow
             ExtendsContentIntoTitleBar = false;
             SetTitleBar(null);
         }
-        SessionDuration.FontFamily = SessionFlyoutDuration.FontFamily = new FontFamily(windowCapabilities.MonospaceFont);
     }
 
     private void InitializeShellInput(bool diagnostics)
@@ -88,7 +87,11 @@ public sealed partial class MainWindow
         if (colorSettings is not null) { colorSettings.ColorValuesChanged -= OnSystemColorsChanged; colorSettings = null; }
     }
 
-    private void OnCaptionThemeChanged(FrameworkElement sender, object args) => RefreshCaptionTheme();
+    private void OnCaptionThemeChanged(FrameworkElement sender, object args)
+    {
+        RefreshCaptionTheme();
+        if (!visualStopped && materialPolicy is { } policy) ApplyBackdrop(policy.EffectsAllowed);
+    }
     private void RefreshCaptionTheme()
     {
         if (visualStopped) return;
@@ -120,11 +123,9 @@ public sealed partial class MainWindow
             AppTitleBar.IconSource=new ImageIconSource { ImageSource=new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri("ms-appx:///Assets/"+asset)) };
     }
 
-    private async void OnSessionDetails(object sender, RoutedEventArgs e)
-    {
-        SessionSurface.Flyout?.Hide();
-        if (Sessions.Session?.Session?.Native?.GameId is { } id) await Navigate(WorkspacePage.Details, id);
-    }
+    private bool TitleBarHasExtraContent => AppTitleBar.Content is not null
+        || AppTitleBar.LeftHeader is not null || AppTitleBar.RightHeader is not null
+        || !string.IsNullOrEmpty(AppTitleBar.Subtitle);
 
     // Library context menu / Ctrl+Enter. Uses the same LaunchViewModel readiness as Details: only a
     // prepared Ready installation launches; anything needing review or a choice opens Details instead.
@@ -133,7 +134,6 @@ public sealed partial class MainWindow
         if (commandsBlocked || navigating) return;
         try
         {
-            LaunchNotice.IsOpen = false;
             await Launch.OpenAsync(game.Id);
             if (commandsBlocked || navigating || Launch.GameId != game.Id) return;
             if (!Launch.CanLaunch)
@@ -141,17 +141,7 @@ public sealed partial class MainWindow
                 await Navigate(WorkspacePage.Details, game.Id);
                 return;
             }
-            await Launch.LaunchAsync();
-            LaunchNotice.Title = game.Name;
-            LaunchNotice.Message = Launch.Message;
-            LaunchNotice.Severity = Launch.LastRequestOutcome switch
-            {
-                LaunchOutcome.Started => InfoBarSeverity.Success,
-                LaunchOutcome.StartedButTrackingLimited or LaunchOutcome.AlreadyRunning or LaunchOutcome.AlreadyLaunching or LaunchOutcome.Cancelled => InfoBarSeverity.Warning,
-                null => InfoBarSeverity.Informational,
-                _ => InfoBarSeverity.Error
-            };
-            LaunchNotice.IsOpen = true;
+            await LaunchAndReportAsync(game.Name);
         }
         catch (Exception) { ViewModel.ReportUnexpected(); }
     }
@@ -196,7 +186,15 @@ public sealed partial class MainWindow
         {
             if (windowCapabilities.Scenario == "mica-attachment-failure-simulation")
                 throw new InvalidOperationException("TestMicaAttachmentFailure");
-            if (SystemBackdrop is not MicaBackdrop) SystemBackdrop = mica ??= new MicaBackdrop();
+            if (micaTheme != Root.ActualTheme)
+            {
+                // Start the new backdrop with the new theme in the same frame as the XAML resources.
+                // Retinting an attached backdrop can briefly leave the new foreground on the old tint.
+                micaTheme = Root.ActualTheme;
+                mica = new MicaBackdrop();
+            }
+            mica ??= new MicaBackdrop();
+            if (!ReferenceEquals(SystemBackdrop, mica)) SystemBackdrop = mica;
             OpaqueCanvas.Visibility = Visibility.Collapsed;
         }, () =>
         {
@@ -281,9 +279,9 @@ public sealed partial class MainWindow
         {
             selectedId = ViewModel.SelectedId, queryText = ViewModel.Query.Text, sort = ViewModel.Query.Sort, layout = ViewModel.Layout,
             titleBar = AppTitleBar.ActualHeight, captionTheme = AppWindow.TitleBar.PreferredTheme.ToString(), backEnabled = AppTitleBar.IsBackButtonEnabled, search = libraryPage.SearchLength, searchFocus = libraryPage.SearchFocus,
-            paneMode = Navigation.DisplayMode.ToString(), paneOpen = Navigation.IsPaneOpen, sessionIndicator = SessionSurface.Visibility == Visibility.Visible,
+            paneMode = Navigation.DisplayMode.ToString(), paneOpen = Navigation.IsPaneOpen, titleBarHasExtraContent = TitleBarHasExtraContent,
             exitButtonPresent = false, accentEvents, accentSource, accentBrushUpdates, accentRgb = accent is { } a ? $"{a.R:X2}{a.G:X2}{a.B:X2}" : "framework",
-            launchNotice = LaunchNotice.IsOpen ? LaunchNotice.Severity.ToString() : null, diagnosticsToggle,
+            launchNotice = lastLaunchSeverity?.ToString(), diagnosticsToggle,
             compatibility = new { hostVersion = windowCapabilities.HostVersion.ToString(), minimumBuild = TheOrder.Platform.Windows.WindowsCompatibility.MinimumBuild,
                 windowCapabilities.Scenario, customTitleBar, windowCapabilities.CaptionTheme, windowCapabilities.MonospaceFont,
                 micaSupported = windowCapabilities.Mica, backdrop = windowBackdrop.UsingMica ? "Mica" : "Solid",

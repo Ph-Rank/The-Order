@@ -16,7 +16,7 @@ public sealed class ContentLanguageInfo : StackPanel
         fields = selections.Select(x => new { selected = x.Selected, original = x.Original, variantCount = x.Variants.Length }).ToArray() };
     public ContentLanguageInfo()
     {
-        HorizontalAlignment = HorizontalAlignment.Stretch; SecondaryDisclosure.Apply(section); Children.Add(section);
+        HorizontalAlignment = HorizontalAlignment.Stretch; Children.Add(section);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(section, "ContentLanguageOriginals");
         section.Expanding += (_, _) => Render();
     }
@@ -36,7 +36,7 @@ public sealed class ContentLanguageInfo : StackPanel
         {
             if (selection.Selected is not { } selected) continue;
             var field = selected.Field switch { "title" => "标题", "synopsis" => "简介", "name" => "姓名", "aliases" => "别名", _ => selected.Field };
-            var caption = new TextBlock { Text = field + " · " + selection.Caption, Opacity = .75, FontSize = 12, TextWrapping = TextWrapping.Wrap };
+            var caption = new TextBlock { Text = field + " · " + selection.Caption, FontSize = 14, TextWrapping = TextWrapping.Wrap };
             ToolTipService.SetToolTip(caption, selected.Identity.Provider + " / " + selected.Identity.Resource + " / " + selected.Identity.Id);
             body.Children.Add(caption);
         }
