@@ -12,15 +12,11 @@ public sealed partial class MainWindow
             return new(ClientOutcome.ReadOnly, "请先处理未保存的修改或等待当前操作完成。" );
         cancellation.ThrowIfCancellationRequested();
         recognition.CancelAll();
-        if (nextMoeSettings.Automatic)
-        {
-            await nextMoeSettings.PauseAutomaticAsync();
-            if (nextMoeSettings.Automatic) return new(ClientOutcome.ValidationFailure, "自动同步未能暂停，请稍后重试。" );
-        }
-        await nextMoeSettings.DrainAsync();
         nextMoeSettings.PauseCommands(true);
+        CancelCollectionSync();
         try
         {
+            await Task.WhenAll(nextMoeSettings.DrainAsync(), collectionSyncOperation, collectionSyncPreview);
             var result = await ViewModel.ExecuteFileMutationAsync(async token =>
             {
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, cancellation);
@@ -49,28 +45,29 @@ public sealed partial class MainWindow
     {
         if (commandsBlocked || !ViewModel.CanEdit || !await ResolveUnsavedAsync()) return;
         recognition.CancelAll();
-        if (nextMoeSettings.Automatic)
-        {
-            await nextMoeSettings.PauseAutomaticAsync();
-            if (nextMoeSettings.Automatic) { ViewModel.ReportUnexpected(); return; }
-        }
-        await nextMoeSettings.DrainAsync();
         nextMoeSettings.PauseCommands(true);
-        var previousIds = library.CurrentSnapshot?.Entries.Select(e => e.Id).ToImmutableArray() ?? [];
+        CancelCollectionSync();
+        var resumeSync = true;
         try
         {
+            await Task.WhenAll(nextMoeSettings.DrainAsync(), collectionSyncOperation, collectionSyncPreview);
+            var previousIds = library.CurrentSnapshot?.Entries.Select(e => e.Id).ToImmutableArray() ?? [];
             var result = await ViewModel.ExecuteFileMutationAsync(token => backups.RestoreAsync(preview, token));
             if (result.IsCommitted)
             {
                 if (preview.Mode == LibraryRestoreMode.ReplaceLibrary)
                 {
                     try { await recognition.ForgetRemovedAsync(previousIds); }
-                    catch { ShowLifecycleError("书架已恢复，但旧识别队列清理未完成。请退出后重试，不要重复恢复。自动云端同步已暂停。"); }
+                    catch
+                    {
+                        resumeSync = false;
+                        ShowLifecycleError("书架已恢复，但旧识别队列清理未完成。请退出后重试，不要重复恢复。自动云端同步已暂停。");
+                    }
                 }
                 await backups.ReloadAfterRestoreAsync();
                 await Navigate(TheOrder.Presentation.WorkspacePage.Library);
             }
         }
-        finally { nextMoeSettings.PauseCommands(commandsBlocked); }
+        finally { nextMoeSettings.PauseCommands(commandsBlocked || !resumeSync); }
     }
 }

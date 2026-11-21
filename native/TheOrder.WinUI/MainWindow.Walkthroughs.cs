@@ -15,6 +15,7 @@ public sealed partial class MainWindow
         walkthroughReader = reader;
         walkthroughSessions = sessions;
         sessions.ChatFactory = GameChatServiceAsync;
+        sessions.ChatFormatter = TheOrder.Presentation.GameChatMarkdown.Format;
     }
     private void RefreshGuideStatus()
     {

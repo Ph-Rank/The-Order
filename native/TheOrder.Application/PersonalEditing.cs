@@ -8,6 +8,14 @@ public sealed record PersonalValues(string Name, string Status, double? Rating, 
     string Notes, ImmutableArray<string> Categories, ImmutableArray<string> Tags)
 {
     public static PersonalValues From(LibraryEntry e) => new(e.Name, e.Status, e.PersonalRating, e.Favorite, e.Notes, e.Categories, e.CustomTags);
+    public static double? ParseRating(string input)
+    {
+        if (input.Length == 0) return null;
+        if (!double.TryParse(input, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.CurrentCulture, out var parsed)
+            || !double.IsFinite(parsed) || parsed is < 0 or > 10)
+            throw new InvalidDataException(UiText.Get("个人评分须为 0 至 10，留空表示未评分。"));
+        return parsed;
+    }
     public bool Matches(PersonalValues other) => Name == other.Name && Status == other.Status && Rating == other.Rating && Favorite == other.Favorite && Notes == other.Notes
         && Categories.SequenceEqual(other.Categories) && Tags.SequenceEqual(other.Tags);
 }
@@ -29,6 +37,7 @@ public sealed record CoverEditToken(Guid Epoch, string Id, Guid Generation, Loca
 public sealed record BulkPersonalPatch
 {
     public Change<string> Status { get; init; }
+    public Change<double?> Rating { get; init; }
     public Change<bool> Favorite { get; init; }
     public ImmutableArray<string> AddCategories { get; init; } = [];
     public ImmutableArray<string> RemoveCategories { get; init; } = [];
@@ -101,7 +110,7 @@ public sealed partial class TransactionalLibrary
         }, cancellation);
 
     // One immutable candidate and one durable transaction, even for 1000 selected games.
-    public Task<CommitResult<int>> UpdateBatchAsync(ImmutableArray<string> ids, BulkPersonalPatch patch, CancellationToken cancellation = default)
+    public Task<CommitResult<ImmutableArray<CollectionEdit>>> UpdateBatchAsync(ImmutableArray<string> ids, BulkPersonalPatch patch, CancellationToken cancellation = default)
         => Mutate(games =>
         {
             if (ids.Length is < 1 or > 1000 || ids.Distinct(StringComparer.Ordinal).Count() != ids.Length) throw new InvalidDataException(UiText.Get("批量修改请选择 1 至 1000 个不重复条目。"));
@@ -109,17 +118,27 @@ public sealed partial class TransactionalLibrary
             var normalized = codec.Decode(codec.Encode([template, template with { Id = "remove", Categories = patch.RemoveCategories, CustomTags = patch.RemoveTags }], now()));
             var add = normalized[0]; var remove = normalized[1];
             if (add.Categories.Intersect(remove.Categories).Any() || add.CustomTags.Intersect(remove.CustomTags).Any()) throw new InvalidDataException(UiText.Get("同一分类或标签不能同时添加和移除。"));
-            if (!patch.Status.IsSpecified && !patch.Favorite.IsSpecified && add.Categories.IsEmpty && remove.Categories.IsEmpty && add.CustomTags.IsEmpty && remove.CustomTags.IsEmpty) throw new InvalidDataException(UiText.Get("请选择至少一项批量修改。"));
+            if (!patch.Status.IsSpecified && !patch.Rating.IsSpecified && !patch.Favorite.IsSpecified && add.Categories.IsEmpty && remove.Categories.IsEmpty && add.CustomTags.IsEmpty && remove.CustomTags.IsEmpty) throw new InvalidDataException(UiText.Get("请选择至少一项批量修改。"));
             var selected = ids.ToHashSet(StringComparer.Ordinal);
             if (games.Count(e => selected.Contains(e.Id)) != ids.Length) throw new StaleLibraryRequestException();
             ImmutableArray<string> Labels(ImmutableArray<string> original, ImmutableArray<string> additions, ImmutableArray<string> removals)
                 => [.. original.Where(s => !removals.Contains(s)).Concat(additions).Distinct(StringComparer.Ordinal)];
-            var candidate = games.Select(e => !selected.Contains(e.Id) ? e : e with
+            var edits = ImmutableArray.CreateBuilder<CollectionEdit>();
+            var candidate = games.Select(entry =>
             {
-                Status = patch.Status.IsSpecified ? patch.Status.Value : e.Status,
-                Favorite = patch.Favorite.IsSpecified ? patch.Favorite.Value : e.Favorite,
-                Categories = Labels(e.Categories, add.Categories, remove.Categories), CustomTags = Labels(e.CustomTags, add.CustomTags, remove.CustomTags)
+                if (!selected.Contains(entry.Id)) return entry;
+                var updated = entry with
+                {
+                    Status = patch.Status.IsSpecified ? patch.Status.Value : entry.Status,
+                    PersonalRating = patch.Rating.IsSpecified ? patch.Rating.Value : entry.PersonalRating,
+                    Favorite = patch.Favorite.IsSpecified ? patch.Favorite.Value : entry.Favorite,
+                    Categories = Labels(entry.Categories, add.Categories, remove.Categories),
+                    CustomTags = Labels(entry.CustomTags, add.CustomTags, remove.CustomTags)
+                };
+                var edit = CollectionEdit.From(updated, entry.Status, entry.PersonalRating);
+                if (edit.Fields != CollectionFields.None) edits.Add(edit);
+                return updated;
             }).ToImmutableArray();
-            return (candidate, ids.Length);
+            return (candidate, edits.ToImmutable());
         }, cancellation);
 }

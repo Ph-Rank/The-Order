@@ -32,7 +32,9 @@
    <Setter Property="Template">
     <Setter.Value>
      <ControlTemplate TargetType="Button">
-      <Border Background="Transparent" />
+      <Border Background="Transparent">
+       <ContentPresenter Content="{TemplateBinding Content}" />
+      </Border>
      </ControlTemplate>
     </Setter.Value>
    </Setter>
@@ -109,17 +111,31 @@
       </Border>
      </Grid>
     </Border>
-    <Border Style="{StaticResource StatisticsCard}">
+    <Border x:Name="TrendCard" Style="{StaticResource StatisticsCard}">
      <StackPanel Spacing="10">
       <Grid ColumnSpacing="12">
        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-       <TextBlock Style="{StaticResource StatisticsChartHeading}" l:Localize.Text="游玩趋势" />
-       <TextBlock x:Name="TrendInterval" Grid.Column="1" Style="{StaticResource MetadataTextStyle}" VerticalAlignment="Center" />
+       <StackPanel Spacing="2" VerticalAlignment="Center">
+        <TextBlock Style="{StaticResource StatisticsChartHeading}" l:Localize.Text="游玩趋势" />
+        <TextBlock x:Name="TrendInterval" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
+       </StackPanel>
+       <Border Grid.Column="1" VerticalAlignment="Center" Background="{ThemeResource ControlFillColorSecondaryBrush}" CornerRadius="8" Padding="3">
+        <StackPanel Orientation="Horizontal" Spacing="3">
+         <ToggleButton x:Name="DurationTrendMode" IsChecked="True" Checked="OnTrendModeChanged" Unchecked="OnTrendModeChanged" Padding="9,4" MinHeight="30"
+                       AutomationProperties.AutomationId="StatisticsDurationMode" l:Localize.Content="时长" />
+         <ToggleButton x:Name="SessionTrendMode" Checked="OnTrendModeChanged" Unchecked="OnTrendModeChanged" Padding="9,4" MinHeight="30"
+                       AutomationProperties.AutomationId="StatisticsSessionsMode" l:Localize.Content="游玩时段" />
+        </StackPanel>
+       </Border>
       </Grid>
       <views:StatisticsTrendChart x:Name="TrendChart" Height="200" Accent="{ThemeResource AccentFillColorDefaultBrush}"
         Gridline="{ThemeResource DividerBrush}" LabelBrush="{ThemeResource TextSecondaryBrush}" Ink="{ThemeResource TextPrimaryBrush}"
         ReadoutBackground="{ThemeResource CanvasBrush}" TargetStyle="{StaticResource StatisticsPlotTarget}" AutomationProperties.AutomationId="StatisticsTrendChart" />
-      <TextBlock x:Name="UndatedNotice" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" Visibility="Collapsed" AutomationProperties.AutomationId="StatisticsUndated" />
+      <views:StatisticsTrendChart x:Name="SessionChart" SessionPeriods="True" Height="274" Visibility="Collapsed"
+        Accent="{ThemeResource AccentFillColorDefaultBrush}" Gridline="{ThemeResource DividerBrush}"
+        LabelBrush="{ThemeResource TextSecondaryBrush}" Ink="{ThemeResource TextPrimaryBrush}"
+        ReadoutBackground="{ThemeResource CanvasBrush}" TargetStyle="{StaticResource StatisticsPlotTarget}"
+        AutomationProperties.AutomationId="StatisticsSessionChart" />
      </StackPanel>
     </Border>
     <Grid x:Name="BreakdownGrid" ColumnSpacing="16" RowSpacing="16">
@@ -128,7 +144,7 @@
        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
        <TextBlock Style="{StaticResource StatisticsChartHeading}" l:Localize.Text="游玩时长排行" />
        <TextBlock x:Name="RankingEmpty" Grid.Row="1" Style="{StaticResource MetadataTextStyle}" VerticalAlignment="Top"
-                  TextWrapping="Wrap" l:Localize.Text="当前区间暂无可归日的游玩时长。" />
+                  TextWrapping="Wrap" l:Localize.Text="当前区间暂无游玩时长。" />
        <ScrollViewer x:Name="RankingScroll" Grid.Row="1" MaxHeight="420" VerticalScrollBarVisibility="Auto"
                      HorizontalScrollBarVisibility="Disabled" VerticalScrollMode="Enabled" Visibility="Collapsed"
                      AutomationProperties.AutomationId="StatisticsRanking" l:Localize.Name="游玩时长排行">
@@ -196,8 +212,7 @@
     </views:SmoothExpander>
     <views:SmoothExpander Header="统计说明" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
      <StackPanel Spacing="10">
-      <TextBlock Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" l:Localize.Text="按本地日期汇总已结束记录中可归日的时长，并计入有效的时长修正。" />
-      <TextBlock x:Name="ProvenanceText" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+      <TextBlock x:Name="ProvenanceText" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" Visibility="Collapsed" />
       <TextBlock Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" l:Localize.Text="书架进度采用你设置的状态，不按时长猜测通关；同一作品的多个安装不会重复计数。统计不上传个人游玩记录。" />
      </StackPanel>
     </views:SmoothExpander>

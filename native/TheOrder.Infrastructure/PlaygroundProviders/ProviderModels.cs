@@ -49,7 +49,7 @@ internal sealed partial class NativePlaygroundProvider
                         GenerationMethods = methods, GenerationMethodsReported = methodsReported,
                         Lifecycle = ModelString(item["lifecycle"], 64),
                         CatalogFamily = Kind == PlaygroundProviderKind.Claude ? ModelString(item["line"], 64) : null,
-                        CatalogTextOutput = ModelTextOutput(item["output_modalities"])
+                        CatalogTextOutput = ModelTextOutput(item["output_modalities"] ?? item["outputModalities"])
                     });
                 }
                 string next;

@@ -111,6 +111,7 @@ internal static class Composition
         var fixtureCredentials = fixtureOnline && configuration["ONLINE_REAL_STORE"] != "1";
         var fixturePersonal = fixtureOnline && Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test
             && configuration["VISUAL_TEST"] == "1" && configuration["PERSONAL_FIXTURE"] == "1";
+        var readOnlyAcceptance = Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test && configuration["READ_ONLY_OAUTH_ACCEPTANCE"] == "1";
         if (fixturePersonal) services.AddSingleton<SyntheticNextMoe>();
         services.AddSingleton<INextMoeAuthStore, WindowsNextMoeAuthStore>();
         services.AddSingleton<NextMoeAccountNetwork>();
@@ -120,7 +121,8 @@ internal static class Composition
         services.AddSingleton(p => new NextMoeAuthentication(
             fixtureCredentials ? p.GetRequiredService<SyntheticOnline>() : p.GetRequiredService<IsolatedCredentialStore>(),
             fixtureCredentials ? p.GetRequiredService<SyntheticOnline>() : p.GetRequiredService<IsolatedCredentialStore>(),
-            p.GetRequiredService<INextMoeAuthStore>(), p.GetRequiredService<INextMoeOAuth>(), p.GetRequiredService<IOAuthLogin>()));
+            p.GetRequiredService<INextMoeAuthStore>(), p.GetRequiredService<INextMoeOAuth>(), p.GetRequiredService<IOAuthLogin>(),
+            catalogOnlyLogin: readOnlyAcceptance));
         services.AddSingleton<ICredentialSettings>(p => p.GetRequiredService<NextMoeAuthentication>());
         services.AddSingleton<ICredentialProvider>(p => p.GetRequiredService<NextMoeAuthentication>());
         services.AddSingleton<INextMoeAccess>(p => p.GetRequiredService<NextMoeAuthentication>());
@@ -136,6 +138,12 @@ internal static class Composition
             p.GetRequiredService<IBangumiOAuthBrowser>(), BangumiOAuthDefaults.Service));
         services.AddSingleton<BangumiAuthorization>();
         services.AddSingleton<BangumiSettingsViewModel>();
+        services.AddSingleton<IBangumiCollectionWriter>(p => new BangumiCollectionWriter(
+            p.GetRequiredService<PublicArtworkNetwork>().Client, p.GetRequiredService<BangumiAccessContext>()));
+        services.AddSingleton<IVndbCredentialStore, WindowsVndbCredentialStore>();
+        services.AddSingleton<IVndbAccountProvider>(p => new VndbAccountProvider(p.GetRequiredService<PublicArtworkNetwork>().Client));
+        services.AddSingleton<VndbAuthorization>();
+        services.AddSingleton<VndbSettingsViewModel>();
         services.AddSingleton(p => new BangumiRelationsProvider(p.GetRequiredService<PublicArtworkNetwork>().Client, access: p.GetRequiredService<BangumiAccessContext>()));
         services.AddSingleton<IBangumiRelationsProvider>(p => p.GetRequiredService<BangumiRelationsProvider>());
         services.AddSingleton<IRelatedSemanticReader>(p => p.GetRequiredService<BangumiRelationsProvider>());
@@ -197,14 +205,19 @@ internal static class Composition
         services.AddSingleton(p => p.GetRequiredService<NextMoeAuthentication>().AuthContext);
         services.AddSingleton<IPersonalSyncStore, WindowsPersonalSyncStore>();
         services.AddSingleton<IPersonalSyncLibrary, PersonalSyncLibrary>();
-        var readOnlyAcceptance = Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test && configuration["READ_ONLY_OAUTH_ACCEPTANCE"] == "1";
         services.AddSingleton<INextMoePersonalApi>(p => {
             INextMoePersonalApi api = fixturePersonal ? p.GetRequiredService<SyntheticNextMoe>() : new NextMoePersonalApi(p.GetRequiredService<CatalogNetwork>().Client,
                 p.GetRequiredService<INextMoeAccess>(), p.GetRequiredService<NextMoeRateCoordinator>());
             return readOnlyAcceptance ? new ReadOnlyPersonalApi(api) : api;
         });
+        services.AddSingleton<INextMoeCollectionWriter>(p => readOnlyAcceptance
+            ? new DisabledNextMoeCollectionWriter()
+            : fixturePersonal ? p.GetRequiredService<SyntheticNextMoe>()
+                : new NextMoePersonalApi(p.GetRequiredService<CatalogNetwork>().Client,
+                    p.GetRequiredService<INextMoeAccess>(), p.GetRequiredService<NextMoeRateCoordinator>()));
         services.AddSingleton<PersonalSyncCoordinator>();
-        services.AddSingleton<NextMoeSettingsViewModel>();
+        services.AddSingleton(p => new NextMoeSettingsViewModel(p.GetRequiredService<NextMoeAuthentication>(),
+            p.GetRequiredService<PersonalSyncCoordinator>(), automaticSyncEnabled: !readOnlyAcceptance));
         services.AddSingleton<ILocalEvidenceParser, LocalEvidenceParser>();
         services.AddSingleton<IExecutableEvidenceParser, ExecutableEvidenceParser>();
         services.AddSingleton<IRecognitionEvidenceReader>(p => new WindowsRecognitionEvidence(p.GetRequiredService<ILocalEvidenceParser>(), RecognitionFingerprint.Evidence, p.GetRequiredService<IExecutableEvidenceParser>()));

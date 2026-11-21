@@ -34,9 +34,14 @@ public sealed record SyncFolderMapping(string FolderId, string LocalCollectionId
     string? Cursor = null, string? UpdatedAt = null, bool Authorized = false);
 public sealed record PendingPersonalWrite(string Id, PersonalSyncKind Kind, string? FolderId, PersonalWrite[] Items, string CreatedAt, PersonalWrite[]? Before = null);
 public sealed record PendingFolderCreation(string Id, string Name, string[] LocalMembers, string CreatedAt);
+public sealed record PendingCatalogRedirect(string EntryId, string OldId, string NewId);
 public sealed record AccountSyncState(string AccountId, string ClientId, PersonalSyncSettings Settings,
     SyncWorkCheckpoint[] Works, SyncFolderMapping[] Folders, ImportedPersonalFacts[] Imported, PendingPersonalWrite[] Pending,
-    string? LastSuccess = null, string? PlaytimeCursor = null, string? StateCursor = null, string? RatingCursor = null, PendingFolderCreation[]? FolderCreations = null);
+    string? LastSuccess = null, string? PlaytimeCursor = null, string? StateCursor = null, string? RatingCursor = null, PendingFolderCreation[]? FolderCreations = null)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public PendingCatalogRedirect? CatalogRedirect { get; init; }
+}
 public interface IPersonalSyncStore
 {
     Task<AccountSyncState?> LoadAsync(string accountId, string clientId, CancellationToken cancellation);
@@ -48,11 +53,19 @@ public sealed record PersonalSyncRow(string Id, PersonalSyncKind Kind, string Wo
 public sealed record PersonalSyncPreview(Guid Id, OnlineAuthSnapshot Auth, string AccountId, PersonalSyncSettings Settings,
     ImmutableArray<LibraryEntry> LocalSnapshot, ImmutableArray<PersonalSyncRow> Rows, ImmutableArray<CloudFolder> CloudFolders,
     int LocalCount, int CloudCount, DateTimeOffset CreatedAt);
-public sealed record PersonalSyncResult(int Completed, int Failed, int Conflicts, string Message);
+public sealed record NextMoeAssociationIssue(string? EntryId, string Title, string WorkId, string? SuggestedId, string Reason);
+public sealed record NextMoeMergeResult(string? UpdatedId, string? SuggestedId, string? Error);
+public sealed record PersonalSyncResult(int Completed, int Failed, int Conflicts, string Message, string? AssociationWarning = null)
+{
+    public ImmutableArray<NextMoeAssociationIssue> AssociationIssues { get; init; } = [];
+    internal int RepairedAssociations { get; init; }
+}
 public enum PersonalSyncChoice { Skip, Import, Upload }
 public interface IPersonalSyncLibrary
 {
     Task<ImmutableArray<LibraryEntry>> SnapshotAsync(CancellationToken cancellation);
     Task ApplyStateAsync(LibraryEntry expected, string status, CancellationToken cancellation);
     Task<string> AddWishlistAsync(WorkMetadata metadata, CancellationToken cancellation);
+    Task<LibraryExtrasDetails> ReadAssociationAsync(string entryId, CancellationToken cancellation);
+    Task RepairAssociationAsync(LibraryExtrasDetails details, string oldId, WorkMetadata canonical, bool confirmed, CancellationToken cancellation);
 }

@@ -18,11 +18,11 @@ public sealed class NextMoeSyncLifecycleTests
     [Fact] public async Task LateAccountFactsCannotAppearAfterAccountSwitch()
     {
         var f = new PersonalSyncTests.Fixture(); await f.Login(); f.Cloud.Ratings = [new("200", 9, "2026-10-11T00:00:00Z")]; await f.Apply(new(ReadRatings: true));
-        using var vm = new NextMoeSettingsViewModel(f.Identity.Auth, f.Sync, f.Library); await vm.InitializeAsync();
+        using var vm = new NextMoeSettingsViewModel(f.Identity.Auth, f.Sync); await vm.InitializeAsync();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         f.Storage.BeforeLoad = async _ => { started.SetResult(); await release.Task; };
         var read = vm.ImportedFactsAsync("200", default); await started.Task;
-        f.Identity.Protocol.Account = "99"; await f.Identity.Auth.SignInAsync(false, false, default); release.SetResult();
+        f.Identity.Protocol.Account = "99"; await f.Identity.Auth.SignInAsync(default); release.SetResult();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => read); f.Storage.BeforeLoad = null; await vm.InitializeAsync();
         Assert.Equal("99", vm.Status!.Account!.Id); Assert.Null(await vm.ImportedFactsAsync("200", default));
     }
@@ -35,11 +35,18 @@ public sealed class NextMoeSyncLifecycleTests
         await f.Auth.RecoverCorruptLoginAsync(default); Assert.True(f.Auth.CatalogAvailable); Assert.Null(await f.Auth.ReadAsync(default)); Assert.Equal("synthetic-existing-key", f.Keys.Value);
         Assert.Equal(NextMoeAccessMode.Anonymous, f.Storage.Record!.Mode);
     }
-    [Fact] public async Task PauseAutomaticIsDurableAndNeverCallsCloud()
+    [Fact] public async Task BackupPauseStopsNewAutomaticReadsAndResumesAfterward()
     {
-        var f = new PersonalSyncTests.Fixture(); await f.Login(); await f.Apply(new(Automatic: true)); int reads = f.Cloud.Reads;
-        await f.Sync.PauseAutomaticAsync(default); Assert.False((await f.State()).Settings.Automatic); Assert.Null(await f.Sync.AutomaticAsync(default));
-        Assert.Equal(reads, f.Cloud.Reads); Assert.Equal(0, f.Cloud.Writes);
+        var f = new PersonalSyncTests.Fixture(); await f.Login();
+        using var vm = new NextMoeSettingsViewModel(f.Identity.Auth, f.Sync);
+        await vm.InitializeAsync();
+        f.Cloud.Times = [new("200", 20)];
+        vm.PauseCommands(true);
+        await vm.AutomaticAsync();
+        Assert.Equal(0, f.Cloud.Reads);
+        vm.PauseCommands(false);
+        await vm.AutomaticAsync();
+        Assert.Equal(20, (await f.State()).Imported.Single().Minutes);
     }
     [Fact] public async Task UnmapOnlyRemovesIndependentMappingAndNeverCloudMembersOrBookshelf()
     {
@@ -47,13 +54,47 @@ public sealed class NextMoeSyncLifecycleTests
         await f.Sync.MapFolderAsync(f.Cloud.Folders.Single(), ["200"], default); await f.Sync.UnmapFolderAsync("10", default);
         Assert.Empty((await f.State()).Folders); Assert.Equal(before, f.Library.Entries); Assert.Equal("200", f.Cloud.Members["10"].Single()); Assert.Equal(0, f.Cloud.Deletes);
     }
-    [Fact] public async Task FolderReauthorizationKeepsSameAccountUnsavedSelections()
+    [Fact] public async Task ReauthorizationEnablesAutomaticSyncEvenWithAnOldAllOffState()
     {
-        var f = new PersonalSyncTests.Fixture(); await f.Login();
-        using var vm = new NextMoeSettingsViewModel(f.Identity.Auth, f.Sync, f.Library); await vm.InitializeAsync();
-        vm.FolderDirection = 3; vm.TimeDirection = 2; vm.ReadRatings = true;
-        await vm.LoginAsync(true); Assert.Equal(3, vm.FolderDirection); Assert.Equal(2, vm.TimeDirection); Assert.True(vm.ReadRatings); Assert.Empty(f.Storage.Data); Assert.Equal(0, f.Cloud.Writes);
-        f.Identity.Protocol.Account = "99"; await vm.LoginAsync(true); Assert.Equal(0, vm.FolderDirection); Assert.False(vm.ReadRatings);
+        var f = new PersonalSyncTests.Fixture();
+        f.Identity.Storage.Record = new(1, NextMoeAccessMode.Account, new("42", "合成用户"), "synthetic-old-refresh",
+            [.. NextMoeOAuthIdentity.CatalogScopes]);
+        await f.Apply(new());
+        f.Cloud.Times = [new("200", 20)];
+        f.Cloud.States = [new("200", "done", "all", "2026-10-11T10:10:00Z")];
+        f.Cloud.Ratings = [new("200", 9, "2026-10-11T10:10:00Z")];
+
+        using var vm = new NextMoeSettingsViewModel(f.Identity.Auth, f.Sync);
+        await vm.InitializeAsync();
+        Assert.Equal("重新授权 NextMoe", vm.LoginAction);
+        Assert.False(vm.Automatic);
+        var reads = f.Cloud.Reads;
+        await vm.AutomaticAsync();
+        Assert.Equal(reads, f.Cloud.Reads);
+
+        await vm.LoginAsync();
+        Assert.True(vm.Automatic);
+        Assert.Equal("重新登录 NextMoe", vm.LoginAction);
+        await vm.AutomaticAsync();
+        var records = (await f.State()).Imported.Single();
+        Assert.Equal(20, records.Minutes);
+        Assert.Equal("all", records.Completion);
+        Assert.Null(records.Rating);
+        Assert.Equal(0, f.Cloud.RatingReads);
+        Assert.Equal(1, await vm.ImportRatingsAsync());
+        Assert.Equal(9, (await f.State()).Imported.Single().Rating);
+        Assert.Equal(1, f.Cloud.RatingReads);
+        f.Cloud.Ratings = [];
+        Assert.Equal(0, await vm.ImportRatingsAsync());
+        Assert.Null((await f.State()).Imported.Single().Rating);
+        Assert.Equal(20, (await f.State()).Imported.Single().Minutes);
+        Assert.Equal("completed", f.Library.Entries.Single().Status);
+        Assert.Equal(8.5, f.Library.Entries.Single().PersonalRating);
+        Assert.Equal(0, f.Cloud.Writes);
+
+        await vm.LogoutAsync();
+        Assert.False(vm.Automatic);
+        Assert.Null(await vm.ImportedFactsAsync("200", default));
     }
     [Fact] public async Task AutomaticRemoteOnlyTimeIncreaseImportsWithoutAdditionOrLocalHistoryChange()
     {
@@ -70,18 +111,64 @@ public sealed class NextMoeSyncLifecycleTests
         f.Cloud.States = [new("200", "done", "all", "2026-10-11T10:10:00Z")];
         await f.Sync.AutomaticAsync(default); Assert.Equal("completed", f.Library.Entries[0].Status); Assert.Equal("all", (await f.State()).Imported.Single().Completion); Assert.Equal(0, f.Cloud.Writes);
     }
-    [Fact] public async Task BidirectionalAutomaticReplacementRequiresManualDecisionWithoutServerCas()
+    [Fact] public async Task AutomaticKeepsConflictingCloudStateAndStillImportsIndependentTime()
     {
-        var f = new PersonalSyncTests.Fixture(); await f.Login(); f.Cloud.States = [new("200", "wish", null, "2026-10-11T00:00:00Z")];
-        await f.Apply(new(State: PersonalSyncDirection.Bidirectional, Automatic: true)); f.Library.Entries = [f.Library.Entries[0] with { Status = "playing" }];
-        var result = await f.Sync.AutomaticAsync(default); Assert.Equal(0, result!.Completed); Assert.Contains("预览", result.Message); Assert.Equal("wish", f.Cloud.States[0].State); Assert.Equal(0, f.Cloud.Writes);
+        var f = new PersonalSyncTests.Fixture(); await f.Login();
+        f.Cloud.States = [new("200", "wish", null, "2026-10-11T00:00:00Z")];
+        await f.Apply(new(State: PersonalSyncDirection.Bidirectional, Automatic: true));
+        f.Library.Entries = [f.Library.Entries[0] with { Status = "playing" }];
+        f.Cloud.States = [new("200", "done", "all", "2026-10-11T10:10:00Z")];
+        f.Cloud.Times = [new("200", 14)];
+
+        var result = await f.Sync.AutomaticAsync(default);
+        Assert.Equal(1, result?.Completed);
+        Assert.Equal("done", f.Cloud.States.Single().State);
+        Assert.Equal("playing", f.Library.Entries.Single().Status);
+        Assert.Equal(14, (await f.State()).Imported.Single().Minutes);
+        Assert.Equal(0, f.Cloud.Writes);
     }
+
+    [Fact] public async Task AutomaticUploadsTimeButLeavesStateToConfirmedEdits()
+    {
+        var f = new PersonalSyncTests.Fixture(); await f.Login();
+        f.Library.Entries = [f.Library.Entries[0] with { TotalPlaySeconds = 180, Status = "playing" }];
+
+        var result = await f.Sync.AutomaticAsync(default);
+        Assert.Equal(1, result?.Completed);
+        Assert.Equal(3, f.Cloud.Times.Single().Minutes);
+        Assert.Empty(f.Cloud.States);
+        Assert.Equal(1, f.Cloud.Writes);
+
+        f.Identity.Time.Now += TimeSpan.FromMinutes(6);
+        await f.Sync.AutomaticAsync(default);
+        Assert.Equal(1, f.Cloud.Writes);
+    }
+    [Fact] public async Task AutomaticFolderSyncKeepsKnownRemovalsWhenOtherChangesCommit()
+    {
+        var f = new PersonalSyncTests.Fixture(); await f.Login();
+        f.Cloud.Members["10"] = ["200"];
+        await f.Sync.MapFolderAsync(f.Cloud.Folders.Single(), ["200"], default);
+        await f.Apply(new(Folders: PersonalSyncDirection.Bidirectional));
+        f.Cloud.Members["10"] = [];
+        f.Cloud.Times = [new("200", 14)];
+
+        await f.Sync.AutomaticAsync(default);
+        Assert.Contains("200", (await f.State()).Folders.Single().CloudBaseline);
+        f.Identity.Time.Now += TimeSpan.FromMinutes(6);
+        await f.Sync.AutomaticAsync(default);
+        Assert.Empty(f.Cloud.Members["10"]);
+        Assert.Contains("200", (await f.State()).Folders.Single().Members);
+        Assert.Equal(0, f.Cloud.Writes);
+        Assert.Equal(0, f.Cloud.Deletes);
+    }
+
     [Fact] public async Task RealReturnedCursorIsReusedForAutomaticReadButCommitRechecksFullSnapshot()
     {
         var f = new PersonalSyncTests.Fixture(); await f.Login(); int phase = 0;
         f.Cloud.TimePages = cursor => phase == 0 ? cursor is null ? new([new("200", 10)], "cur_second", true) : new([new("201", 2)], null, false)
             : new([new("200", 20)], null, false);
-        await f.Apply(new(Playtime: PersonalSyncDirection.Import, Automatic: true)); int readIndex = f.Cloud.TimeCursors.Count; phase = 1;
+        await f.Sync.AutomaticAsync(default); int readIndex = f.Cloud.TimeCursors.Count; phase = 1;
+        f.Identity.Time.Now += TimeSpan.FromMinutes(6);
         await f.Sync.AutomaticAsync(default); Assert.Equal("cur_second", f.Cloud.TimeCursors[readIndex]); Assert.Null(f.Cloud.TimeCursors[readIndex + 1]);
         Assert.Equal(20, (await f.State()).Imported.Single().Minutes); Assert.Equal(0, f.Cloud.Writes);
     }

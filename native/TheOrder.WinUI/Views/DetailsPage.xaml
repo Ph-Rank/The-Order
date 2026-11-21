@@ -21,6 +21,7 @@
           <Button x:Name="HeroMore" Width="40" Height="36" Padding="8,0" CornerRadius="6" AutomationProperties.AutomationId="DetailsMore" l:Localize.Name="更多作品操作"><FontIcon Glyph="" FontSize="14" />
           <Button.Flyout><MenuFlyout Placement="BottomEdgeAlignedLeft" Opening="OnLaunchMenuOpening">
            <MenuFlyoutItem Click="OnInstallations" l:Localize.Text="游戏文件与启动"><MenuFlyoutItem.Icon><FontIcon Glyph="" /></MenuFlyoutItem.Icon></MenuFlyoutItem>
+           <MenuFlyoutItem Text="同步状态与评分" Click="OnSyncCollection" AutomationProperties.AutomationId="SyncWorkStatusAndRating" />
            <MenuFlyoutItem Text="游玩记录、攻略与补充资料" Click="OnGameTools" AutomationProperties.AutomationId="GameTools" />
            <MenuFlyoutSubItem x:Name="LaunchInstallationsMenu" l:Localize.Text="本次启动哪个文件夹的游戏" />
            <MenuFlyoutItem x:Name="CoverButton" Click="OnCover" IsEnabled="{x:Bind ViewModel.CanEdit, Mode=OneWay}" AutomationProperties.AutomationId="ChooseLocalCover" l:Localize.Text="选择本地封面"><MenuFlyoutItem.Icon><FontIcon Glyph="" /></MenuFlyoutItem.Icon></MenuFlyoutItem>

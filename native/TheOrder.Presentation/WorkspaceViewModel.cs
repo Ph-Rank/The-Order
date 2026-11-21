@@ -102,6 +102,7 @@ public sealed class WorkspaceViewModel(IOfflineLibraryClient client, IUiPreferen
     public string DataDirectory => configuration.DataDirectory ?? UiText.Get("未指定；不会访问正式书架");
     public double LastQueryMilliseconds { get; private set; }
     public event Action? ThemeChanged;
+    public event Action<ImmutableArray<CollectionEdit>>? CollectionEdited;
 
     private void StateChanged()
     {
@@ -332,6 +333,7 @@ public sealed class WorkspaceViewModel(IOfflineLibraryClient client, IUiPreferen
             Report(result);
             if (result.IsCommitted)
             {
+                if (!result.CollectionEdits.IsEmpty) CollectionEdited?.Invoke(result.CollectionEdits);
                 var detailFailed = false;
                 if (detailId is not null)
                 {
@@ -370,15 +372,17 @@ public sealed class WorkspaceViewModel(IOfflineLibraryClient client, IUiPreferen
         return saving = RunMutationAsync(mutation);
     }
     public Task<ClientResult> BatchAsync(ImmutableArray<string> ids, BulkPersonalPatch patch) => StartBatchAsync(token => client.BatchAsync(ids, patch, token));
-    public Task<ClientResult> ApplyBatchAsync(ImmutableArray<string> ids, string status, string favorite, string categoriesText, string tagsText, bool remove) => StartBatchAsync(async token =>
+    public Task<ClientResult> ApplyBatchAsync(ImmutableArray<string> ids, string status, string favorite, string categoriesText, string tagsText, bool remove, string ratingText = "") => StartBatchAsync(async token =>
     {
-        var labels = await Task.Run(() => (Categories: textRules.SplitLabels(categoriesText), Tags: textRules.SplitLabels(tagsText)), token);
+        var inputs = await Task.Run(() => (Categories: textRules.SplitLabels(categoriesText), Tags: textRules.SplitLabels(tagsText),
+            Rating: PersonalValues.ParseRating(ratingText.Trim())), token);
         token.ThrowIfCancellationRequested();
         return await client.BatchAsync(ids, new()
         {
             Status = new(status != "all", status), Favorite = new(favorite != "keep", favorite == "yes"),
-            AddCategories = remove ? [] : labels.Categories, RemoveCategories = remove ? labels.Categories : [],
-            AddTags = remove ? [] : labels.Tags, RemoveTags = remove ? labels.Tags : []
+            Rating = new(inputs.Rating.HasValue, inputs.Rating),
+            AddCategories = remove ? [] : inputs.Categories, RemoveCategories = remove ? inputs.Categories : [],
+            AddTags = remove ? [] : inputs.Tags, RemoveTags = remove ? inputs.Tags : []
         }, token);
     });
     public async Task ChangeAppearanceAsync(NativeTheme theme, string layout)

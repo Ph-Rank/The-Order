@@ -12,7 +12,8 @@ public sealed partial class MainWindow
         await Navigate(WorkspacePage.Settings);
         switch (action)
         {
-            case "login": await nextMoeSettings.LoginAsync(true); break;
+            case "login": await nextMoeSettings.LoginAsync(); break;
+            case "sync": await nextMoeSettings.AutomaticAsync(); break;
             case "preview": nextMoeSettings.TimeDirection = 2; nextMoeSettings.StateDirection = 3; nextMoeSettings.ReadRatings = true; await nextMoeSettings.PreviewAsync(); break;
             case "apply": await nextMoeSettings.ApplyAsync(); break;
             case "logout": await nextMoeSettings.LogoutAsync(); break;

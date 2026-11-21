@@ -74,6 +74,46 @@ public sealed class OfflineClientTests
     private static Task<UnsavedChoice> Stay() => Task.FromResult(UnsavedChoice.Stay);
 
     [Fact]
+    public async Task ConfirmedSingleAndBatchEditsPublishOnlyDurablyChangedFields()
+    {
+        using var oracle = Oracle();
+        using var profile = new TransactionProfile(Input(oracle));
+        await using var client = Client(profile);
+        await using var vm = new WorkspaceViewModel(client, new MemoryPreferences(), new(profile.Root), TextRules);
+        await vm.InitializeAsync();
+        var notifications = new List<ImmutableArray<CollectionEdit>>();
+        vm.CollectionEdited += notifications.Add;
+
+        await vm.NavigateAsync(WorkspacePage.Details, "entry-0", Stay);
+        vm.Draft!.Notes = "note only";
+        Assert.True((await vm.SaveAsync()).IsCommitted);
+        Assert.Empty(notifications);
+        vm.Draft!.Rating = "8";
+        Assert.True((await vm.SaveAsync()).IsCommitted);
+        var single = Assert.Single(Assert.Single(notifications));
+        Assert.Equal(CollectionFields.Rating, single.Fields);
+        Assert.Equal(8, single.Entry.PersonalRating);
+
+        await vm.NavigateAsync(WorkspacePage.Library, null, Stay);
+        var ids = ImmutableArray.Create("entry-0", "entry-1");
+        var rejected = await vm.ApplyBatchAsync(ids, "all", "keep", "", "", false, "11");
+        Assert.Equal(ClientOutcome.ValidationFailure, rejected.Outcome);
+        Assert.Single(notifications);
+        var accepted = await vm.ApplyBatchAsync(ids, "all", "keep", "", "", false, "9");
+        Assert.True(accepted.IsCommitted);
+        Assert.Equal(2, notifications[1].Length);
+        Assert.All(notifications[1], edit =>
+        {
+            Assert.Equal(CollectionFields.Rating, edit.Fields);
+            Assert.Equal(9, edit.Entry.PersonalRating);
+        });
+        Assert.All(client.CurrentSnapshot!.Entries.Where(entry => ids.Contains(entry.Id)), entry => Assert.Equal(9, entry.PersonalRating));
+        var count = notifications.Count;
+        Assert.True((await vm.ApplyBatchAsync(ids, "all", "keep", "", "", false, "9")).IsCommitted);
+        Assert.Equal(count, notifications.Count);
+    }
+
+    [Fact]
     public async Task DraftSaveCancelAndRestartPreserveAuthoritativeState()
     {
         using var d = Oracle(); using var p = new TransactionProfile(Input(d));

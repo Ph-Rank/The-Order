@@ -13,7 +13,7 @@ public sealed class OnlineException(OnlineFailure failure, TimeSpan? retryAfter 
     {
         OnlineFailure.LoginRequired => "NextMoe 登录已失效或刷新未完成，请重新登录；当前访问方式未改变。",
         OnlineFailure.UserIdentityRequired => "个人数据需要登录 NextMoe；匿名访问和 API 密钥只能读取公开目录。",
-        OnlineFailure.ScopeRequired => "这项操作需要额外授权。请在同步设置中明确选择后重新授权。",
+        OnlineFailure.ScopeRequired => "这项操作需要账号权限。请在「资料与账号」重新授权 NextMoe。",
         OnlineFailure.QuotaExceeded => "今天的在线额度已用完，已暂停请求。可稍后再试；本地书架仍可使用。",
         OnlineFailure.Conflict => "资料已在另一侧发生变化，请重新预览并选择要保留的结果。",
         OnlineFailure.NoCredential => UiText.Get("请在设置中检查当前资料访问方式。"),

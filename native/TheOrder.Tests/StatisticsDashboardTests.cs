@@ -59,6 +59,120 @@ public sealed class StatisticsDashboardTests
         var game = Game(seconds: 3601) with { Sessions = [new("s", "2026-10-18T23:00:00Z", "2026-10-19T01:00:00Z", 3601)] };
         var data = Build([game]); Assert.True(data.Estimated); Assert.Equal(2, data.Days.Length); Assert.Equal(3601, data.Days.Sum(x => x.Seconds)); Assert.Equal(0, data.UnknownSeconds);
     }
+    [Fact] public void SessionTimelineKeepsGameIdentityAndSplitsMidnightWithTheSameDateFilters()
+    {
+        var first = Game("a", seconds: 7200) with
+        {
+            Sessions = [new("s", "2026-10-18T23:00:00Z", "2026-10-19T01:00:00Z", 7200)]
+        };
+        var second = Game("b", seconds: 3600) with
+        {
+            Sessions = [new("t", "2026-10-19T18:00:00Z", "2026-10-19T19:00:00Z", 3600)]
+        };
+
+        var data = Build([first, second], StatisticsPeriod.Last7Days);
+        Assert.Equal(7, data.SessionTimeline.Length);
+        Assert.Equal(("a", 82800, 86400), Coordinates(Assert.Single(data.SessionTimeline[^2].Ranges)));
+        Assert.Collection(data.SessionTimeline[^1].Ranges,
+            range => Assert.Equal(("a", 0, 3600), Coordinates(range)),
+            range => Assert.Equal(("b", 64800, 68400), Coordinates(range)));
+        var filtered = Build([first, second], StatisticsPeriod.Last7Days, id: "b");
+        Assert.Equal(("b", 64800, 68400), Coordinates(Assert.Single(filtered.SessionTimeline[^1].Ranges)));
+        Assert.Empty(filtered.SessionTimeline[^2].Ranges);
+    }
+
+    [Fact] public void SessionAxisFitsTheCurrentGameAndRollsClockLabelsAcrossMidnight()
+    {
+        var evening = Game("a", seconds: 7200) with
+        {
+            Sessions = [new("overnight", "2026-10-18T23:00:00Z", "2026-10-19T01:00:00Z", 7200)]
+        };
+        var afternoon = Game("b") with
+        {
+            Sessions = [new("earlier", "2026-10-19T18:00:00Z", "2026-10-19T19:00:00Z", 3600)]
+        };
+
+        var data = Build([evening, afternoon], StatisticsPeriod.Last7Days);
+        Assert.Equal(new StatisticsSessionAxis(61200, 93600, 7200), StatisticsSessionAxis.For(data.SessionTimeline));
+        var filtered = Build([evening, afternoon], StatisticsPeriod.Last7Days, id: "a");
+        var axis = StatisticsSessionAxis.For(filtered.SessionTimeline)!.Value;
+        Assert.Equal(new StatisticsSessionAxis(79200, 93600, 3600), axis);
+        Assert.Equal(("a", 82800, 86400), Coordinates(Assert.Single(axis.Project(Assert.Single(filtered.SessionTimeline[^2].Ranges)))));
+        Assert.Equal(("a", 86400, 90000), Coordinates(Assert.Single(axis.Project(Assert.Single(filtered.SessionTimeline[^1].Ranges)))));
+        var daytime = Build([evening, afternoon], StatisticsPeriod.Last7Days, id: "b");
+        Assert.Equal(new StatisticsSessionAxis(57600, 75600, 3600), StatisticsSessionAxis.For(daytime.SessionTimeline));
+    }
+
+    [Theory]
+    [InlineData(0, 21600, 108000)]
+    [InlineData(3600, 3600, 86400)]
+    public void SessionAxisKeepsAllExtensiveDataWithoutPaddingItPastOneClockCycle(int from, int axisStart, int axisEnd)
+    {
+        var day = new DateOnly(2026, 10, 19);
+        var range = new StatisticsSessionRange("a", "Game", from, 86400);
+        var axis = StatisticsSessionAxis.For([new(day, day, "10/19", [range])])!.Value;
+        Assert.Equal(new StatisticsSessionAxis(axisStart, axisEnd, 14400), axis);
+        var projected = axis.Project(range).ToArray();
+        Assert.Equal(range.EndSecond - range.StartSecond, projected.Sum(x => x.EndSecond - x.StartSecond));
+        Assert.All(projected, x =>
+        {
+            Assert.InRange(x.StartSecond, axis.StartSecond, axis.EndSecond);
+            Assert.InRange(x.EndSecond, axis.StartSecond, axis.EndSecond);
+        });
+    }
+
+    [Fact] public void MonthlySessionBucketsCombineGenuineOverlapAndLeaveDisjointIntervalsEmpty()
+    {
+        var first = Game("a", seconds: 10800) with
+        {
+            Sessions =
+            [
+                new("one", "2026-10-01T08:00:00Z", "2026-10-01T09:00:00Z", 3600),
+                new("two", "2026-10-02T08:30:00Z", "2026-10-02T09:30:00Z", 3600),
+                new("three", "2026-10-03T20:00:00Z", "2026-10-03T21:00:00Z", 3600)
+            ]
+        };
+        var second = Game("b", date: "2026-10-03");
+        var data = Build([first, second], StatisticsPeriod.ThisYear);
+        var ranges = data.SessionTimeline.Single(bucket => bucket.Start.Month == 10).Ranges;
+        Assert.Collection(ranges,
+            range => Assert.Equal(("a", 28800, 34200), Coordinates(range)),
+            range => Assert.Equal(("b", 36000, 43200), Coordinates(range)),
+            range => Assert.Equal(("a", 72000, 75600), Coordinates(range)));
+    }
+
+    [Fact] public void SessionTimelineOmitsUndatedCorrectionsAndUnconfirmedExitTimes()
+    {
+        var game = Game() with
+        {
+            Sessions = [ProcessGone("gone", "2026-10-19T14:00:00Z", "2026-10-19T15:00:00Z", 1800)],
+            ManualPlaytime = [new("added", "2026-10-19", 600, "", "2026-10-19T16:00:00Z")]
+        };
+        var data = Build([game]);
+        Assert.All(data.SessionTimeline, bucket => Assert.Empty(bucket.Ranges));
+        Assert.Null(StatisticsSessionAxis.For(data.SessionTimeline));
+        Assert.Equal(2400, data.PeriodSeconds);
+        Assert.Equal(1800, data.UnknownSeconds);
+    }
+
+    [Theory]
+    [InlineData(3, 8, "2026-03-08T06:30:00Z", "2026-03-08T07:30:00Z", 5400, 7200, 10800, 12600)]
+    [InlineData(11, 1, "2026-11-01T05:55:00Z", "2026-11-01T06:05:00Z", 3600, 3900, 6900, 7200)]
+    public void SessionTimelinePreservesWallClockGapsAtDaylightSavingTransitions(int month, int day, string start, string end,
+        int first, int firstEnd, int second, int secondEnd)
+    {
+        var zone = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+        long seconds = (long)(DateTimeOffset.Parse(end) - DateTimeOffset.Parse(start)).TotalSeconds;
+        var game = Game("a", seconds: seconds) with { Sessions = [new("s", start, end, seconds)] };
+        var report = StatisticsDashboardBuilder.Build(new([game], StatisticsPeriod.Last7Days, new(2026, month, day), zone));
+        Assert.Collection(report.SessionTimeline[^1].Ranges,
+            range => Assert.Equal(("a", first, firstEnd), Coordinates(range)),
+            range => Assert.Equal(("a", second, secondEnd), Coordinates(range)));
+    }
+
+    private static (string Id, int Start, int End) Coordinates(StatisticsSessionRange range)
+        => (range.GameId, range.StartSecond, range.EndSecond);
+
     [Theory] [InlineData(SessionLifecycle.Open)] [InlineData(SessionLifecycle.Incomplete)] [InlineData(SessionLifecycle.RecoveryPending)]
     public void NonCompletedSessionsDoNotInventDailyActivity(SessionLifecycle lifecycle)
     {

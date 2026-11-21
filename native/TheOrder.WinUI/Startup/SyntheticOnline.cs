@@ -40,6 +40,11 @@ public sealed class SyntheticOnline : HttpMessageHandler, ICredentialProvider, I
         }
         if (Program.Profile?.Manifest.ProfileKind == NativeProfileKind.Test)
         {
+            if (uri.AbsolutePath.StartsWith("/v2/catalog/works/", StringComparison.Ordinal)
+                && SyntheticNextMoe.MergeTarget(uri.Segments[^1]) is { } target)
+                return Json(new { @object = "work", code = "ENTITY_MERGED", current_id = target }, 404);
+            if (uri.AbsolutePath == "/v2/catalog/works/900086" && Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_PERSONAL_FIXTURE") == "1")
+                return Json(new { @object = "work", code = "ENTITY_MERGED", current_id = "900090" }, 404);
             var more = query.ContainsKey("cursor");
             if (uri.AbsolutePath == "/v2/catalog/works" && query.TryGetValue("q", out var term) && term is "motion" or "motion-scroll" or "motion-retry")
             {
@@ -155,7 +160,8 @@ public sealed class SyntheticOnline : HttpMessageHandler, ICredentialProvider, I
             string[] ids = q == "empty" ? [] : q == "invalid-cover" ? ["99"] : q == "mismatched-detail" ? ["86"] : q == "slow-detail" ? ["87"] : query.ContainsKey("cursor") ? ["2", "3"] : ["1", "2"];
             return Json(new { @object = "list", items = ids.Select(id => new { @object = "search_result", target_object = "work", id }), next_cursor = query.ContainsKey("cursor") || q is "empty" or "invalid-cover" ? null : "cur_page2" });
         }
-        if (query.TryGetValue("ids", out var joined)) return Json(new { @object = "list", items = joined.Split(',').Reverse().Select(Work) });
+        if (query.TryGetValue("ids", out var joined)) return Json(new { @object = "list", items = joined.Split(',').Where(id => Program.Profile?.Manifest.ProfileKind != NativeProfileKind.Test
+            || SyntheticNextMoe.MergeTarget(id) is null).Reverse().Select(Work) });
         if (query.ContainsKey("limit")) { if (slowConnection) await Task.Delay(40000, cancellation); return Json(new { @object = "list", items = Array.Empty<object>() }); }
         DetailRequests++;
         var id = uri.Segments.Last();

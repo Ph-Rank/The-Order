@@ -29,9 +29,10 @@ public sealed class NativeLibraryCodec : ILibraryCodec
             if (game.TryGetProperty("nativeExtras", out var x))
             {
                 if (x.ValueKind != JsonValueKind.Object || !x.TryGetProperty("version", out var v) || !v.TryGetInt32(out var version)) throw new InvalidDataException("缺少扩展资料版本。");
-                if (version is not (1 or 2 or 3 or 4 or 5 or 6 or 7) || x.EnumerateObject().Any(p => p.Name is not ("version" or "manualPlaytime" or "guidePaths" or "metadataMix" or "installations" or "migrationOrigins" or "progressStatus"))) throw new UnsupportedExtrasSchemaException();
+                if (version is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8) || x.EnumerateObject().Any(p => p.Name is not ("version" or "manualPlaytime" or "guidePaths" or "metadataMix" or "installations" or "migrationOrigins" or "progressStatus" or "collectionBindings"))) throw new UnsupportedExtrasSchemaException();
                 var extra = x.Deserialize<NativeExtras>(NativeSessionCodec.Options) ?? throw new InvalidDataException("空扩展资料。");
                 if (extra.ManualPlaytime.IsDefault || extra.Installations.IsDefault || extra.Installations.Any(i => i is null) || extra.Installations.Select(i => i.Id).Distinct().Count() != extra.Installations.Length) throw new InvalidDataException("扩展安装记录无效。");
+                if ((version == 8) != (extra.CollectionBindings is not null)) throw new InvalidDataException("手动同步编号与扩展资料版本不一致。");
                 if (version == 1 && extra.Installations.Any(i => i.Compatibility?.Auxiliaries is not null)) throw new InvalidDataException("启动覆盖需要扩展资料 v2。");
                 if (version < 3 && extra.MigrationOrigins is not null || version == 3 && (extra.MigrationOrigins is null || extra.MigrationOrigins.Value.IsDefaultOrEmpty))
                     throw new InvalidDataException("Migration lineage requires native extras v3.");
@@ -73,7 +74,7 @@ public sealed class NativeLibraryCodec : ILibraryCodec
             if (extras.TryGetValue(e.Id, out var x))
             {
                 if (x.Installations.Any(i => !e.Installations.Any(existing => existing.Id == i.Id))) throw new InvalidDataException("扩展安装不存在。");
-                e = e with { Status = x.ProgressStatus ?? e.Status, ManualPlaytime = x.ManualPlaytime, GuidePaths = x.GuidePaths, MetadataMix = NormalizeMix(x.MetadataMix), MigrationOrigins = x.MigrationOrigins ?? [],
+                e = e with { Status = x.ProgressStatus ?? e.Status, ManualPlaytime = x.ManualPlaytime, GuidePaths = x.GuidePaths, MetadataMix = NormalizeMix(x.MetadataMix), MigrationOrigins = x.MigrationOrigins ?? [], CollectionBindings = x.CollectionBindings,
                     Installations = [.. e.Installations.Select(i => x.Installations.FirstOrDefault(a => a.Id == i.Id) is { } a ? i with { SaveFolder = a.SaveFolder, SteamAppId = a.SteamAppId, Compatibility = a.Compatibility } : i)] };
             }
             LibraryExtras.Validate(e); return e;
@@ -101,8 +102,8 @@ public sealed class NativeLibraryCodec : ILibraryCodec
         {
             var projected = LegacyLibraryCodec.Project(LegacyProgress(e));
             LibraryExtras.Validate(e);
-            if (HasExtras(e)) projected["nativeExtras"] = new NativeExtras(e.MigrationOrigins.Any(o => o.HistoryDates is not null) ? 7 : e.MigrationOrigins.Any(RequiresInterchangeV6) ? 6 : e.MigrationOrigins.Any(o => o.Review is not null) ? 5 : e.Status == "wish" || e.MigrationOrigins.Any(o => o.ProgressUpdate is not null) ? 4 : !e.MigrationOrigins.IsEmpty ? 3 : e.Installations.Any(i => i.Compatibility?.Auxiliaries is not null) ? 2 : 1, e.ManualPlaytime, e.GuidePaths, NormalizeMix(e.MetadataMix),
-                [.. e.Installations.Where(i => i.SaveFolder is not null || i.SteamAppId is not null || i.Compatibility is not null).Select(i => new InstallationExtras(i.Id, i.SaveFolder, i.SteamAppId, i.Compatibility))], e.MigrationOrigins.IsEmpty ? null : e.MigrationOrigins, e.Status == "wish" ? "wish" : null);
+            if (HasExtras(e)) projected["nativeExtras"] = new NativeExtras(e.CollectionBindings is not null ? 8 : e.MigrationOrigins.Any(o => o.HistoryDates is not null) ? 7 : e.MigrationOrigins.Any(RequiresInterchangeV6) ? 6 : e.MigrationOrigins.Any(o => o.Review is not null) ? 5 : e.Status == "wish" || e.MigrationOrigins.Any(o => o.ProgressUpdate is not null) ? 4 : !e.MigrationOrigins.IsEmpty ? 3 : e.Installations.Any(i => i.Compatibility?.Auxiliaries is not null) ? 2 : 1, e.ManualPlaytime, e.GuidePaths, NormalizeMix(e.MetadataMix),
+                [.. e.Installations.Where(i => i.SaveFolder is not null || i.SteamAppId is not null || i.Compatibility is not null).Select(i => new InstallationExtras(i.Id, i.SaveFolder, i.SteamAppId, i.Compatibility))], e.MigrationOrigins.IsEmpty ? null : e.MigrationOrigins, e.Status == "wish" ? "wish" : null, e.CollectionBindings);
             projected["sessions"] = e.Sessions.Select(s =>
             {
                 var record = new Dictionary<string, object?> { ["id"] = s.Id, ["startedAt"] = s.StartedAt, ["endedAt"] = s.EndedAt, ["seconds"] = s.Seconds };
@@ -131,10 +132,11 @@ public sealed class NativeLibraryCodec : ILibraryCodec
         return mix with { Base = mix.Base is null ? null : legacy.NormalizeWork(mix.Base), Layers = [.. mix.Layers.Select(x => x with { Work = legacy.NormalizeWork(x.Work) })] };
     }
     private static LibraryEntry LegacyProgress(LibraryEntry e) => e.Status == "wish" ? e with { Status = "planned" } : e;
-    private static bool HasExtras(LibraryEntry e) => e.Status == "wish" || !e.MigrationOrigins.IsEmpty || !e.ManualPlaytime.IsEmpty || !e.GuidePaths.IsEmpty || e.MetadataMix is not null || e.Installations.Any(i => i.SaveFolder is not null || i.SteamAppId is not null || i.Compatibility is not null);
+    private static bool HasExtras(LibraryEntry e) => e.Status == "wish" || !e.MigrationOrigins.IsEmpty || !e.ManualPlaytime.IsEmpty || !e.GuidePaths.IsEmpty || e.MetadataMix is not null || e.CollectionBindings is not null || e.Installations.Any(i => i.SaveFolder is not null || i.SteamAppId is not null || i.Compatibility is not null);
     private sealed record InstallationExtras(string Id, string? SaveFolder, string? SteamAppId, LaunchCompatibility? Compatibility);
     private sealed record NativeExtras(int Version, ImmutableArray<ManualPlaytime> ManualPlaytime, ImmutableArray<string> GuidePaths, MetadataMix? MetadataMix, ImmutableArray<InstallationExtras> Installations,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] ImmutableArray<MigrationOrigin>? MigrationOrigins = null,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? ProgressStatus = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? ProgressStatus = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] CollectionBindings? CollectionBindings = null);
 }
 internal sealed class UnsupportedExtrasSchemaException : Exception;

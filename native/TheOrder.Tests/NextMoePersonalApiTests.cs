@@ -32,7 +32,7 @@ public sealed class NextMoePersonalApiTests
             Api = new(Client, Identity.Auth, Rate);
         }
         public void Dispose() => Client.Dispose();
-        internal Task Login(bool folders = false) => Identity.Auth.SignInAsync(folders, folders, default);
+        internal Task Login() => Identity.Auth.SignInAsync(default);
     }
     [Theory] [InlineData(false)] [InlineData(true)]
     public async Task NonUserIdentityNeverSendsPrivateRequest(bool legacyKey)
@@ -42,13 +42,17 @@ public sealed class NextMoePersonalApiTests
         var error = await Assert.ThrowsAsync<OnlineException>(() => f.Api.PlaytimesAsync(null, default));
         Assert.Equal(OnlineFailure.UserIdentityRequired, error.Failure); Assert.Empty(f.Requests);
     }
-    [Fact] public async Task BareUserScopesReadTimesAndStatesButFoldersRequireExplicitPermission()
+    [Fact] public async Task OlderCatalogGrantCanReadTimesAndStatesUntilReauthorizedForFolders()
     {
-        using var f = new Fixture((_, _) => Task.FromResult(Json("{\"object\":\"list\",\"items\":[]}"))); await f.Login();
+        using var f = new Fixture((_, _) => Task.FromResult(Json("{\"object\":\"list\",\"items\":[]}")));
+        f.Identity.Storage.Record = new(1, NextMoeAccessMode.Account, new("42", "合成用户"), "synthetic-old-refresh",
+            [.. NextMoeOAuthIdentity.CatalogScopes]);
+        f.Identity.Protocol.GrantedScopes = [.. NextMoeOAuthIdentity.CatalogScopes];
         await f.Api.PlaytimesAsync(null, default); await f.Api.StatesAsync(null, default);
         Assert.Equal(OnlineFailure.ScopeRequired, (await Assert.ThrowsAsync<OnlineException>(() => f.Api.FoldersAsync(null, default))).Failure);
         Assert.Equal(2, f.Requests.Count);
-        await f.Login(true); await f.Api.FoldersAsync(null, default); Assert.Equal(3, f.Requests.Count);
+        f.Identity.Protocol.GrantedScopes = null;
+        await f.Login(); await f.Api.FoldersAsync(null, default); Assert.Equal(3, f.Requests.Count);
     }
     [Fact] public async Task CursorIsReceivedOpaqueAndSentExactlyRatherThanConstructed()
     {
@@ -96,7 +100,7 @@ public sealed class NextMoePersonalApiTests
         using var f = new Fixture((request, _) => Task.FromResult(Json(request.RequestUri!.AbsolutePath.EndsWith("work-states")
             ? "{\"items\":[{\"status\":200,\"object\":\"work_state\",\"work_id\":\"200\",\"state\":\"done\",\"completion\":\"all\"}]}"
             : "{\"object\":\"folder\",\"id\":\"10\",\"owner_uid\":\"42\",\"name\":\"合成收藏\",\"item_count\":0,\"updated_at\":\"2026-10-11T00:00:00Z\"}")));
-        await f.Login(true); await f.Api.WriteAsync(PersonalSyncKind.State, null, [new("200", State: "done", Completion: "all")], Guid.NewGuid().ToString("D"), default);
+        await f.Login(); await f.Api.WriteAsync(PersonalSyncKind.State, null, [new("200", State: "done", Completion: "all")], Guid.NewGuid().ToString("D"), default);
         Assert.Contains("\"completion\":\"all\"", f.Requests[0].Body);
         await f.Api.CreateFolderAsync("合成收藏", Guid.NewGuid().ToString("D"), default); Assert.Contains("\"visibility\":\"private\"", f.Requests[1].Body);
         await Assert.ThrowsAsync<OnlineException>(() => f.Api.WriteAsync(PersonalSyncKind.State, null, [new("200", State: "wish", Completion: "all")], Guid.NewGuid().ToString("D"), default));

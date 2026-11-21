@@ -12,7 +12,7 @@ public sealed partial class SettingsPage
     private SettingsCategory? currentCategory;
 
     private IEnumerable<Expander> SettingsExpanders =>
-        [ApiKeyPanel, SyncSettingsGroup, GlobalLocaleToolSection, GlobalMagpieToolSection, UpdateNotes];
+        [ApiKeyPanel, GlobalLocaleToolSection, GlobalMagpieToolSection, UpdateNotes];
 
     private void OnCategoryClick(object sender, RoutedEventArgs e) => OpenCategory((Button)sender);
 
@@ -22,6 +22,7 @@ public sealed partial class SettingsPage
     {
         if (currentCategory is not { } previous) return false;
         currentCategory = null;
+        if (previous.Entry == SourcesCategory) CloseVndbEditor();
         SettingsScroll.ChangeView(null, 0, null, true);
         previous.Panel.Visibility = Visibility.Collapsed;
         SettingsDetail.Visibility = Visibility.Collapsed;
@@ -35,6 +36,7 @@ public sealed partial class SettingsPage
     }
 
     internal void RevealSources() => OpenCategory(SourcesCategory, NextMoeSection);
+    internal void RevealVndb() => OpenCategory(SourcesCategory, VndbSection);
     internal void RevealBangumi() => OpenCategory(SourcesCategory, BangumiSection);
     internal void RevealUpdates() => OpenCategory(UpdatesCategory);
     internal void RevealGameAssistant() => OpenCategory(LaunchCategory, GameAssistantSection);
@@ -99,9 +101,6 @@ public sealed partial class SettingsPage
             case "settings-update": RevealUpdates(); break;
             case "settings-bangumi": RevealBangumi(); break;
             case "settings-sync":
-                SyncSettingsGroup.IsExpanded = true;
-                OpenCategory(SourcesCategory, SyncSettingsGroup);
-                break;
             case "settings-online":
             case "settings-api":
             case "settings-api-edit":

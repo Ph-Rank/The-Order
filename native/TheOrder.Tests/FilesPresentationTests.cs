@@ -78,6 +78,24 @@ public sealed class FilesPresentationTests
         await files.SaveAsync(); Assert.False(files.HasDraft); Assert.Contains(nameof(files.HasDraft), notifications); Assert.Contains("已保存", files.InstallationMessage); Assert.Contains("刷新失败", files.InstallationMessage); Assert.Equal(1, client.Saves);
         await files.SaveAsync(); Assert.Equal(1, client.Saves);
     }
+    [Theory]
+    [InlineData(ClientOutcome.Committed, 1)]
+    [InlineData(ClientOutcome.CommittedWithWarning, 1)]
+    [InlineData(ClientOutcome.ValidationFailure, 0)]
+    public async Task OnlySavedInstallationsAwaitLaunchRefresh(ClientOutcome outcome, int expected)
+    {
+        await using var workspace = Workspace(new()); await workspace.InitializeAsync();
+        var client = new Files { SaveResult = new(outcome, "result") };
+        await using var files = new FilesViewModel(client, workspace);
+        var refreshed = new List<string>(); var release = Gate<bool>(); var entered = Gate<bool>();
+        files.InstallationsCommitted = async id => { refreshed.Add(id); entered.SetResult(true); await release.Task; };
+        await files.LoadInstallationsAsync("a"); files.Edit(null);
+        var saving = files.SaveAsync();
+        if (expected != 0) { await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)); Assert.False(saving.IsCompleted); Assert.Equal("a", Assert.Single(refreshed)); }
+        release.SetResult(true); await saving;
+        Assert.Equal(expected, refreshed.Count);
+        Assert.Equal(expected == 0, files.HasDraft);
+    }
     [Fact] public async Task ValidationFailureRetainsDraftAndDraftCannotBeSilentlyReplaced()
     {
         await using var workspace = Workspace(new()); await workspace.InitializeAsync(); var client = new Files { SaveResult = new(ClientOutcome.ValidationFailure, "路径无效") };

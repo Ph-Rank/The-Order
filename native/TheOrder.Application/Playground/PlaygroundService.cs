@@ -39,8 +39,14 @@ public sealed partial class PlaygroundService : IAsyncDisposable
             lock (gate) { ThrowClosed(); if (initialized) return; }
             var loaded = await store.LoadAsync(cancellation).ConfigureAwait(false) ?? new() { Identity = store.Identity };
             Validate(loaded);
-            var recovered = loaded with { Conversations = loaded.Conversations.Select(c => c.Options.Search == PlaygroundSearchMode.Deep
-                ? c with { Options = c.Options with { Search = PlaygroundSearchMode.Smart } } : c).ToImmutableArray(), Messages = loaded.Messages.Select(m => m.Status == PlaygroundMessageStatus.Generating
+            var usedConversations = loaded.Messages.Select(m => m.ConversationId)
+                .Concat(loaded.Memories.Select(m => m.ConversationId)).ToHashSet();
+            var conversations = loaded.Conversations
+                .Where(c => string.IsNullOrEmpty(c.Options.GameOverlayKey) || usedConversations.Contains(c.Id)
+                    || c.Title != "新会话" && !c.Title.StartsWith("游戏中 · ", StringComparison.Ordinal))
+                .Select(c => c.Options.Search == PlaygroundSearchMode.Deep
+                    ? c with { Options = c.Options with { Search = PlaygroundSearchMode.Smart } } : c).ToImmutableArray();
+            var recovered = loaded with { Conversations = conversations, Messages = loaded.Messages.Select(m => m.Status == PlaygroundMessageStatus.Generating
                 ? m with { Status = PlaygroundMessageStatus.Interrupted, Error = "上次回复已中断；可手动重试，程序不会自动重新发送。" } : m).ToImmutableArray() };
             if (!recovered.Messages.SequenceEqual(loaded.Messages) || !recovered.Conversations.SequenceEqual(loaded.Conversations))
             { recovered = recovered with { Revision = checked(loaded.Revision + 1) }; await store.SaveAsync(recovered, loaded.Revision, cancellation).ConfigureAwait(false); }

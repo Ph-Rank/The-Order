@@ -1,8 +1,9 @@
 #pragma once
 #include "GuideFlowCanvas.hpp"
+#include "GuideChatMarkdown.hpp"
 
 namespace guide::chat {
-constexpr LONG magic=0x54414348,version=1,inputOffset=256,inputBytes=16384,draftOffset=16640,stateOffset=33024,stateBytes=1048576,pixelOffset=1081600,pixelBytes=8388608,capacity=pixelOffset+pixelBytes;
+constexpr LONG magic=0x54414348,version=2,inputOffset=256,inputBytes=16384,draftOffset=16640,stateOffset=33024,stateBytes=1048576,pixelOffset=1081600,pixelBytes=8388608,capacity=pixelOffset+pixelBytes;
 struct Header {
     LONG magic,version;volatile LONG sequence,length,request,ack,command,argument,inputLength,busy,focus,capture;
     volatile LONG captureRequest,captureAck,captureStatus,width,height,pixelLength;
@@ -10,12 +11,26 @@ struct Header {
     LONG pid,reserved100;LONG64 created;LONG owner;volatile LONG writer,imeX,imeY,captureWriter,caret,selectionStart,selectionEnd,editorSequence;BYTE reserved148[108];
 };
 static_assert(sizeof(Header)==256&&offsetof(Header,inputPulse)==72&&offsetof(Header,created)==104&&offsetof(Header,writer)==116);
-struct Message{std::string role,text,meta;};
+
 struct Snapshot{std::string status,model="选择模型",effort="high";bool busy=false,image=false,search=true,spoiler=true;std::vector<std::string> models;std::vector<Message> messages;};
 inline Snapshot decode(const std::vector<BYTE>& bytes){
     Cursor c{bytes.data(),bytes.size()};Snapshot s;s.status=c.text();s.model=c.text();s.effort=c.text();s.busy=c.count(1)!=0;s.image=c.count(1)!=0;s.search=c.count(1)!=0;s.spoiler=c.count(1)!=0;
     for(int n=c.count(512);n--;)s.models.push_back(c.text());
-    for(int n=c.count(32);n--;){Message m;m.role=c.text();m.text=c.text();m.meta=c.text();s.messages.push_back(std::move(m));}
+    for (int n = c.count(32); n--;) {
+        Message message{c.text(), c.text(), c.text(), {}};
+        size_t previous = 0;
+        for (int spans = c.count(2048); spans--;) {
+            size_t start = size_t(c.count(int(message.text.size())));
+            size_t length = size_t(c.count(int(message.text.size() - start)));
+            int style = c.count(63);
+            if (!length || !style || start < previous || !utf8Boundary(message.text, start)
+                || !utf8Boundary(message.text, start + length))
+                throw std::runtime_error("chat text span");
+            message.styles.push_back({start, length, style});
+            previous = start + length;
+        }
+        s.messages.push_back(std::move(message));
+    }
     if(c.offset!=c.size)throw std::runtime_error("chat trailer");return s;
 }
 class Connection{
@@ -53,7 +68,9 @@ using flow::Rect;using flow::Color;
 struct Hit{Rect box;int command,argument;};
 struct Canvas{
     Rect outer{},body{},input{};float scroll=0,maximum=0,scale=1;bool modelsOpen=false;int modelFirst=0;size_t count=0;std::vector<Hit> hits;
-    std::vector<float> rowHeights;LONG measuredRevision=-1;float measuredWidth=0,measuredScale=0;
+    std::vector<float> rowHeights;
+    std::vector<TextLayout> rowLayouts;
+    LONG measuredRevision=-1;float measuredWidth=0,measuredScale=0;
     bool wheel(Point point,float delta){if(!body.has(point))return false;if(modelsOpen){modelFirst=std::max(0,modelFirst-int(delta*2));return true;}scroll=std::clamp(scroll-delta*75*scale,0.f,maximum);return true;}
     bool click(Point point,Connection& c){
         if(!c.h)return false;
@@ -93,7 +110,20 @@ template<class P> void render(P& p,Canvas& canvas,Connection& connection,Rect ar
     canvas.input={area.x,area.y+area.h-composer,area.w-48*s,composer};
     float width=std::min(790*s,area.w-24*s),left=area.x+(area.w-width)/2,y=canvas.body.y;
     bool bottom=canvas.scroll>=canvas.maximum-24*s;
-    if(canvas.measuredRevision!=connection.revision()||canvas.measuredWidth!=width||canvas.measuredScale!=s){canvas.rowHeights.clear();for(auto& m:state.messages){float w=m.role=="user"?width*.84f:width;float hgt=p.paragraph(m.text,0,0,w-24*s,16*s,chatInk,false,false)+24*s+(m.meta.empty()?0:22*s);canvas.rowHeights.push_back(hgt);}canvas.measuredRevision=connection.revision();canvas.measuredWidth=width;canvas.measuredScale=s;}
+    if (canvas.measuredRevision != connection.revision() || canvas.measuredWidth != width || canvas.measuredScale != s) {
+        canvas.rowHeights.clear();
+        canvas.rowLayouts.clear();
+        for (const auto& message : state.messages) {
+            const float w = std::max(s, (message.role == "user" ? width * .84f : width) - 24 * s);
+            auto formatted = message.styles.empty() ? TextLayout{} : layoutText(p, message, w, 16 * s);
+            const float height = message.styles.empty() ? p.paragraph(message.text, 0, 0, w, 16 * s, chatInk, false, false) : formatted.height;
+            canvas.rowHeights.push_back(height + 24 * s + (message.meta.empty() ? 0 : 22 * s));
+            canvas.rowLayouts.push_back(std::move(formatted));
+        }
+        canvas.measuredRevision = connection.revision();
+        canvas.measuredWidth = width;
+        canvas.measuredScale = s;
+    }
     const auto& messageHeights=canvas.rowHeights;float total=0;for(auto height:messageHeights)total+=height+20*s;
     canvas.maximum=std::max(0.f,total-canvas.body.h);
     if(bottom||canvas.count!=state.messages.size())canvas.scroll=canvas.maximum;
@@ -102,7 +132,13 @@ template<class P> void render(P& p,Canvas& canvas,Connection& connection,Rect ar
     p.clip(canvas.body);
     if(state.messages.empty())p.text("随时聊聊眼前的这一幕",canvas.body,18*s,chatMuted,true);
     for(size_t i=0;i<state.messages.size();++i){auto& m=state.messages[i];float w=m.role=="user"?width*.84f:width,xx=left+(m.role=="user"?width-w:0),hgt=messageHeights[i];
-        if(y+hgt>=canvas.body.y&&y<canvas.body.y+canvas.body.h){if(m.role=="user")p.box({xx,y,w,hgt},fill,clear,10*s);p.paragraph(m.text,xx+12*s,y+10*s,w-24*s,16*s,chatInk,false,true);if(!m.meta.empty())p.text(m.meta,{xx+12*s,y+hgt-24*s,w-24*s,20*s},11*s,chatMuted,false);}
+        if (y + hgt >= canvas.body.y && y < canvas.body.y + canvas.body.h) {
+            if (m.role == "user") p.box({xx,y,w,hgt},fill,clear,10*s);
+            if (m.styles.empty()) p.paragraph(m.text, xx + 12*s, y + 10*s, std::max(s,w - 24*s), 16*s, chatInk, false, true);
+            else drawTextLayout(p, m, canvas.rowLayouts[i], xx + 12*s, y + 10*s, 16*s, chatInk,
+                light ? Color{17,85,132} : Color{142,203,246}, light ? Color{225,234,242} : Color{51,62,78}, canvas.body);
+            if (!m.meta.empty()) p.text(m.meta,{xx+12*s,y+hgt-24*s,w-24*s,20*s},11*s,chatMuted,false);
+        }
         y+=hgt+20*s;
     }
     p.unclip();

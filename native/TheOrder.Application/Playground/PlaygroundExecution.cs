@@ -51,12 +51,22 @@ public sealed partial class PlaygroundService
         public string Binding { get; set; } = "";
         public long LastTextPreview { get; set; }
         public bool SavedContext => Conversation.Options.UseSavedContext;
+        public bool AdmittingGameDraft { get; set; }
         public void Dispose() { Deadline.Dispose(); Cancel.Dispose(); }
     }
     public Task SendAsync(Guid conversationId, string text, CancellationToken cancellation = default)
         => Send(conversationId, text, [], null, cancellation);
     public Task SendAsync(Guid conversationId, string text, ImmutableArray<PlaygroundAttachment> attachments, CancellationToken cancellation = default)
         => Send(conversationId, text, attachments, null, cancellation);
+    public Task SendGameAsync(PlaygroundConversation draft, string text, ImmutableArray<PlaygroundAttachment> attachments,
+        CancellationToken cancellation = default)
+    {
+        if (draft.Id == Guid.Empty || draft.Temporary || string.IsNullOrEmpty(draft.Options.GameOverlayKey)
+            || draft.Title.Length is < 1 or > 120 || draft.Title.Any(char.IsControl))
+            throw new ArgumentException("游戏会话无效。", nameof(draft));
+        Validate(draft.Options);
+        return Send(draft.Id, text, attachments, null, cancellation, draft);
+    }
     public Task RetryAsync(Guid conversationId, CancellationToken cancellation = default)
     {
         var messages = Snapshot.Messages.Where(m => m.ConversationId == conversationId).ToArray();
@@ -72,12 +82,19 @@ public sealed partial class PlaygroundService
             throw new InvalidOperationException("原问题引用的作品关联已变化或无法核对，请重新核对后发送。");
         return Send(conversationId, question.Text, question.Attachments, question.Id, cancellation);
     }
-    private async Task Send(Guid conversationId, string text, ImmutableArray<PlaygroundAttachment> attachments, Guid? retry, CancellationToken cancellation)
+    private async Task Send(Guid conversationId, string text, ImmutableArray<PlaygroundAttachment> attachments, Guid? retry,
+        CancellationToken cancellation, PlaygroundConversation? draft = null)
     {
         ArgumentNullException.ThrowIfNull(text); ValidateAttachments(attachments);
         text = text.Trim(); if (text.Length > 16000 || text.Length == 0 && attachments.IsEmpty) throw new ArgumentException("请填写消息或添加文件资料；消息最多 16000 个字符。");
         await InitializeAsync(cancellation).ConfigureAwait(false);
-        var conversation = Conversation(conversationId); var captured = Snapshot; long epoch;
+        var captured = Snapshot;
+        var existing = captured.Conversations.FirstOrDefault(c => c.Id == conversationId);
+        if (draft is not null && existing is not null && existing.Options.GameOverlayKey != draft.Options.GameOverlayKey)
+            throw new ArgumentException("会话已变化。");
+        var conversation = existing ?? draft ?? throw new ArgumentException("会话已不存在。");
+        bool creating = existing is null;
+        long epoch;
         lock (gate) { ThrowClosed(); if (configurationUncertain) throw new InvalidOperationException("授权设置尚未安全保存，请先重新保存设置。"); epoch = generation; }
         RequireConnection(captured.Settings, conversation.Options);
         if (!await credentials.HasAsync(conversation.Options.Provider, Endpoint(conversation.Options.Provider, conversation.Options.Endpoint), cancellation).ConfigureAwait(false))
@@ -94,10 +111,21 @@ public sealed partial class PlaygroundService
         }
         try
         {
-            PrepareConversationTape(run, captured, retry is not null);
+            if (!creating) PrepareConversationTape(run, captured, retry is not null);
+            run.AdmittingGameDraft = creating;
             await Mutate(s =>
             {
-                EnsureCurrent(run); var now = clock(); var messages = s.Messages.Select(m => m with
+                EnsureCurrent(run);
+                var now = clock();
+                var conversations = s.Conversations;
+                if (creating)
+                {
+                    if (conversations.Length >= 500) throw new InvalidOperationException("会话数量已达上限，请先整理现有会话。");
+                    if (conversations.Any(c => c.Id == conversation.Id || c.Options.GameOverlayKey == conversation.Options.GameOverlayKey))
+                        throw new InvalidOperationException("这部作品已有会话，请重新发送。");
+                    conversations = conversations.Add(conversation with { CreatedAt = now, UpdatedAt = now });
+                }
+                var messages = s.Messages.Select(m => m with
                     { Attachments = PlaygroundGameFrames.WithoutPixels(m.Attachments) }).ToImmutableArray();
                 if (retry is null)
                 {
@@ -108,11 +136,13 @@ public sealed partial class PlaygroundService
                 }
                 messages = messages.Add(new(run.AssistantId, conversationId, "assistant", "", now, PlaygroundMessageStatus.Generating, run.Id)
                     { Provider = conversation.Options.Provider, Model = conversation.Options.Model });
-                return s with { Messages = messages, Conversations = s.Conversations.Select(c => c.Id == conversationId
+                return s with { Messages = messages, Conversations = conversations.Select(c => c.Id == conversationId
                     ? c with { UpdatedAt = now, Title = c.Title is "新会话" or "临时会话" && !c.Temporary
                         ? Bounded(text.Length == 0 ? "资料 · " + attachments[0].Name : text, 38) : c.Title } : c).ToImmutableArray() };
             }, run.Cancel.Token, !conversation.Temporary).ConfigureAwait(false);
+            run.AdmittingGameDraft = false;
             Notify(conversationId, run.Id, "started");
+            if (creating) PrepareConversationTape(run, Snapshot, retry: false);
             await Execute(run).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -127,6 +157,7 @@ public sealed partial class PlaygroundService
         { await Finish(run, PlaygroundMessageStatus.Failed, "本轮未完成，未自动重发；检查设置后可手动重试。", false).ConfigureAwait(false); }
         finally
         {
+            run.AdmittingGameDraft = false;
             lock (gate) { if (run.Attachments.Any(a => a.IsGameFrame)) state = state with { Messages = state.Messages.Select(m => m.Id == run.UserId
                 ? m with { Attachments = PlaygroundGameFrames.WithoutPixels(m.Attachments) } : m).ToImmutableArray() }; if (active == run) active = null; }
             run.Finished.TrySetResult(); run.Dispose(); Notify(conversationId, run.Id, "idle");
@@ -136,7 +167,7 @@ public sealed partial class PlaygroundService
     {
         run.Cancel.Token.ThrowIfCancellationRequested();
         lock (gate) if (disposed || closing || active != run || generation != run.Generation || state.Identity != store.Identity
-            || !state.Conversations.Any(c => c.Id == run.Conversation.Id)) throw new OperationCanceledException(run.Cancel.Token);
+            || !run.AdmittingGameDraft && !state.Conversations.Any(c => c.Id == run.Conversation.Id)) throw new OperationCanceledException(run.Cancel.Token);
     }
     private static void RequireConnection(PlaygroundSettings settings, PlaygroundConversationOptions options)
     {

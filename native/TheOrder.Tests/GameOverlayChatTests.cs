@@ -3,6 +3,7 @@ using System.Text.Json;
 using TheOrder.Application;
 using TheOrder.Application.Playground;
 using TheOrder.Platform.Windows;
+using TheOrder.Presentation;
 using Xunit;
 
 namespace TheOrder.Tests;
@@ -103,6 +104,67 @@ public sealed partial class PlaygroundCoreTests
         await r.Service.SendAsync(id, "这里是什么", [Pixel() with { IsGameFrame = true }]);
         Assert.Empty(r.Provider.Requests); Assert.Equal(PlaygroundMessageStatus.Failed, Last(r).Status);
         await Assert.ThrowsAsync<InvalidOperationException>(() => r.Service.RetryAsync(id));
+    }
+
+    [Theory]
+    [InlineData(PlaygroundProviderKind.OpenAI)]
+    [InlineData(PlaygroundProviderKind.Gemini)]
+    public async Task OpeningTheActualGameChatHostDoesNotWriteUntilItsFirstMessage(PlaygroundProviderKind provider)
+    {
+        await using var rig = new Rig(new Provider(provider));
+        var existing = await rig.Ready();
+        int count = rig.Store.Writes.Count;
+        using var chat = new WindowsGameChat("Local\\TheOrder.Guide." + Guid.NewGuid().ToString("N"),
+            "fixture-game-key", "合成作品", _ => Task.FromResult(rig.Service), () => true, default, GameChatMarkdown.Format);
+        var initialLength = chat.View.ReadInt32(12);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+        while (chat.View.ReadInt32(12) == initialLength)
+        {
+            chat.Tick(true);
+            await Task.Delay(25, deadline.Token);
+        }
+        Assert.Equal(count, rig.Store.Writes.Count);
+        Assert.Equal(existing, Assert.Single(rig.Service.Snapshot.Conversations).Id);
+
+        var text = System.Text.Encoding.UTF8.GetBytes("第一次发消息。");
+        chat.View.Write(44, 0);
+        chat.View.WriteArray(GameChatWire.Input, text, 0, text.Length);
+        chat.View.Write(32, text.Length);
+        chat.View.Write(24, 1);
+        chat.View.Write(16, 1);
+        while (!deadline.IsCancellationRequested && !rig.Service.Snapshot.Messages.Any(m => m.Role == "assistant" && m.Status == PlaygroundMessageStatus.Complete))
+        {
+            chat.Tick(true);
+            await Task.Delay(25);
+        }
+        var displayLength = chat.View.ReadInt32(GameChatWire.State);
+        var statusBytes = new byte[displayLength];
+        chat.View.ReadArray(GameChatWire.State + 4, statusBytes, 0, displayLength);
+        Assert.True(!deadline.IsCancellationRequested, System.Text.Encoding.UTF8.GetString(statusBytes)
+            + string.Join(", ", rig.Service.Snapshot.Messages.Select(m => m.Status + " " + m.Error)));
+        var game = Assert.Single(rig.Service.Snapshot.Conversations, c => c.Options.GameOverlayKey == "fixture-game-key");
+        Assert.Contains(rig.Store.Writes[count].Messages, m => m.ConversationId == game.Id && m.Role == "user");
+        Assert.Contains(rig.Store.Writes[count].Conversations, c => c.Id == game.Id);
+        Assert.Single(rig.Provider.Requests);
+    }
+
+    [Fact]
+    public async Task StartupPrunesOnlyOldEmptyAutomaticallyNamedGameConversations()
+    {
+        await using var rig = new Rig();
+        var id = await rig.Ready();
+        var ordinary = Assert.Single(rig.Service.Snapshot.Conversations);
+        Assert.Equal(id, ordinary.Id);
+        var old = ordinary with { Id = Guid.NewGuid(), Title = "游戏中 · 旧条目", Options = ordinary.Options with { GameOverlayKey = "old-game" } };
+        var renamed = old with { Id = Guid.NewGuid(), Title = "我手动命名的游戏会话" };
+        var used = old with { Id = Guid.NewGuid(), Title = "游戏中 · 有消息", Options = old.Options with { GameOverlayKey = "other-game" } };
+        rig.Store.Value = rig.Store.Value! with { Conversations = [ordinary, old, renamed, used],
+            Messages = [new(Guid.NewGuid(), used.Id, "user", "保留这条消息", ordinary.CreatedAt, PlaygroundMessageStatus.Complete, Guid.NewGuid())] };
+        await using var reopened = new PlaygroundService(rig.Store, rig.Credentials, [rig.Provider], () => rig.Library, () => null);
+        await reopened.InitializeAsync();
+        Assert.Equal(new[] { ordinary.Id, renamed.Id, used.Id }, reopened.Snapshot.Conversations.Select(c => c.Id));
+        Assert.Equal(used.Id, Assert.Single(reopened.Snapshot.Messages).ConversationId);
+        Assert.DoesNotContain(rig.Store.Value!.Conversations, c => c.Id == old.Id);
     }
 
     [Fact]

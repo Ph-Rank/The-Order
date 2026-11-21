@@ -26,6 +26,7 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
     private bool lightTheme;
     private int appearanceDpi = 96;
     public Func<CancellationToken, Task<TheOrder.Application.Playground.PlaygroundService>>? ChatFactory { get; set; }
+    public Func<GameChatLine, GameChatLine>? ChatFormatter { get; set; }
     private string ChatKey(string gameId)
     {
         var entry = library.CurrentSnapshot!.Entries.First(e => e.Id == gameId);
@@ -508,7 +509,7 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
             View = Mapping.CreateViewAccessor(); View.Write(0, GuideOverlayWire.Magic); View.Write(4, GuideOverlayWire.Version);
             if (owner.ChatFactory is { } factory)
             {
-                Chat = new WindowsGameChat(Name, owner.ChatKey(GameId), title, factory, () => owner.Current(this), Token);
+                Chat = new WindowsGameChat(Name, owner.ChatKey(GameId), title, factory, () => owner.Current(this), Token, owner.ChatFormatter);
             }
             View.Write(76, key); View.Write(88, .94f); View.Write(92, 22f); View.Write(112, System.Environment.ProcessId);
             View.Write(148, (Guides.IsEmpty ? 0 : 1) | (Local.Guides.IsEmpty ? 0 : 2) | (Local.Notes.IsEmpty ? 0 : 4) | (Chat is null ? 0 : 8));

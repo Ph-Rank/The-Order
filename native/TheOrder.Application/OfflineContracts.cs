@@ -8,6 +8,7 @@ public sealed record ClientResult(ClientOutcome Outcome, string Message)
 {
     public bool IsCommitted => Outcome is ClientOutcome.Committed or ClientOutcome.CommittedWithWarning;
     public ImmutableArray<string> ImportedGameIds { get; init; } = [];
+    public ImmutableArray<CollectionEdit> CollectionEdits { get; init; } = [];
 }
 public sealed record LibraryCapability(bool Loaded, bool CanEdit, string Message);
 public sealed record LibraryQuery(string Text = "", string View = "all", string Status = "all", bool Favorites = false, string Category = "", string Tag = "", string MinRating = "", string Sort = "added");

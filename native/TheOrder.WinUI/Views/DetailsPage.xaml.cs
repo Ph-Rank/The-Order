@@ -31,6 +31,12 @@ public sealed partial class DetailsPage : Page, IImageHost
 
     public Func<Task>? OpenLaunchSettings { get; set; }
     private async void OnLaunchSettings(object sender, RoutedEventArgs e) { try { if (OpenLaunchSettings is not null) await OpenLaunchSettings(); } catch { ViewModel.ReportUnexpected(); } }
+    public Func<Task>? SyncCollection { get; set; }
+    private async void OnSyncCollection(object sender, RoutedEventArgs e)
+    {
+        try { if (SyncCollection is not null) await SyncCollection(); }
+        catch { ViewModel.ReportUnexpected(); }
+    }
     public Func<Task>? OpenGameTools { get; set; }
     private async void OnGameTools(object sender, RoutedEventArgs e) { try { if (OpenGameTools is not null) await OpenGameTools(); } catch { ViewModel.ReportUnexpected(); } }
     public Func<Task>? ActivateLaunch { get; set; }
@@ -122,7 +128,7 @@ public sealed partial class DetailsPage : Page, IImageHost
     private async Task SynchronizeLaunchAsync()
     {
         var selected = ViewModel.SelectedId;
-        if (selected == launchGame) return;
+        if (selected == launchGame && Launch.GameId == selected) return;
         launchGame = selected;
         try
         {

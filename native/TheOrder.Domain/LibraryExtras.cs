@@ -17,12 +17,35 @@ public sealed record LaunchCompatibility(bool Administrator = false, bool HighDp
 public sealed record MetadataSourceLayer(string Source, string SourceId, WorkMetadata Work, ImmutableArray<string> Fields, bool FillOnly);
 public sealed record MetadataMix(WorkMetadata? Base, ImmutableArray<MetadataSourceLayer> Layers);
 
+public sealed record CollectionBindings(string? Vndb = null, string? Bangumi = null, string? NextMoe = null)
+{
+    public static CollectionBindings? Merge(CollectionBindings? left, CollectionBindings? right)
+    {
+        if (left is null || right is null) return left ?? right;
+        return new(MergeId(left.Vndb, right.Vndb), MergeId(left.Bangumi, right.Bangumi),
+            MergeId(left.NextMoe, right.NextMoe));
+    }
+
+    private static string? MergeId(string? left, string? right)
+    {
+        if (left is not null && right is not null && left != right)
+            throw new InvalidDataException("两条书架记录的手动同步编号不同，无法合并。");
+        return left ?? right;
+    }
+}
+
 public static class LibraryExtras
 {
     public static readonly ImmutableArray<string> MetadataFields = ["description", "releaseDate", "developers", "tags", "ratings", "characters", "cover"];
     public static void Validate(LibraryEntry entry)
     {
         MigrationLineage.Validate(entry.MigrationOrigins);
+        if (entry.CollectionBindings is { } bindings
+            && (bindings == new CollectionBindings()
+                || bindings.Vndb is { } vn && !Regex.IsMatch(vn, @"\Av[1-9][0-9]{0,9}\z")
+                || bindings.Bangumi is { } bgm && !Regex.IsMatch(bgm, @"\A[1-9][0-9]{0,9}\z")
+                || bindings.NextMoe is { } nm && !Regex.IsMatch(nm, @"\A[1-9][0-9]{0,19}\z")))
+            throw new InvalidDataException("手动同步编号无效。");
         if (entry.GuidePaths.IsDefault || entry.GuidePaths.Length > 20 || entry.GuidePaths.Distinct(StringComparer.OrdinalIgnoreCase).Count() != entry.GuidePaths.Length) throw new InvalidDataException("攻略记录无效。");
         foreach (var guide in entry.GuidePaths) Path(guide);
         if (entry.ManualPlaytime.IsDefault || entry.ManualPlaytime.Length > 10000 || entry.ManualPlaytime.Any(x => x is null) || entry.ManualPlaytime.Select(x => x.Id).Distinct(StringComparer.Ordinal).Count() != entry.ManualPlaytime.Length)

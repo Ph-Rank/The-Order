@@ -27,7 +27,7 @@ public sealed class WindowsOAuthLogin(IOAuthSystemBrowser browser, TimeSpan? dur
     public async Task<OAuthAuthorizationCode> AuthorizeAsync(string clientId, string[] scopes, CancellationToken cancellation)
     {
         if (clientId.Length is < 1 or > 256 || !clientId.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
-            || scopes.Except(NextMoeOAuthIdentity.FolderWriteScopes, StringComparer.Ordinal).Any()) throw new OnlineException(OnlineFailure.InvalidRequest);
+            || scopes.Except(NextMoeOAuthIdentity.LoginScopes, StringComparer.Ordinal).Any()) throw new OnlineException(OnlineFailure.InvalidRequest);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation); timeout.CancelAfter(duration ?? TimeSpan.FromMinutes(5));
         var listener = new TcpListener(IPAddress.Loopback, 0); listener.Server.ExclusiveAddressUse = true;
         var verifier = RandomUrlSafe(32); var state = RandomUrlSafe(32);

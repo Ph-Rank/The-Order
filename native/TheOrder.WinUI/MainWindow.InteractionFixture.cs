@@ -32,7 +32,11 @@ public sealed partial class MainWindow
         object? verified = null;
         try
         {
-            if (action == "navigation")
+            if (action == "launch-confirmation")
+            {
+                verified = await VerifyLaunchConfirmationAsync(); operations = 5;
+            }
+            else if (action == "navigation")
             {
                 foreach (var page in new[] { WorkspacePage.Library, WorkspacePage.Settings, WorkspacePage.Library,
                     WorkspacePage.Statistics, WorkspacePage.Library, WorkspacePage.Import, WorkspacePage.Library,
@@ -470,6 +474,11 @@ public sealed partial class MainWindow
             }
             else throw new InvalidDataException("Unknown interaction check");
         }
+        catch (Exception error) when (action == "launch-confirmation")
+        {
+            await File.WriteAllTextAsync(Path.Combine(fixtureDirectory, "launch-confirmation-failure.txt"), error.ToString());
+            throw;
+        }
         finally { CompositionTarget.Rendering -= sample; }
         var intervals = frames.Order().ToArray();
         await File.AppendAllTextAsync(Path.Combine(fixtureDirectory, "interaction-evidence.jsonl"), JsonSerializer.Serialize(new {
@@ -620,6 +629,33 @@ public sealed partial class MainWindow
             || P1Elements(statusPage).OfType<InfoBar>().Any(bar => bar.Title is "书架" or "程序运行"))
             throw new InvalidOperationException("Clearing message history affected a current reminder or kept an old error.");
 
+        const string skippedWork = "已跳过 1 部关联暂无法确认的作品（《合成作品》）。请核对 NextMoe 关联。";
+        SetNextMoeStatusNotice(skippedWork, recoveryRequired: false);
+        await Task.Delay(120);
+        InvokeStatusAction("ClearStatusMessages");
+        await Task.Delay(120);
+        if (statusPage.HasNotice("nextmoe-sync") || !statusPage.HasNotice("app-update")
+            || P1Elements(statusPage).OfType<InfoBar>().Any(bar => bar.IsOpen && bar.Message == skippedWork))
+            throw new InvalidOperationException("The clear button did not dismiss the current NextMoe notice.");
+
+        SetNextMoeStatusNotice(skippedWork, recoveryRequired: false);
+        if (statusPage.HasNotice("nextmoe-sync"))
+            throw new InvalidOperationException("An unchanged NextMoe notice reappeared after dismissal.");
+
+        SetNextMoeStatusNotice("本轮同步校验未通过，稍后将重新核对。", recoveryRequired: false);
+        if (!statusPage.HasNotice("nextmoe-sync"))
+            throw new InvalidOperationException("A new NextMoe notice was hidden with the previous one.");
+
+        SetNextMoeStatusNotice(null, recoveryRequired: true);
+        statusPage.Post(new("合成通知", "任务日志"));
+        await Task.Delay(120);
+        InvokeStatusAction("ClearStatusMessages");
+        await Task.Delay(120);
+        if (!statusPage.HasNotice("nextmoe-sync")
+            || !P1Elements(statusPage).OfType<Button>().Any(button => AutomationProperties.GetAutomationId(button) == "NextMoeSyncRecovery"))
+            throw new InvalidOperationException("Clearing messages removed the pending recovery action.");
+        SetNextMoeStatusNotice(null, recoveryRequired: false);
+
         InvokeStatusAction("StatusOpenUpdates");
         await Task.Delay(180);
         if (ViewModel.Page != WorkspacePage.Settings ||
@@ -648,8 +684,9 @@ public sealed partial class MainWindow
         await Task.Delay(200);
         if (TitleBarHasExtraContent)
             throw new InvalidOperationException("A status message added content to the title bar.");
-        return (18, new
+        return (22, new
         {
+            dismissesNextMoeSync = true, suppressesRepeatedNotice = true, showsNewNotice = true, preservesRecovery = true,
             notice = true, noTopBanner = true, unread = true, updateLink = true, clearHistory = true, cancelScan = true,
             quietNotices = true, requiredAction = true, titleBarEmpty = true,
             theme = statusPage.ActualTheme.ToString(), width = statusPage.ActualWidth
@@ -658,8 +695,9 @@ public sealed partial class MainWindow
         void InvokeStatusAction(string id)
         {
             var button = P1Elements(statusPage).OfType<Button>().Single(value => AutomationProperties.GetAutomationId(value) == id);
-            if (FrameworkElementAutomationPeer.CreatePeerForElement(button)?.GetPattern(PatternInterface.Invoke) is not IInvokeProvider invoke)
-                throw new InvalidOperationException("Status action is not accessible.");
+            if (button.Visibility != Visibility.Visible || button.ActualWidth <= 0
+                || FrameworkElementAutomationPeer.CreatePeerForElement(button)?.GetPattern(PatternInterface.Invoke) is not IInvokeProvider invoke)
+                throw new InvalidOperationException("Status action is not visible and accessible.");
             invoke.Invoke();
         }
     }

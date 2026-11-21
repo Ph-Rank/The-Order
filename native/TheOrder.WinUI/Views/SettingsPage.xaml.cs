@@ -36,6 +36,7 @@ public sealed partial class SettingsPage : Page
     public LibraryBackupViewModel Backups { get; }
     public LibraryMigrationViewModel Migration { get; }
     public BangumiSettingsViewModel Bangumi { get; }
+    public VndbSettingsViewModel Vndb { get; }
     public Func<VerifiedAppUpdate, Task<bool>>? InstallUpdate { get; set; }
     public string AppVersion => "The Order " + AppReleaseIdentity.Version;
     private bool editingCredential;
@@ -60,9 +61,9 @@ public sealed partial class SettingsPage : Page
         if (synchronizing || MaterialChoice.OptionIndex < 0) return;
         if (ChangeMaterialMode is { } change) await change((MaterialMode)MaterialChoice.OptionIndex);
     }
-    public SettingsPage(WorkspaceViewModel viewModel, OnlineViewModel online, RecognitionViewModel recognition, CatalogBrowseSettings browsing, LanguageSettings languages, ContentLanguageSettings contentLanguages, AppUpdateViewModel updates, NextMoeSettingsViewModel nextMoe, LibraryBackupViewModel backups, BangumiSettingsViewModel bangumi, GlobalLaunchSettings launchDefaults, LibraryMigrationViewModel migration)
+    public SettingsPage(WorkspaceViewModel viewModel, OnlineViewModel online, RecognitionViewModel recognition, CatalogBrowseSettings browsing, LanguageSettings languages, ContentLanguageSettings contentLanguages, AppUpdateViewModel updates, NextMoeSettingsViewModel nextMoe, LibraryBackupViewModel backups, BangumiSettingsViewModel bangumi, VndbSettingsViewModel vndb, GlobalLaunchSettings launchDefaults, LibraryMigrationViewModel migration)
     {
-        ViewModel = viewModel; Online = online; Recognition = recognition; Browsing = browsing; Languages = languages; ContentLanguages = contentLanguages; Updates = updates; NextMoe = nextMoe; Backups = backups; Bangumi = bangumi; LaunchDefaults = launchDefaults; Migration = migration; InitializeComponent();
+        ViewModel = viewModel; Online = online; Recognition = recognition; Browsing = browsing; Languages = languages; ContentLanguages = contentLanguages; Updates = updates; NextMoe = nextMoe; Backups = backups; Bangumi = bangumi; Vndb = vndb; LaunchDefaults = launchDefaults; Migration = migration; InitializeComponent();
         categories = [
             new(AppearanceCategory, AppearancePanel), new(LaunchCategory, LaunchPanel),
             new(LibraryCategory, LibraryPanel), new(SourcesCategory, SourcesPanel),
@@ -73,6 +74,7 @@ public sealed partial class SettingsPage : Page
         Unloaded += (_, _) => { Migration.PropertyChanged -= OnMigrationState; ViewModel.PropertyChanged -= OnMigrationState; CancelMigrationDialog(); Migration.Clear(); };
         Loaded += (_, _) => Bangumi.RefreshState();
         Unloaded += (_, _) => { Bangumi.Cancel(); BangumiToken.Password = ""; BangumiEditor.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed; };
+        Unloaded += (_, _) => { Vndb.Cancel(); CloseVndbEditor(); };
         Loaded += (_, _) => { Backups.PropertyChanged += OnBackupState; SynchronizeBackups(); };
         Unloaded += (_, _) => { Backups.PropertyChanged -= OnBackupState; };
         Loaded += (_, _) => { NextMoe.PropertyChanged += OnNextMoeState; SynchronizeNextMoe(); };
@@ -239,7 +241,7 @@ public sealed partial class SettingsPage : Page
     }
     private double HorizontalInset(Microsoft.UI.Xaml.DependencyObject control, Microsoft.UI.Xaml.DependencyObject root)
     {
-        double inset = Inside(control, SyncPreviewRows) ? 32 : 0;
+        double inset = 0;
         for (var current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(control); current is not null; )
         {
             if (current is Microsoft.UI.Xaml.FrameworkElement fe) inset += fe.Margin.Left + fe.Margin.Right;
@@ -259,8 +261,6 @@ public sealed partial class SettingsPage : Page
         }
         return inset;
     }
-    private static bool Inside(Microsoft.UI.Xaml.DependencyObject control, Microsoft.UI.Xaml.DependencyObject parent)
-    { for (var current = control; current is not null; current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current)) if (ReferenceEquals(current, parent)) return true; return false; }
     private static bool IsVisible(Microsoft.UI.Xaml.DependencyObject control)
     { if (control is Microsoft.UI.Xaml.FrameworkElement { IsLoaded: false }) return false;
       for (var current = control; current is not null; current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current))

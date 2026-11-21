@@ -5,7 +5,7 @@ using TheOrder.Application;
 
 namespace TheOrder.Infrastructure.Online;
 
-public sealed class NextMoePersonalApi(HttpClient client, INextMoeAccess auth, NextMoeRateCoordinator rate) : INextMoePersonalApi
+public sealed partial class NextMoePersonalApi(HttpClient client, INextMoeAccess auth, NextMoeRateCoordinator rate) : INextMoePersonalApi, INextMoeCollectionWriter
 {
     public Task<CloudPage<CloudPlaytime>> PlaytimesAsync(string? cursor, CancellationToken cancellation)
         => Page("me/playtimes", cursor, null, x => { Kind(x, "playtime"); return new CloudPlaytime(Id(x, "work_id"), Integer(x, "minutes", long.MaxValue / 60)); }, cancellation);
@@ -87,11 +87,12 @@ public sealed class NextMoePersonalApi(HttpClient client, INextMoeAccess auth, N
     {
         using var response = await Request(HttpMethod.Delete, "me/folders/" + ValidateId(folderId) + "/items/" + ValidateId(workId), "folder:write", null, null, cancellation).ConfigureAwait(false);
     }
-    private async Task<JsonDocument> Request(HttpMethod method, string path, string? scope, object? payload, string? idempotencyKey, CancellationToken cancellation)
+    private async Task<JsonDocument> Request(HttpMethod method, string path, string? scope, object? payload, string? idempotencyKey, CancellationToken cancellation,
+        OnlineAuthSnapshot? expected = null)
     {
         for (int attempt = 0; attempt < 2; attempt++)
         {
-        var snapshot = await auth.AuthContext.CaptureAsync(cancellation).ConfigureAwait(false);
+        var snapshot = expected ?? await auth.AuthContext.CaptureAsync(cancellation).ConfigureAwait(false);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation, snapshot.Changed); timeout.CancelAfter(TimeSpan.FromSeconds(45));
         try
         {
@@ -117,6 +118,14 @@ public sealed class NextMoePersonalApi(HttpClient client, INextMoeAccess auth, N
             rate.Observe(snapshot.Generation, response.Headers, code);
             if ((int)response.StatusCode == 401 && attempt == 0)
             { body.Dispose(); if (await auth.RefreshRejectedAsync(token, timeout.Token).ConfigureAwait(false)) continue; throw new OnlineException(OnlineFailure.LoginRequired); }
+            if (expected.HasValue && (int)response.StatusCode == 404 && code == "ENTITY_MERGED")
+            {
+                using (body)
+                {
+                    if (Text(body.RootElement, "object", 32) != "work") throw Invalid();
+                    throw new MergedWorkException(Id(body.RootElement, "current_id"));
+                }
+            }
             if (!response.IsSuccessStatusCode)
             {
                 body.Dispose(); throw new OnlineException((int)response.StatusCode switch { 401 => OnlineFailure.LoginRequired,

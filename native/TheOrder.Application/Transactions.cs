@@ -353,6 +353,7 @@ public sealed partial class TransactionalLibrary : IDisposable, IAsyncDisposable
                     MigrationOrigins = MigrationLineage.Merge(e.MigrationOrigins, target.MigrationOrigins),
                     GuidePaths = [.. e.GuidePaths.Concat(target.GuidePaths).Distinct(StringComparer.OrdinalIgnoreCase)],
                     MetadataMix = MetadataMixing.Merge(work, e.MetadataMix, target.MetadataMix),
+                    CollectionBindings = CollectionBindings.Merge(e.CollectionBindings, target.CollectionBindings),
                     LastPlayedAt = target.LastPlayedAt is not null && (e.LastPlayedAt is null || string.CompareOrdinal(target.LastPlayedAt, e.LastPlayedAt) > 0) ? target.LastPlayedAt : e.LastPlayedAt,
                     LocalCover = inheritCover ? target.LocalCover : e.LocalCover,
                     CoverChoice = inheritCover && target.LocalCover is null && target.CoverChoice?.WorkId == work.Id ? target.CoverChoice : e.CoverChoice,

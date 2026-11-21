@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.ComponentModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -66,18 +67,25 @@ public sealed partial class MainWindow : Window
     private readonly BangumiSettingsViewModel bangumiSettings;
     private readonly LibraryBackupViewModel backups;
     private readonly DispatcherTimer backupTimer = new() { Interval = TimeSpan.FromMinutes(5) };
-    public MainWindow(WorkspaceViewModel workspace, NativeConfiguration configuration, FilesViewModel files, IImagePipeline images, IOfflineFilesClient filesClient, OnlineViewModel online, RecognitionViewModel recognition, LaunchViewModel launch, AppSessionHost sessions, IMaterialPreferencesStore materialPreferences, IPersonalBannerStore personalBanners, OnlineCoverSelectionClient coverSelection, IRemoteCoverRegistry coverRegistry, IOnlineCatalog catalog, IEntityCatalog entities, CatalogPresentationService presentations, OfflineLibraryClient library, CatalogBrowseClient browsing, CatalogBrowsePolicy browsingPolicy, CatalogBrowseSettings browsingSettings, LanguageSettings languages, ContentLanguageSettings contentLanguages, LaunchFileDiscovery launchFiles, AppUpdateViewModel updates, NextMoeSettingsViewModel nextMoeSettings, LibraryBackupViewModel backups, LibrarySourcesService sources, WindowsLibrarySourcesWatcher sourceWatcher, LibraryExtrasClient extras, MetadataSourceClient metadataSources, WindowsLocalResources resources, IBangumiRelationsReader bangumiRelations, IBangumiSubjectDetailsReader bangumiSubjects, IRelatedSemanticReader relationSemantics, IMusicBrainzReader musicBrainz, IAniListReader aniList, IWatchLinkPreferencesStore watchPreferences, IBangumiWatchLinksReader watchReader, BangumiSettingsViewModel bangumiSettings, IBookBibliographyReader bookBibliography, IBangumiBookRelationsReader bookRelations, IBangumiEpisodesReader episodes, ICatalogReleaseReader catalogReleases, IMusicBrainzEntityReader musicEntities, GlobalLaunchSettings launchDefaults, LaunchPolicy launchPolicy, GameVideoReader gameVideos, IMediaIdentityDecisions identityDecisions, LibraryMigrationService migrationService, DiscoveryFeedViewModel discovery, IsolatedHeroFrameCache heroFrames, WindowsClosePreference closePreference, ImageCacheStorage imageCacheStorage, SyntheticScenario? scenario = null, SyntheticOnline? onlineFixture = null)
+    public MainWindow(WorkspaceViewModel workspace, NativeConfiguration configuration, FilesViewModel files, IImagePipeline images, IOfflineFilesClient filesClient, OnlineViewModel online, RecognitionViewModel recognition, LaunchViewModel launch, AppSessionHost sessions, IMaterialPreferencesStore materialPreferences, IPersonalBannerStore personalBanners, OnlineCoverSelectionClient coverSelection, IRemoteCoverRegistry coverRegistry, IOnlineCatalog catalog, IEntityCatalog entities, CatalogPresentationService presentations, OfflineLibraryClient library, CatalogBrowseClient browsing, CatalogBrowsePolicy browsingPolicy, CatalogBrowseSettings browsingSettings, LanguageSettings languages, ContentLanguageSettings contentLanguages, LaunchFileDiscovery launchFiles, AppUpdateViewModel updates, NextMoeSettingsViewModel nextMoeSettings, LibraryBackupViewModel backups, LibrarySourcesService sources, WindowsLibrarySourcesWatcher sourceWatcher, LibraryExtrasClient extras, MetadataSourceClient metadataSources, WindowsLocalResources resources, IBangumiRelationsReader bangumiRelations, IBangumiSubjectDetailsReader bangumiSubjects, IRelatedSemanticReader relationSemantics, IMusicBrainzReader musicBrainz, IAniListReader aniList, IWatchLinkPreferencesStore watchPreferences, IBangumiWatchLinksReader watchReader, BangumiSettingsViewModel bangumiSettings, IBookBibliographyReader bookBibliography, IBangumiBookRelationsReader bookRelations, IBangumiEpisodesReader episodes, ICatalogReleaseReader catalogReleases, IMusicBrainzEntityReader musicEntities, GlobalLaunchSettings launchDefaults, LaunchPolicy launchPolicy, GameVideoReader gameVideos, IMediaIdentityDecisions identityDecisions, LibraryMigrationService migrationService, DiscoveryFeedViewModel discovery, IsolatedHeroFrameCache heroFrames, WindowsClosePreference closePreference, ImageCacheStorage imageCacheStorage, VndbSettingsViewModel vndbSettings, IBangumiCollectionWriter bangumiWriter, INextMoeCollectionWriter nextMoeWriter, SyntheticScenario? scenario = null, SyntheticOnline? onlineFixture = null)
     {
         Sessions = sessions; this.launchDefaults = launchDefaults; this.launchPolicy = launchPolicy;
         this.nextMoeSettings = nextMoeSettings; this.bangumiSettings = bangumiSettings;
         this.backups = backups;
         this.closePreference = closePreference;
         this.sources = sources; this.sourceWatcher = sourceWatcher; this.extras = extras; this.metadataSources = metadataSources; this.resources = resources;
+        collectionBinding = new(library, catalog, metadataSources);
+        openNextMoeSyncIssues = () => OpenCollectionProblems(CollectionSite.NextMoe,
+            nextMoeSettings.AssociationIssues.Where(issue => issue.EntryId is not null)
+                .Select(issue => new CollectionProblem(issue.EntryId!, issue.Title, issue.Reason, CollectionFields.None,
+                    issue.WorkId, issue.SuggestedId, CatalogAssociation: true)).ToArray(),
+            library, bangumiWriter, nextMoeWriter);
         this.updates = updates;
         this.scenario = scenario; this.online = online; this.onlineFixture = onlineFixture; Launch = launch;
         this.recognition = recognition;
         this.launchFiles = launchFiles; this.launchFilesClient = filesClient;
         this.files = files; this.images = images; this.presentations = presentations;
+        files.InstallationsCommitted = id => Launch.GameId == id ? Launch.RefreshAsync() : Task.CompletedTask;
         this.browsingPolicy = browsingPolicy; this.browsingSettings = browsingSettings; languageSettings = languages; contentLanguageSettings = contentLanguages;
         recognition.PrepareImportedArtwork = presentations.PrepareAsync;
         presentations.Prepared += OnArtworkPrepared;
@@ -152,12 +160,18 @@ public sealed partial class MainWindow : Window
                 await Navigate(next is null ? WorkspacePage.Library : WorkspacePage.Details, next);
         };
         recognition.PropertyChanged += OnRecognitionState;
-        settingsPage = new(workspace, online, recognition, browsingSettings, languages, contentLanguages, updates, nextMoeSettings, backups, bangumiSettings, launchDefaults, new LibraryMigrationViewModel(migrationService)) { ChooseLaunchHelper = () => PickFile(".exe"), ChangeMaterialMode = SetMaterialModeAsync,
+        detailsPage.SyncCollection = () => StartCollectionSync(library, bangumiWriter, nextMoeWriter);
+        settingsPage = new(workspace, online, recognition, browsingSettings, languages, contentLanguages, updates, nextMoeSettings, backups, bangumiSettings, vndbSettings, launchDefaults, new LibraryMigrationViewModel(migrationService)) { ChooseLaunchHelper = () => PickFile(".exe"), ChangeMaterialMode = SetMaterialModeAsync,
             ChooseBackupDestination = PickBackupDestination, ChooseBackupFile = () => PickFile(".json"),
             ChooseMigrationFile = () => PickFile(".zip"), ImportMigration = (preview, token) => ImportManagerLibraryAsync(preview, migrationService, token),
             PrepareBackupAction = ResolveUnsavedAsync, RestoreLibrary = preview => RestoreLibraryAsync(preview, library),
             InstallUpdate = package => App.Instance?.RequestUpgradeAsync(package) ?? Task.FromResult(false),
             OpenFeedback = OpenFeedbackAsync };
+        settingsPage.ImportNextMoeRatings = ImportNextMoeRatingsAsync;
+        settingsPage.WriteCollections = () => WriteCollectionEditsAsync(library, bangumiWriter, nextMoeWriter,
+            library.CurrentSnapshot?.Entries.Select(entry => new CollectionEdit(entry, CollectionFields.All)).ToImmutableArray() ?? [],
+            requested: true);
+        workspace.CollectionEdited += edits => _ = WriteCollectionEditsAsync(library, bangumiWriter, nextMoeWriter, edits, requested: false);
         var managerExport = new TheOrder.Application.Migrations.LibraryManagerExportService(library,
             new TheOrder.Infrastructure.Legacy.NativeLibraryCodec(), new TheOrder.Infrastructure.Migration.ManagerArchiveWriter(), new WindowsManagerExportSink(configuration));
         settingsPage.ConfigureClosePreference(closePreference, startupExitOnClose, closePreferenceLoaded);
@@ -174,9 +188,14 @@ public sealed partial class MainWindow : Window
         };
         online.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(OnlineViewModel.CatalogReminder)) RefreshCatalogStatus(); };
         nextMoeSettings.Access.Changed += OnNextMoeAccessChanged;
+        nextMoeSettings.PropertyChanged += OnNextMoeStatus;
         nextMoeSettings.IdentityChanged = async () => { await online.CheckCredentialAsync(); if (settingsPage.CredentialSaved is { } ready) await ready(); };
         var personalSyncTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-        personalSyncTimer.Tick += async (_, _) => { if (nextMoeSettings.Automatic) await nextMoeSettings.AutomaticAsync(); };
+        personalSyncTimer.Tick += async (_, _) =>
+        {
+            if (startupReady && Sessions.Ready && !Sessions.Closing && !commandsBlocked && ViewModel.CanEdit && collectionSyncOperation.IsCompleted)
+                await nextMoeSettings.AutomaticAsync();
+        };
         personalSyncTimer.Start();
         Closed += (_, _) => { personalSyncTimer.Stop(); nextMoeSettings.Dispose(); };
         var bangumiRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
@@ -185,7 +204,7 @@ public sealed partial class MainWindow : Window
         Closed += (_, _) => bangumiRefreshTimer.Stop();
         browsingPolicy.Changed += OnBrowsingChanged;
         detailsPage.RefreshOnline = async () => { if (await ResolveUnsavedAsync() && workspace.SelectedId is { } id) {
-            await online.RefreshEntryAsync(id);
+            await online.RefreshEntryAsync(id, ConfirmCatalogRedirectAsync);
             if (workspace.PersistenceResult?.IsCommitted == true && workspace.Draft?.Source.Metadata is { } fresh)
             { await presentations.GetAsync(fresh.Id, refresh: true); presentations.Queue([fresh.Id]); detailsPage.RefreshPrepared(fresh.Id); }
         } };
@@ -241,6 +260,7 @@ public sealed partial class MainWindow : Window
                     throw new IOException("Startup library unavailable");
                 await LoadMaterialPreferencesAsync(); await LoadRecognitionPreferencesAsync(); await browsingSettings.InitializeAsync();
                 await online.CheckCredentialAsync(); await updates.ReadReceiptAsync(); await nextMoeSettings.InitializeAsync(); await bangumiSettings.InitializeAsync();
+                await settingsPage.Vndb.InitializeAsync();
                 RefreshCatalogStatus();
                 RefreshLibraryAccessStatus();
             }, () => libraryPage.WaitForInitialArtworkAsync(), NextStartupFrameAsync);
@@ -277,8 +297,8 @@ public sealed partial class MainWindow : Window
     public void SetCommandsBlocked(bool value)
     { commandsBlocked = value; nextMoeSettings.PauseCommands(value); if (value) { coverDialog?.Hide(); p1Dialog?.Hide(); settingsPage?.CancelBackupDialog(); settingsPage?.CancelMigrationDialog(); } PageContent.IsEnabled = !value; RefreshSession(); }
     public void ShowLifecycleError(string message) => statusPage.Post(new("程序运行", message, InfoBarSeverity.Error));
-    public void CancelBackgroundRequests() { playground?.Stop(); CancelOnlineRequests(); recognition.CancelAll(); files.CancelScan(); ViewModel.CancelPendingOperation(); nextMoeSettings.Cancel(); bangumiSettings.Cancel(); feedbackDialog?.CancelForExit(); }
-    public Task DrainPersonalRequestsAsync() => Task.WhenAll(nextMoeSettings.DrainAsync(), bangumiSettings.DrainAsync(), p1Operation);
+    public void CancelBackgroundRequests() { playground?.Stop(); CancelOnlineRequests(); recognition.CancelAll(); files.CancelScan(); ViewModel.CancelPendingOperation(); nextMoeSettings.Cancel(); bangumiSettings.Cancel(); CancelCollectionSync(); feedbackDialog?.CancelForExit(); }
+    public Task DrainPersonalRequestsAsync() => Task.WhenAll(nextMoeSettings.DrainAsync(), bangumiSettings.DrainAsync(), settingsPage.Vndb.DrainAsync(), collectionSyncOperation, collectionSyncPreview, p1Operation);
     private async Task ResumeRecognitionAsync(bool retryPending)
     { try { await recognition.StartUnidentifiedAsync(retryPending); } catch (OperationCanceledException) { } catch { ViewModel.ReportUnexpected(); } }
     private void RefreshSession()
@@ -467,6 +487,7 @@ public sealed partial class MainWindow : Window
         await StopPlaygroundAsync();
         if (settingsPage is not null) { settingsPage.CancelMigrationDialog(); await settingsPage.Migration.DisposeAsync(); }
         nextMoeSettings.Access.Changed -= OnNextMoeAccessChanged;
+        nextMoeSettings.PropertyChanged -= OnNextMoeStatus;
         bangumiSettings.Access.Changed -= OnBangumiAccessChanged;
         bangumiSettings.PropertyChanged -= OnBangumiStatus;
         bangumiSettings.Dispose();

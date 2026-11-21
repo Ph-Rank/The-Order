@@ -18,8 +18,11 @@ internal sealed class WindowsGameChat : IDisposable
     private readonly CancellationTokenSource lifetime;
     private readonly object gate = new();
     private readonly string key, title;
+    private readonly Func<GameChatLine, GameChatLine>? format;
+    private readonly Dictionary<Guid, (PlaygroundMessage Message, GameChatLine Line)> renderedLines = [];
     private PlaygroundService? service;
     private Guid conversation;
+    private PlaygroundConversation? draft;
     private sealed record ModelChoice(PlaygroundProviderKind Provider, string Endpoint, string Id, string Label);
     private readonly List<ModelChoice> models = [];
     private Task pending = Task.CompletedTask;
@@ -34,8 +37,9 @@ internal sealed class WindowsGameChat : IDisposable
     private string? awaitingInput;
     private long published;
     public WindowsGameChat(string name, string key, string title, Func<CancellationToken, Task<PlaygroundService>> factory,
-        Func<bool> current, CancellationToken cancellation)
+        Func<bool> current, CancellationToken cancellation, Func<GameChatLine, GameChatLine>? format = null)
     {
+        this.format = format;
         this.key = key; this.title = title; this.factory = factory; this.current = current;
         lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         mapping = MemoryMappedFile.CreateNew(name + ".chat", GameChatWire.MaximumBytes, MemoryMappedFileAccess.ReadWrite);
@@ -76,28 +80,33 @@ internal sealed class WindowsGameChat : IDisposable
         {
             var chat = await factory(lifetime.Token).ConfigureAwait(false);
             await chat.InitializeAsync(lifetime.Token).ConfigureAwait(false); Check();
-            service = chat; chat.Changed += Changed;
-            var existing = chat.Snapshot.Conversations.FirstOrDefault(c => c.Options.GameOverlayKey == key);
-            if (existing is null)
+            var snapshot = chat.Snapshot;
+            lock (gate)
             {
-                conversation = await chat.CreateConversationAsync(cancellation: lifetime.Token).ConfigureAwait(false);
-                var options = chat.Snapshot.Conversations.First(c => c.Id == conversation).Options;
-                await chat.UpdateConversationAsync(conversation, options with { GameOverlayKey = key }, lifetime.Token).ConfigureAwait(false);
-                string caption = "游戏中 · " + string.Concat(title.Where(c => !char.IsControl(c)));
-                await chat.RenameConversationAsync(conversation, caption[..Math.Min(120, caption.Length)], lifetime.Token).ConfigureAwait(false);
+                Check();
+                service = chat;
+                chat.Changed += Changed;
+                var existing = snapshot.Conversations.FirstOrDefault(c => c.Options.GameOverlayKey == key);
+                if (existing is null)
+                {
+                    var options = snapshot.Conversations
+                        .Where(c => !c.Temporary && !string.IsNullOrWhiteSpace(c.Options.Model))
+                        .OrderByDescending(c => c.UpdatedAt).FirstOrDefault()?.Options;
+                    if (options is null)
+                    {
+                        options = new();
+                        if (snapshot.Settings.Connections.FirstOrDefault() is { } connection)
+                            options = options with { Provider = connection.Provider, Endpoint = connection.Endpoint, Model = connection.Model };
+                    }
+                    string caption = "游戏中 · " + string.Concat(title.Where(c => !char.IsControl(c)));
+                    var now = DateTimeOffset.UtcNow;
+                    draft = new(Guid.NewGuid(), caption[..Math.Min(120, caption.Length)], now, now,
+                        options with { GameOverlayKey = key }, false);
+                }
+                conversation = existing?.Id ?? draft!.Id;
+                status = "";
+                discovery = DiscoverAsync(chat);
             }
-            else conversation = existing.Id;
-            var selected = chat.Snapshot.Conversations.First(c => c.Id == conversation).Options;
-            if (existing is null || string.IsNullOrWhiteSpace(selected.Model))
-            {
-                var previous = chat.Snapshot.Conversations.Where(c => c.Id != conversation && !c.Temporary && !string.IsNullOrWhiteSpace(c.Options.Model)).OrderByDescending(c => c.UpdatedAt).FirstOrDefault();
-                if (previous is not null) { selected = previous.Options with { GameOverlayKey = key }; await chat.UpdateConversationAsync(conversation, selected, lifetime.Token).ConfigureAwait(false); }
-            }
-            if (!string.IsNullOrWhiteSpace(selected.Model)) AddModel(selected.Provider, selected.Endpoint, selected.Model, selected.Model);
-            foreach (var connection in chat.Snapshot.Settings.Connections)
-                if (!string.IsNullOrWhiteSpace(connection.Model)) AddModel(connection.Provider, connection.Endpoint, connection.Model, connection.Model);
-            Check(); status = "";
-            discovery = DiscoverAsync(chat);
         }
         catch (Exception e) when (e is not OutOfMemoryException) { status = "对话未就绪，请先在主程序中配置连接与授权。"; }
         finally { lock (gate) { loading = false; dirty = true; } }
@@ -112,7 +121,7 @@ internal sealed class WindowsGameChat : IDisposable
                 Check();
                 try
                 {
-                    using var budget = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); budget.CancelAfter(TimeSpan.FromSeconds(5));
+                    using var budget = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); budget.CancelAfter(TimeSpan.FromSeconds(25));
                     var latest = PlaygroundModelSelection.SelectLatest(connection.Provider,
                         await chat.ListModelsAsync(connection.Provider, connection.Endpoint, budget.Token).ConfigureAwait(false));
                     lock (gate)
@@ -121,7 +130,11 @@ internal sealed class WindowsGameChat : IDisposable
                             AddModel(connection.Provider, connection.Endpoint, model.Id, model.Name, generation);
                     }
                 }
-                catch (Exception e) when (e is not OutOfMemoryException && !lifetime.IsCancellationRequested) { /* Configured model remains selectable. */ }
+                catch (Exception e) when (e is not OutOfMemoryException && !lifetime.IsCancellationRequested)
+                {
+                    if (!string.IsNullOrWhiteSpace(connection.Model))
+                        AddModel(connection.Provider, connection.Endpoint, connection.Model, connection.Model, generation);
+                }
             }
         }
         catch (OperationCanceledException) { }
@@ -144,7 +157,12 @@ internal sealed class WindowsGameChat : IDisposable
         {
             Check(); if (service is null || conversation == Guid.Empty) throw new InvalidOperationException();
             if (service.IsGenerating) { status = "另一段对话正在回复，请稍候。"; return; }
-            var options = service.Snapshot.Conversations.FirstOrDefault(c => c.Id == conversation)?.Options ?? throw new InvalidOperationException();
+            if (draft is not null && service.Snapshot.Conversations.FirstOrDefault(c => c.Options.GameOverlayKey == key) is { } existing)
+            {
+                conversation = existing.Id;
+                draft = null;
+            }
+            var options = CurrentOptions(service) ?? throw new InvalidOperationException();
             if (string.IsNullOrWhiteSpace(options.Model)) { status = "请先在主程序连接模型，然后在这里选择型号。"; return; }
             bool image = View.ReadInt32(44) != 0;
             ImmutableArray<PlaygroundAttachment> attachments = [];
@@ -158,7 +176,14 @@ internal sealed class WindowsGameChat : IDisposable
             Check(); status = ""; Mark();
             token.ThrowIfCancellationRequested();
             awaitingInput = text;
-            await service.SendAsync(conversation, text, attachments, token).ConfigureAwait(false);
+            if (draft is { } newConversation)
+            {
+                await service.SendGameAsync(newConversation, text, attachments, token).ConfigureAwait(false);
+                if (!service.Snapshot.Conversations.Any(item => item.Id == newConversation.Id))
+                    status = token.IsCancellationRequested ? "已停止。" : "首条消息未保存，可重新发送。";
+            }
+            else
+                await service.SendAsync(conversation, text, attachments, token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) { status = "已停止。"; }
         catch (PlaygroundProviderException e) { status = e.Failure.Message; }
@@ -170,7 +195,7 @@ internal sealed class WindowsGameChat : IDisposable
         try
         {
             Check(); if (service is null || conversation == Guid.Empty || service.IsGenerating) return;
-            var options = service.Snapshot.Conversations.FirstOrDefault(c => c.Id == conversation)?.Options ?? throw new InvalidOperationException();
+            var options = CurrentOptions(service) ?? throw new InvalidOperationException();
             if (command == 3)
             {
                 ModelChoice model;
@@ -183,7 +208,9 @@ internal sealed class WindowsGameChat : IDisposable
             else if (command == 4) options = options with { ReasoningEffort = argument switch { 0 => "low", 1 => "medium", _ => "high" } };
             else if (command == 5) options = options with { Search = argument == 0 ? PlaygroundSearchMode.Off : PlaygroundSearchMode.Smart };
             else if (command == 6) options = options with { Spoiler = argument == 0 ? PlaygroundSpoilerMode.Full : PlaygroundSpoilerMode.LibraryStatus };
-            await service.UpdateConversationAsync(conversation, options, lifetime.Token).ConfigureAwait(false); status = "";
+            if (draft is { } unsent) draft = unsent with { Options = options };
+            else await service.UpdateConversationAsync(conversation, options, lifetime.Token).ConfigureAwait(false);
+            status = "";
         }
         catch (Exception e) when (e is not OutOfMemoryException) { status = "设置未能保存。"; }
         finally { Mark(); }
@@ -227,6 +254,8 @@ internal sealed class WindowsGameChat : IDisposable
             }
         }
     }
+    private PlaygroundConversationOptions? CurrentOptions(PlaygroundService? chat)
+        => chat?.Snapshot.Conversations.FirstOrDefault(c => c.Id == conversation)?.Options ?? draft?.Options;
     private void Check() { lifetime.Token.ThrowIfCancellationRequested(); if (!current()) throw new OperationCanceledException(); }
     private void Changed(PlaygroundChange change)
     {
@@ -242,6 +271,7 @@ internal sealed class WindowsGameChat : IDisposable
                     byte[] bytes = new byte[length]; View.ReadArray(GameChatWire.Draft, bytes, 0, length);
                     if (Encoding.UTF8.GetString(bytes).Trim() == sent) { View.Write(80, View.ReadInt32(80) + 1); View.Write(84, 0); Thread.MemoryBarrier(); View.Write(80, View.ReadInt32(80) + 1); }
                 }
+                draft = null;
                 awaitingInput = null;
             }
             dirty = true;
@@ -250,15 +280,22 @@ internal sealed class WindowsGameChat : IDisposable
     private void Mark() { lock (gate) dirty = true; }
     private void Publish()
     {
-        var snapshot = service?.Snapshot; var options = snapshot?.Conversations.FirstOrDefault(c => c.Id == conversation)?.Options;
-        var lines = snapshot?.Messages.Where(m => m.ConversationId == conversation).TakeLast(32).Select(m =>
+        var snapshot = service?.Snapshot; var options = CurrentOptions(service);
+        var messages = snapshot?.Messages.Where(m => m.ConversationId == conversation).TakeLast(32).ToArray() ?? [];
+        var retained = messages.Select(message => message.Id).ToHashSet();
+        foreach (var id in renderedLines.Keys.Where(id => !retained.Contains(id)).ToArray()) renderedLines.Remove(id);
+        var lines = messages.Select(m =>
         {
+            if (renderedLines.TryGetValue(m.Id, out var cached) && ReferenceEquals(cached.Message, m)) return cached.Line;
             string text = m.Text;
             var used = new List<PlaygroundSource>();
             text = Regex.Replace(text, @"\[\[([A-Za-z0-9_-]+)\]\]", match => { var source = m.Sources.FirstOrDefault(s => s.Id == match.Groups[1].Value); if (source is null) return ""; int index = used.FindIndex(s => s.Id == source.Id); if (index < 0) { index = used.Count; used.Add(source); } return "[" + (index + 1) + "]"; });
             if (used.Count > 0) text += "\n\n" + string.Join("\n", used.Select((s, i) => (i + 1) + ". " + s.Title + (s.Kind == PlaygroundSourceKind.Web ? "  " + s.Url : "")));
-            return new GameChatLine(m.Role, text, m.Error ?? (m.Status == PlaygroundMessageStatus.Generating ? "正在回复…" : ""));
-        }).ToArray() ?? [];
+            var line = new GameChatLine(m.Role, text, m.Error ?? (m.Status == PlaygroundMessageStatus.Generating ? "正在回复…" : ""));
+            line = format?.Invoke(line) ?? line;
+            renderedLines[m.Id] = (m, line);
+            return line;
+        }).ToArray();
         bool busy = !pending.IsCompleted || service?.ActiveConversationId == conversation && service.IsGenerating;
         var state = new GameChatState(status, options?.Model ?? "选择模型", options?.ReasoningEffort ?? "high", busy,
             options is not null && service!.Capabilities(options.Provider, options.Endpoint, options.Model).ImageInput,

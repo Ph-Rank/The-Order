@@ -64,12 +64,11 @@ public static class MetadataMixing
     {
         foreach (var layer in mix?.Layers ?? [])
         {
-            var references = work.References.Where(r => r.Source.Equals(layer.Source, StringComparison.OrdinalIgnoreCase)).ToArray();
             // A layer can cross catalog IDs only when the new work explicitly identifies
-            // that same source record. Same-work refreshes may omit a reference, but an
-            // explicit conflicting reference always requires the user to resolve it first.
-            if (references.Any(r => r.Id != layer.SourceId)
-                || mix!.Base?.Id != work.Id && layer.Work.Id != work.Id && !references.Any(r => r.Id == layer.SourceId))
+            // that same source record. Release references do not identify a separate VNDB work.
+            if (!CollectionUpdate.TryReadSourceWorkId(work, layer.Source, out var reference)
+                || reference is not null && reference != layer.SourceId
+                || mix!.Base?.Id != work.Id && layer.Work.Id != work.Id && reference is null)
                 throw new InvalidDataException("补充资料与要关联的作品不一致或无法确认。请先在作品的「补充资料」中撤回相关来源，再重新关联；原书架条目已保留。");
         }
     }
@@ -80,8 +79,9 @@ public sealed partial class TransactionalLibrary
     {
         var e = Find(games, token.GameId); AssertExtras(token, e);
         layer = layer with { Work = codec.NormalizeWork(layer.Work) };
-        var reference = e.Metadata?.References.FirstOrDefault(r => r.Source.Equals(layer.Source, StringComparison.OrdinalIgnoreCase));
-        if (reference is not null && reference.Id != layer.SourceId) throw new InvalidDataException("资料源编号与当前作品不同，请先核对作品和版本。");
+        if (!CollectionUpdate.TryReadSourceWorkId(e.Metadata, layer.Source, out var reference)
+            || reference is not null && reference != layer.SourceId)
+            throw new InvalidDataException("资料源编号与当前作品不同，请先核对作品和版本。");
         var mix = e.MetadataMix ?? new(e.Metadata, []);
         mix = mix with { Layers = mix.Layers.RemoveAll(x => x.Source == layer.Source).Add(layer) };
         var changed = e with { MetadataMix = mix, Metadata = MetadataMixing.Compose(mix) };

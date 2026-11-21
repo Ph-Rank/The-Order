@@ -10,9 +10,12 @@ int main(){
     try{
         using namespace guide::chat;
         require(sizeof(Header)==256,"header size");require(offsetof(Header,focus)==40&&offsetof(Header,captureRequest)==48,"input offsets");require(offsetof(Header,captureWriter)==128&&offsetof(Header,caret)==132&&offsetof(Header,editorSequence)==144,"capture/editor offsets");require(stateOffset==33024&&pixelOffset==stateOffset+stateBytes,"region offsets");
-        text("");text("model");text("high");number(0);number(1);number(1);number(1);number(1);text("Model");number(1);text("assistant");text("引用 · 人間は考える葦である");text("");
+        text("");text("model");text("high");number(0);number(1);number(1);number(1);number(1);text("Model");number(1);text("assistant");text("引用 · 人間は考える葦である");text("");number(1);number(0);number(6);number(bold);
         auto decoded=decode(data);require(decoded.image&&decoded.search&&decoded.spoiler&&!decoded.busy,"boolean state");require(decoded.messages.size()==1&&decoded.messages[0].text.find("人間")!=std::string::npos,"utf8 reply");
-        data.push_back(0);bool rejected=false;try{decode(data);}catch(...){rejected=true;}require(rejected,"reject trailing bytes");data.pop_back();data[0]=255;rejected=false;try{decode(data);}catch(...){rejected=true;}require(rejected,"reject malformed length");
+        require(decoded.messages[0].styles.size()==1&&decoded.messages[0].styles[0].length==6,"unicode bold span");
+        data[data.size()-8]=5;bool rejected=false;try{decode(data);}catch(...){rejected=true;}
+        require(rejected,"reject a span ending inside a UTF-8 code point");data[data.size()-8]=6;
+        data.push_back(0);rejected=false;try{decode(data);}catch(...){rejected=true;}require(rejected,"reject trailing bytes");data.pop_back();data[0]=255;rejected=false;try{decode(data);}catch(...){rejected=true;}require(rejected,"reject malformed length");
         std::wstring base=L"Local\\TheOrder.Guide.0123456789abcdef0123456789abcdef";
         HANDLE map=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,capacity,(base+L".chat").c_str());require(map&&GetLastError()!=ERROR_ALREADY_EXISTS,"unique mapping");auto* memory=static_cast<BYTE*>(MapViewOfFile(map,FILE_MAP_ALL_ACCESS,0,0,capacity));require(memory!=nullptr,"map view");
         auto* header=reinterpret_cast<Header*>(memory);header->magic=magic;header->version=version;header->pid=12;header->created=34;header->owner=56;

@@ -45,6 +45,24 @@ public sealed partial class MainWindow
         if (ViewModel.Page == WorkspacePage.Settings) settingsPage.RevealSources();
     }
 
+    private void OnNextMoeStatus(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not (nameof(NextMoeSettingsViewModel.Error) or nameof(NextMoeSettingsViewModel.HasPending)
+            or nameof(NextMoeSettingsViewModel.Status))) return;
+        SetNextMoeStatusNotice(nextMoeSettings.Error,
+            nextMoeSettings.HasPending && nextMoeSettings.Status is { Mode: NextMoeAccessMode.Account, NeedsLogin: false });
+    }
+
+    private void SetNextMoeStatusNotice(string? error, bool recoveryRequired)
+    {
+        statusPage.SetNotice("nextmoe-sync", recoveryRequired
+            ? new("NextMoe 同步", error ?? "有同步任务需要核对结果。", InfoBarSeverity.Warning,
+                new("恢复检查", nextMoeSettings.RecoverPendingAsync, "NextMoeSyncRecovery"), RequiresAction: true)
+            : error is not null ? new("NextMoe", error, InfoBarSeverity.Error,
+                nextMoeSettings.AssociationIssues.Any(issue => issue.EntryId is not null)
+                    ? new("查看未完成作品", openNextMoeSyncIssues, "NextMoeAssociationIssues") : null, Dismissible: true) : null);
+    }
+
     private void OnBangumiStatus(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(BangumiSettingsViewModel.NeedsReauthorization)) return;

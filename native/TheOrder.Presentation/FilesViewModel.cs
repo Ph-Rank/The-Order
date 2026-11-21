@@ -68,6 +68,7 @@ public sealed class InstallationDraft : ObservableState
 }
 public sealed class FilesViewModel(IOfflineFilesClient client, WorkspaceViewModel workspace) : ObservableState, IAsyncDisposable
 {
+    public Func<string, Task>? InstallationsCommitted { get; set; }
     private CancellationTokenSource? scanCancellation;
     private Task? scanTask;
     private readonly List<Task> detailTasks = [];
@@ -218,7 +219,14 @@ public sealed class FilesViewModel(IOfflineFilesClient client, WorkspaceViewMode
     {
         Installations = null; Draft = null;
         if (disposed) return;
-        try { Installations = await client.InstallationsAsync(GameId!, CancellationToken.None); }
+        var id = GameId!; var generation = detailGeneration;
+        try
+        {
+            var refreshed = await client.InstallationsAsync(id, CancellationToken.None);
+            if (disposed || generation != detailGeneration) return;
+            Installations = refreshed;
+            if (InstallationsCommitted is { } refreshLaunch) await refreshLaunch(id);
+        }
         catch (Exception) { InstallationMessage += UiText.Get(" 已保存，但安装界面刷新失败，请重新打开；不要重复提交。"); }
     }
     private void NotifyInstallations() { Changed(nameof(Installations)); Changed(nameof(Draft)); Changed(nameof(HasDraft)); Changed(nameof(InstallationMessage)); Changed(nameof(LastPreflight)); }

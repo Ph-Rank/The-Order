@@ -4,7 +4,11 @@ namespace TheOrder.Application;
 
 public enum NextMoeAccessMode { Anonymous, Account, ApiKey }
 public sealed record NextMoeAccount(string Id, string Name);
-public sealed record NextMoeAuthStatus(NextMoeAccessMode Mode, NextMoeAccount? Account, bool NeedsLogin, string[] Scopes);
+public sealed record NextMoeAuthStatus(NextMoeAccessMode Mode, NextMoeAccount? Account, bool NeedsLogin, string[] Scopes)
+{
+    public bool CanReadFolders => NextMoeOAuthIdentity.HasScope(Scopes, "folder:read");
+    public bool CanWriteFolders => NextMoeOAuthIdentity.HasScope(Scopes, "folder:write");
+}
 // A persisted refresh-in-progress flag makes a lost rotation fail closed after a crash.
 public sealed record NextMoeAuthRecord(int Schema, NextMoeAccessMode Mode, NextMoeAccount? Account,
     string? RefreshToken, string[] Scopes, bool RefreshInProgress = false)
@@ -49,14 +53,16 @@ public static class NextMoeOAuthIdentity
     // Public application number verified against the official authorization endpoint, not a secret.
     public const string ClientId = "2df77ee1e0167493048a94b677c73e10";
     public static readonly string[] CatalogScopes = ["openid", "profile", "catalog:read"];
-    public static readonly string[] FolderReadScopes = ["openid", "profile", "catalog:read", "folder:read"];
-    public static readonly string[] FolderWriteScopes = ["openid", "profile", "catalog:read", "folder:read", "folder:write"];
+    public static readonly string[] LoginScopes = [.. CatalogScopes, "folder:read", "folder:write"];
+
+    internal static bool HasScope(string[] granted, string scope) => granted.Contains(scope, StringComparer.Ordinal)
+        || scope == "folder:read" && granted.Contains("folder:write", StringComparer.Ordinal);
 }
 
 // Identity transitions use the existing request admission fence. Refresh keeps the same identity.
 // Legacy key storage remains intact when selecting anonymous/account access.
 public sealed class NextMoeAuthentication(ICredentialSettings keys, ICredentialProvider keyReader, INextMoeAuthStore store,
-    INextMoeOAuth oauth, IOAuthLogin login, string clientId = NextMoeOAuthIdentity.ClientId, TimeProvider? clock = null)
+    INextMoeOAuth oauth, IOAuthLogin login, string clientId = NextMoeOAuthIdentity.ClientId, TimeProvider? clock = null, bool catalogOnlyLogin = false)
     : ICredentialSettings, INextMoeAccess
 {
     public OnlineAuthContext AuthContext { get; } = new();
@@ -137,8 +143,7 @@ public sealed class NextMoeAuthentication(ICredentialSettings keys, ICredentialP
             await Initialize(cancellation).ConfigureAwait(false);
             if (current!.Mode != NextMoeAccessMode.Account) throw new OnlineException(OnlineFailure.UserIdentityRequired);
             var token = await GetAccountToken(cancellation).ConfigureAwait(false);
-            if (scope is not null && !token.Scopes.Contains(scope, StringComparer.Ordinal)
-                && !(scope == "folder:read" && token.Scopes.Contains("folder:write", StringComparer.Ordinal))) throw new OnlineException(OnlineFailure.ScopeRequired);
+            if (scope is not null && !NextMoeOAuthIdentity.HasScope(token.Scopes, scope)) throw new OnlineException(OnlineFailure.ScopeRequired);
             return token.AccessToken;
         }
         finally { serial.Release(); }
@@ -191,12 +196,12 @@ public sealed class NextMoeAuthentication(ICredentialSettings keys, ICredentialP
         if (mode == NextMoeAccessMode.Account && current!.Account is null) throw new OnlineException(OnlineFailure.LoginRequired);
         var next = current! with { Mode = mode }; await store.SaveAsync(next, token).ConfigureAwait(false); current = next;
     }, cancellation);
-    public Task SignInAsync(bool folderRead, bool folderWrite, CancellationToken cancellation) => Transition(async token =>
+    public Task SignInAsync(CancellationToken cancellation) => Transition(async token =>
     {
-        var scopes = folderWrite ? NextMoeOAuthIdentity.FolderWriteScopes : folderRead ? NextMoeOAuthIdentity.FolderReadScopes : NextMoeOAuthIdentity.CatalogScopes;
+        var scopes = catalogOnlyLogin ? NextMoeOAuthIdentity.CatalogScopes : NextMoeOAuthIdentity.LoginScopes;
         var code = await login.AuthorizeAsync(clientId, scopes, token).ConfigureAwait(false);
         var next = await oauth.ExchangeAsync(clientId, code, token).ConfigureAwait(false);
-        if (scopes.Except(next.Scopes, StringComparer.Ordinal).Any()) throw new OnlineException(OnlineFailure.ScopeRequired);
+        if (scopes.Any(scope => !NextMoeOAuthIdentity.HasScope(next.Scopes, scope))) throw new OnlineException(OnlineFailure.ScopeRequired);
         var record = new NextMoeAuthRecord(1, NextMoeAccessMode.Account, next.Account, next.RefreshToken, next.Scopes);
         await store.SaveAsync(record, CancellationToken.None).ConfigureAwait(false); current = record; access = next; refreshFailed = false;
     }, cancellation);

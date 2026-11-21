@@ -82,7 +82,7 @@ internal sealed class StatisticsChartMotion
 }
 
 // Charts are vectors. The same time buckets drive the shapes and keyboard-accessible readouts.
-public sealed class StatisticsTrendChart : Grid
+public sealed partial class StatisticsTrendChart : Grid
 {
     private readonly Canvas canvas = new();
     private readonly StatisticsChartMotion motion;
@@ -104,6 +104,7 @@ public sealed class StatisticsTrendChart : Grid
     public Brush? ReadoutBackground { get => (Brush?)GetValue(ReadoutBackgroundProperty); set => SetValue(ReadoutBackgroundProperty, value); }
     public Style? TargetStyle { get; set; }
     public bool Bars { get; set; }
+    public bool SessionPeriods { get; set; }
 
     private static DependencyProperty BrushProperty(string name) => DependencyProperty.Register(
         name, typeof(Brush), typeof(StatisticsTrendChart), new PropertyMetadata(null, (d, _) => ((StatisticsTrendChart)d).Draw()));
@@ -113,15 +114,24 @@ public sealed class StatisticsTrendChart : Grid
         motion = new(this);
         Children.Add(canvas);
         SizeChanged += (_, _) => Draw();
-        ActualThemeChanged += (_, _) => { if (Bars) Draw(); };
+        ActualThemeChanged += (_, _) =>
+        {
+            if (SessionPeriods) UpdateSessionPalette();
+            if (Bars || SessionPeriods) Draw();
+        };
         Loaded += (_, _) => ObserveAccent(Accent as SolidColorBrush);
-        Unloaded += (_, _) => ObserveAccent(null);
+        Unloaded += (_, _) =>
+        {
+            ObserveAccent(null);
+            ShowSessionMark(null);
+        };
     }
 
     internal void SetHighContrast(bool value)
     {
         if (highContrast == value) return;
         highContrast = value;
+        if (SessionPeriods) UpdateSessionPalette();
         Draw();
     }
 
@@ -158,10 +168,13 @@ public sealed class StatisticsTrendChart : Grid
     private void Draw()
     {
         motion.Prepared(null);
+        showSessionMark = null;
         canvas.Children.Clear();
         areaStops = [];
         double width = ActualWidth, height = ActualHeight;
-        if (!double.IsFinite(width) || width < 100 || height < 90 || data.IsEmpty) return;
+        if (!double.IsFinite(width) || width < 100 || height < 90) return;
+        if (SessionPeriods) { DrawSessionPeriods(width, height); return; }
+        if (data.IsEmpty) return;
         if (IsLoaded) ObserveAccent(Accent as SolidColorBrush);
 
         var scale = StatisticsChartScale.For(data.Select(x => x.Seconds));
@@ -213,7 +226,7 @@ public sealed class StatisticsTrendChart : Grid
         {
             Position(new TextBlock
             {
-                Text = "当前区间暂无可归日的游玩时长", Width = right - left, TextAlignment = TextAlignment.Center,
+                Text = "当前区间暂无游玩时长", Width = right - left, TextAlignment = TextAlignment.Center,
                 TextWrapping = TextWrapping.Wrap, Foreground = LabelBrush, FontSize = 13
             }, left, (top + bottom) / 2 - 9);
         }
@@ -472,17 +485,9 @@ public sealed class StatisticsTrendChart : Grid
             canvas.Children.Insert(0, column);
         }
         var date = AxisLabel("");
-        var value = new TextBlock { Foreground = Ink, FontSize = 14, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
+        var value = CreateReadoutValue();
         Typography.SetNumeralAlignment(value, FontNumeralAlignment.Tabular);
-        var panel = new StackPanel { Spacing = 2 };
-        panel.Children.Add(date);
-        panel.Children.Add(value);
-        var readout = new Border
-        {
-            Background = ReadoutBackground, BorderBrush = Gridline, BorderThickness = new(1),
-            CornerRadius = new(7), Padding = new(9, 6, 9, 7), MaxWidth = Math.Min(248, ActualWidth - 4),
-            Child = panel, IsHitTestVisible = false
-        };
+        var readout = CreateReadout(date, value);
 
         int? focused = null, hovered = null;
         void Show(int? index)
@@ -504,11 +509,7 @@ public sealed class StatisticsTrendChart : Grid
             }
             date.Text = BucketDate(data[i]);
             value.Text = StatisticsPage.Hours(data[i].Seconds);
-            readout.Measure(new Size(readout.MaxWidth, bottom));
-            var size = readout.DesiredSize;
-            double x = point.X + size.Width + 16 < ActualWidth ? point.X + 13 : point.X - size.Width - 13;
-            Canvas.SetLeft(readout, Math.Clamp(x, 2, Math.Max(2, ActualWidth - size.Width - 2)));
-            Canvas.SetTop(readout, Math.Clamp(point.Y - size.Height / 2, 0, Math.Max(0, bottom - size.Height)));
+            PlaceReadout(readout, new Rect(point.X, point.Y, 0, 0), bottom);
         }
 
         for (int i = 0; i < points.Length; i++)
@@ -541,6 +542,27 @@ public sealed class StatisticsTrendChart : Grid
             canvas.Children.Add(marker);
         }
         canvas.Children.Add(readout);
+    }
+
+    private TextBlock CreateReadoutValue() => new()
+    {
+        Foreground = Ink, FontSize = 14, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap
+    };
+
+    private Border CreateReadout(TextBlock caption, TextBlock value) => new()
+    {
+        Background = ReadoutBackground, BorderBrush = Gridline, BorderThickness = new(1),
+        CornerRadius = new(7), Padding = new(9, 6, 9, 7), MaxWidth = Math.Min(248, ActualWidth - 4),
+        Child = new StackPanel { Spacing = 2, Children = { caption, value } }, IsHitTestVisible = false
+    };
+
+    private void PlaceReadout(Border readout, Rect anchor, double bottom)
+    {
+        readout.Measure(new Size(readout.MaxWidth, bottom));
+        var size = readout.DesiredSize;
+        double x = anchor.Right + size.Width + 16 < ActualWidth ? anchor.Right + 13 : anchor.Left - size.Width - 13;
+        Canvas.SetLeft(readout, Math.Clamp(x, 2, Math.Max(2, ActualWidth - size.Width - 2)));
+        Canvas.SetTop(readout, Math.Clamp(anchor.Y + (anchor.Height - size.Height) / 2, 0, Math.Max(0, bottom - size.Height)));
     }
 
     private string BucketDate(StatisticsBucket bucket) => Bars ? bucket.Label

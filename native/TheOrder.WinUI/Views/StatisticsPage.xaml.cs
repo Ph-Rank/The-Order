@@ -68,7 +68,7 @@ public sealed partial class StatisticsPage : Page, IDisposable
     public Func<string, Task>? OpenDetails { get; set; }
     public Func<Task>? OpenImport { get; set; }
     internal Func<Task>? OpenStatus { get; set; }
-    private bool initialized, rendering, disposed;
+    private bool initialized, rendering, disposed, showingSessionPeriods, updatingTrendMode;
     private int summaryColumns, breakdownColumns, visibleDays = 30;
     private StatisticsPeriod previousPeriod;
     private string? previousGame, hoveredStatus, focusedStatus;
@@ -86,6 +86,7 @@ public sealed partial class StatisticsPage : Page, IDisposable
     internal void SetHighContrast(bool value)
     {
         TrendChart.SetHighContrast(value);
+        SessionChart.SetHighContrast(value);
         WeekdayChart.SetHighContrast(value);
         StatusChart.SetHighContrast(value);
     }
@@ -124,26 +125,52 @@ public sealed partial class StatisticsPage : Page, IDisposable
         DaysNumber.Text = $"{data.ActiveDays:N0}\u2009";
         DaysCaption.Text = data.ActiveDays > 0 ? $"活跃日均 {Hours(data.PeriodSeconds / data.ActiveDays)}" : "暂无活跃日期";
         GamesNumber.Text = $"{data.PlayedGames:N0}\u2009";
-        TrendInterval.Text = data.IntervalLabel;
         TrendChart.SetData(data.Trend);
+        SessionChart.SetSessionPeriods(data.SessionTimeline);
+        UpdateTrendMode();
         WeekdayChart.SetData([.. data.Weekdays.Select(x => new StatisticsBucket(data.Start, data.End, x.Name, x.Seconds))]);
-        UndatedNotice.Text = $"另有 {Hours(data.UnknownSeconds)} 缺少可归属日期，仅计入累计。";
-        UndatedNotice.Visibility = data.UnknownSeconds > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (StatusChart.SetData(data.Statuses)) DrawLegend();
         ShowStatus();
         DrawRanking(data.Games, scopeChanged);
         DailyDetails.Header = $"逐日明细 · {data.Days.Length:N0} 条";
         if (DailyDetails.IsExpanded) DrawDays();
         var explanation = new List<string>();
-        if (data.UnknownSeconds > 0) explanation.Add($"{Hours(data.UnknownSeconds)} 无可归属日期，保留在累计中，不进入时间趋势和排行。");
         if (data.Estimated) explanation.Add("跨日记录按经过时间分配；因未保存完整暂停区间，这些日期的分配为估算。");
         if (data.ManualSeconds != 0) explanation.Add($"当前区间包含净时长修正 {Hours(data.ManualSeconds)}，原始计时记录不变。");
         if (data.FutureSeconds != 0) explanation.Add($"另有 {Hours(data.FutureSeconds)} 记录日期在今天之后，暂不计入当前区间。");
-        if (explanation.Count == 0) explanation.Add("当前区间的时长均可归属到具体日期。");
         ProvenanceText.Text = string.Join("\n", explanation);
+        ProvenanceText.Visibility = explanation.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         AutomationProperties.SetName(Dashboard, $"游玩统计，累计 {Hours(data.LifetimeSeconds)}，当前区间 {Hours(data.PeriodSeconds)}，{data.ActiveDays} 个活跃日，{data.PlayedGames} 部作品。");
         if (reveal && !empty) InteractionMotion.RevealContent(Dashboard, .65f);
     }
+    private void OnTrendModeChanged(object sender, RoutedEventArgs e)
+    {
+        if (!initialized || updatingTrendMode) return;
+        if (DurationTrendMode.IsChecked == true && ReferenceEquals(sender, DurationTrendMode)) showingSessionPeriods = false;
+        if (SessionTrendMode.IsChecked == true && ReferenceEquals(sender, SessionTrendMode)) showingSessionPeriods = true;
+        UpdateTrendMode();
+    }
+
+    private void UpdateTrendMode()
+    {
+        updatingTrendMode = true;
+        try
+        {
+            DurationTrendMode.IsChecked = !showingSessionPeriods;
+            SessionTrendMode.IsChecked = showingSessionPeriods;
+            TrendChart.Visibility = showingSessionPeriods ? Visibility.Collapsed : Visibility.Visible;
+            SessionChart.Visibility = showingSessionPeriods ? Visibility.Visible : Visibility.Collapsed;
+            if (!showingSessionPeriods) SessionChart.ShowSessionMark(null);
+            if (ViewModel.Data is not { } data) return;
+            TrendInterval.Text = !showingSessionPeriods ? data.IntervalLabel
+                : data.SessionTimeline.Any(bucket => bucket.Start != bucket.End)
+                    ? $"{data.IntervalLabel} · 时段叠加" : "会话起止 · 本地时间";
+            ToolTipService.SetToolTip(TrendInterval, showingSessionPeriods
+                ? "纵轴按当前记录调整。跨日会话按本地日期分开，较长区间叠加出现过的时段。" : null);
+        }
+        finally { updatingTrendMode = false; }
+    }
+
     private void DrawRanking(ImmutableArray<StatisticsGame> games, bool scopeChanged)
     {
         if (scopeChanged) RankingScroll.ChangeView(null, 0, null, true);

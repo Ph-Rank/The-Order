@@ -152,12 +152,12 @@ public sealed class NextMoeCatalogAccessTests
     public async Task SavedAccountNameMustNotMaskLoginRecoveryAfterRefreshFailure()
     {
         var lab = new PersonalSyncTests.Fixture();
-        using var settings = new NextMoeSettingsViewModel(lab.Identity.Auth, lab.Sync, lab.Library);
+        using var settings = new NextMoeSettingsViewModel(lab.Identity.Auth, lab.Sync);
         await lab.Login(); await settings.InitializeAsync();
         Assert.False(settings.Status!.NeedsLogin);
         lab.Identity.Protocol.Fail = true; lab.Identity.Time.Now = lab.Identity.Time.Now.AddMinutes(20);
         await Assert.ThrowsAsync<OnlineException>(() => lab.Identity.Auth.ReadAsync(default));
         Assert.True(settings.Status.NeedsLogin);
-        Assert.Contains("重新登录", settings.AccessMessage);
+        Assert.Equal("重新授权 NextMoe", settings.LoginAction);
     }
 }

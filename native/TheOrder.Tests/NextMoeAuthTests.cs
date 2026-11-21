@@ -29,9 +29,10 @@ public sealed class NextMoeAuthTests
         public int Refreshes;
         public string Account = "42";
         public bool Fail;
+        public string[]? GrantedScopes;
         public Func<CancellationToken, Task>? Pause;
         public OAuthTokens Tokens(int n) => new("synthetic-access-" + n, "synthetic-refresh-" + n, clock.Now.AddMinutes(15),
-            login.Scopes.Length == 0 ? [.. NextMoeOAuthIdentity.CatalogScopes] : [.. login.Scopes], new(Account, "合成用户"));
+            GrantedScopes ?? (login.Scopes.Length == 0 ? [.. NextMoeOAuthIdentity.CatalogScopes] : [.. login.Scopes]), new(Account, "合成用户"));
         public Task<OAuthTokens> ExchangeAsync(string id, OAuthAuthorizationCode code, CancellationToken c) => Task.FromResult(Tokens(0));
         public async Task<OAuthTokens> RefreshAsync(string id, string refresh, CancellationToken c)
         { int n = Interlocked.Increment(ref Refreshes); if (Pause is { } pause) await pause(c); if (Fail) throw new OnlineException(OnlineFailure.LoginRequired); return Tokens(n); }
@@ -41,7 +42,7 @@ public sealed class NextMoeAuthTests
         public readonly Credential Keys = new(null); public readonly Store Storage = new(); public readonly Clock Time = new(); public readonly Login Browser = new();
         public readonly OAuth Protocol; public readonly NextMoeAuthentication Auth;
         public Fixture() { Protocol = new(Time, Browser); Auth = new(Keys, Keys, Storage, Protocol, Browser, clock: Time); }
-        public Task SignIn() => Auth.SignInAsync(false, false, default);
+        public Task SignIn() => Auth.SignInAsync(default);
     }
     [Fact] public async Task NewUserAnonymousAndLegacyKeyRetained()
     {
@@ -49,7 +50,7 @@ public sealed class NextMoeAuthTests
         Assert.Equal(NextMoeAccessMode.Anonymous, (await anonymous.Auth.StatusAsync(default)).Mode);
         var old = new Fixture(); old.Keys.Value = "synthetic-old-key";
         Assert.Equal("synthetic-old-key", await old.Auth.ReadAsync(default)); Assert.Equal(NextMoeAccessMode.ApiKey, old.Storage.Record!.Mode);
-        await old.SignIn(); Assert.Equal("synthetic-old-key", old.Keys.Value); Assert.Empty(old.Browser.Scopes.Except(NextMoeOAuthIdentity.CatalogScopes));
+        await old.SignIn(); Assert.Equal("synthetic-old-key", old.Keys.Value); Assert.Equal(NextMoeOAuthIdentity.LoginScopes, old.Browser.Scopes);
         await old.Auth.SelectAsync(NextMoeAccessMode.Anonymous, default); Assert.Null(await old.Auth.ReadAsync(default)); Assert.Equal("synthetic-old-key", old.Keys.Value);
         await old.Auth.SelectAsync(NextMoeAccessMode.ApiKey, default); Assert.Equal("synthetic-old-key", await old.Auth.ReadAsync(default));
     }
@@ -99,14 +100,31 @@ public sealed class NextMoeAuthTests
         var f = new Fixture(); await f.SignIn(); await f.Auth.SaveAsync("synthetic-key", default); await f.Auth.ClearAsync(default);
         Assert.Equal(NextMoeAccessMode.Anonymous, f.Storage.Record!.Mode); Assert.NotNull(f.Storage.Record.Account); Assert.Null(f.Keys.Value);
     }
-    [Fact] public async Task FolderPermissionsAreRequestedOnlyAfterExplicitChoice()
+    [Fact] public async Task FirstLoginRequestsAllSupportedScopesTogether()
     {
-        var f = new Fixture(); await f.SignIn();
-        Assert.DoesNotContain("folder:read", f.Browser.Scopes);
-        Assert.Equal(OnlineFailure.ScopeRequired, (await Assert.ThrowsAsync<OnlineException>(() => f.Auth.UserTokenAsync("folder:read", default))).Failure);
-        await f.Auth.SignInAsync(true, false, default); Assert.Contains("folder:read", f.Browser.Scopes); Assert.DoesNotContain("folder:write", f.Browser.Scopes);
-        await f.Auth.SignInAsync(true, true, default); Assert.Contains("folder:write", f.Browser.Scopes); Assert.DoesNotContain("email", f.Browser.Scopes);
-        Assert.DoesNotContain("catalog:edit", f.Browser.Scopes); Assert.DoesNotContain("preferences", f.Browser.Scopes);
+        var f = new Fixture();
+        await f.SignIn();
+        Assert.Equal(new[] { "openid", "profile", "catalog:read", "folder:read", "folder:write" }, f.Browser.Scopes);
+        var status = await f.Auth.StatusAsync(default);
+        Assert.True(status.CanReadFolders);
+        Assert.True(status.CanWriteFolders);
+        Assert.Equal("synthetic-access-0", await f.Auth.UserTokenAsync("folder:write", default));
+    }
+
+    [Fact] public async Task MissingFolderGrantIsNotInferredFromRequestedScopes()
+    {
+        var f = new Fixture();
+        var previous = new NextMoeAuthRecord(1, NextMoeAccessMode.Account, new("42", "合成用户"), "synthetic-old-refresh",
+            [.. NextMoeOAuthIdentity.CatalogScopes]);
+        f.Storage.Record = previous;
+        f.Protocol.GrantedScopes = [.. NextMoeOAuthIdentity.CatalogScopes];
+        Assert.Equal(OnlineFailure.ScopeRequired, (await Assert.ThrowsAsync<OnlineException>(f.SignIn)).Failure);
+        var status = await f.Auth.StatusAsync(default);
+        Assert.False(status.CanReadFolders);
+        Assert.False(status.CanWriteFolders);
+        Assert.Equal(previous, f.Storage.Record);
+        Assert.Equal(OnlineFailure.ScopeRequired, (await Assert.ThrowsAsync<OnlineException>(
+            () => f.Auth.UserTokenAsync("folder:read", default))).Failure);
     }
     [Fact] public async Task ApiKeyDoesNotRepresentUserAndFailedRefreshNeverChangesIdentity()
     {

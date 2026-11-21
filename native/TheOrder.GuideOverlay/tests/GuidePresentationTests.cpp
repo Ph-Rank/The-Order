@@ -34,6 +34,8 @@ struct LayoutPainter {
     void polygon(const std::vector<guide::Point>&,guide::flow::Color,guide::flow::Color,float=1){}
     void draft(const std::string&,guide::flow::Rect,float,guide::flow::Color,const guide::chat::Header&){}
     float paragraph(const std::string&,float,float,float,float size,guide::flow::Color,bool,bool){return size*1.5f;}
+    float measureChatRun(std::string_view value,float size,int) { return float(value.size())*size*.5f; }
+    void drawChatRun(std::string_view value,float,float,float,guide::flow::Color,int) { labels.emplace_back(value); }
 };
 static void controlsFit(float width,float height,float dpi) {
     using namespace guide;
@@ -83,8 +85,12 @@ static void controlsFit(float width,float height,float dpi) {
     chat::Header chatHeader{};
     chat::Connection chat;
     chat.h=&chatHeader;chat.state.models={"Gemini 4 Hydrogen","Gemini 4 Carbon"};
+    chat.state.messages.push_back({"assistant","粗体 content","",{{0,6,chat::bold}}});
     chat::render(painter,canvas,chat,body,s,false);
     require(canvas.hits.size()==7,"all conversation controls available");
+    require(canvas.rowLayouts.size()==1&&canvas.rowLayouts[0].runs[0].style==chat::bold,"chat uses bold spans");
+    require(std::find(painter.labels.begin(),painter.labels.end(),"粗体")!=painter.labels.end(),"chat painter receives formatted CJK");
+    require(heading.closeWidth>=38*s,"close label gets one horizontal row");
     require(canvas.body.h>=layout.height*.37f&&canvas.body.y+canvas.body.h<=canvas.input.y,"usable messages and composer");
     for(const auto& hit:canvas.hits)
         require(hit.box.x>=inset-.01f&&hit.box.x+hit.box.w<=right+.01f,"chat tools fit");

@@ -139,6 +139,162 @@ public sealed class OnlineAcceptanceTests
         lab.Catalog.ClearCache(); await Assert.ThrowsAsync<OnlineException>(() => lab.Library.AddAsync("86", default));
         Assert.Equal(before, File.ReadAllBytes(lab.Profile.Main)); Assert.Single((await lab.Offline.QueryAsync(new(), default)).Items);
     }
+    [Fact] public async Task ConfirmedCatalogMergeKeepsLocalEditionNameAndSupplementedSource()
+    {
+        await using var lab = new Lab();
+        await lab.Workspace.InitializeAsync();
+        lab.Send = (_, _) => Task.FromResult(Json("""
+            {"object":"work","id":"86","display_name":"Local Edition","refs":[{"source":"vndb","external_id":"r102263"}]}
+            """));
+        Assert.True((await lab.Library.AddAsync("86", default)).IsCommitted);
+        var library = lab.Offline.Required();
+        var old = Assert.Single(library.Snapshot.Entries);
+        var extras = await library.ExtrasAsync(old.Id);
+        var vndb = old.Metadata! with { Id = "vndb:v20424", References = [new("vndb", "v20424", "https://vndb.org/v20424")], Description = "补充资料" };
+        await library.ApplySourceAsync(extras.Token, new("vndb", "v20424", vndb, ["description"], false));
+        await library.UpdateAsync(old.Id, new() { Notes = "保留笔记", Favorite = true });
+        lab.Send = (request, _) => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/86", StringComparison.Ordinal)
+            ? Merge("90")
+            : Json("""{"object":"work","id":"90","display_name":"Canonical Work","refs":[{"source":"vndb","external_id":"r102263"},{"source":"vndb","external_id":"v20424"}]}"""));
+
+        var declined = await lab.Library.RefreshAsync(old.Id, default, (entry, target, _) =>
+        {
+            Assert.Equal(old.Id, entry.Id);
+            Assert.Equal("90", target.Id);
+            return Task.FromResult(false);
+        });
+        Assert.Equal(ClientOutcome.Cancelled, declined.Outcome);
+        Assert.Equal("86", Assert.Single(library.Snapshot.Entries).Metadata?.Id);
+
+        var accepted = await lab.Library.RefreshAsync(old.Id, default, (_, _, _) => Task.FromResult(true));
+        Assert.True(accepted.IsCommitted, accepted.Message);
+        var current = Assert.Single(library.Snapshot.Entries);
+        Assert.Equal(old.Id, current.Id);
+        Assert.Equal("Local Edition", current.Name);
+        Assert.True(current.Favorite);
+        Assert.Equal("保留笔记", current.Notes);
+        Assert.Equal("90", current.Metadata?.Id);
+        Assert.Equal("补充资料", current.Metadata?.Description);
+        Assert.Equal("v20424", CollectionUpdate.WorkIdFor(current, CollectionSite.Vndb));
+    }
+
+    [Fact] public async Task ConfirmingCatalogMergeDoesNotCombineSeparateShelfEntries()
+    {
+        await using var lab = new Lab();
+        await lab.Workspace.InitializeAsync();
+        lab.Send = (request, _) => Task.FromResult(Work(request.RequestUri!.AbsolutePath.Split('/')[^1]));
+        await lab.Library.AddAsync("86", default);
+        await lab.Library.AddAsync("90", default);
+        var library = lab.Offline.Required();
+        var old = library.Snapshot.Entries.Single(entry => entry.Metadata?.Id == "86");
+        lab.Send = (request, _) => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/86", StringComparison.Ordinal) ? Merge("90") : Work("90"));
+
+        var result = await lab.Library.RefreshAsync(old.Id, default, (_, _, _) => throw new InvalidOperationException());
+        Assert.Equal(ClientOutcome.Conflict, result.Outcome);
+        Assert.Equal(2, library.Snapshot.Entries.Length);
+        Assert.Contains(library.Snapshot.Entries, entry => entry.Id == old.Id && entry.Metadata?.Id == "86");
+    }
+
+    [Theory]
+    [InlineData(CollectionSite.Vndb, "https://vndb.org/v202", "v202", 84)]
+    [InlineData(CollectionSite.Bangumi, "202", "202", 8)]
+    [InlineData(CollectionSite.NextMoe, "#86", "90", 8)]
+    public async Task ConfirmingAnExactSyncBindingPreservesCatalogueAndPersonalFields(
+        CollectionSite site, string input, string id, int rating)
+    {
+        await using var lab = new Lab();
+        await lab.Workspace.InitializeAsync();
+        Assert.True((await lab.Library.AddAsync("86", default)).IsCommitted);
+        var library = lab.Offline.Required();
+        var old = Assert.Single(library.Snapshot.Entries);
+        await library.UpdateAsync(old.Id, new() { Notes = "本地笔记", Rating = 8.4, Status = "completed" });
+        lab.Send = (request, _) => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/86", StringComparison.Ordinal)
+            ? Merge("90") : Work("90"));
+        using var direct = new HttpClient(new Handler((request, _) => Task.FromResult(
+            request.RequestUri!.Host == "api.vndb.org"
+                ? Json("""{"results":[{"id":"v202","title":"Synthetic"}]}""")
+                : Json("""{"id":202,"type":4,"name":"Synthetic"}"""))));
+        var binder = new CollectionBindingClient(lab.Offline, lab.Catalog, new(lab.Offline, new DirectMetadataSources(direct)));
+
+        var preview = await binder.ReadAsync(old.Id, site, input, allowAdult: false, default);
+        Assert.Equal(id, preview.WorkId);
+        Assert.Equal("Synthetic", preview.Title);
+        Assert.Null(Assert.Single(library.Snapshot.Entries).CollectionBindings);
+        Assert.Equal(new CollectionUpdate(site, id, null, rating), preview.UpdateFor(CollectionFields.Rating));
+
+        var result = await binder.BindAsync(preview, default);
+        Assert.True(result.IsCommitted, result.Message);
+        var loaded = Assert.Single(new NativeLibraryCodec().Decode(await lab.Offline.ExportBackupAsync(default)));
+        Assert.Equal(id, CollectionUpdate.WorkIdFor(loaded, site));
+        Assert.Equal("86", loaded.Metadata?.Id);
+        Assert.Equal("Synthetic", loaded.Name);
+        Assert.Equal("本地笔记", loaded.Notes);
+        Assert.Equal("completed", loaded.Status);
+        Assert.Equal(8.4, loaded.PersonalRating);
+    }
+
+    [Fact]
+    public async Task SyncBindingRejectsDuplicateIdsMismatchedResponsesAndStalePreviews()
+    {
+        await using var lab = new Lab();
+        await lab.Workspace.InitializeAsync();
+        lab.Send = (request, _) => Task.FromResult(Work(request.RequestUri!.AbsolutePath.Split('/')[^1]));
+        await lab.Library.AddAsync("86", default);
+        await lab.Library.AddAsync("90", default);
+        var library = lab.Offline.Required();
+        var entry = library.Snapshot.Entries.Single(item => item.Metadata?.Id == "86");
+        using var direct = new HttpClient(new Handler((_, _) =>
+            Task.FromResult(Json("""{"results":[{"id":"v203","title":"Wrong number"}]}"""))));
+        var binder = new CollectionBindingClient(lab.Offline, lab.Catalog, new(lab.Offline, new DirectMetadataSources(direct)));
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => binder.ReadAsync(entry.Id, CollectionSite.Vndb, "v202", false, default));
+        await Assert.ThrowsAsync<InvalidDataException>(() => binder.ReadAsync(entry.Id, CollectionSite.Vndb, "r202", false, default));
+        var duplicate = await binder.ReadAsync(entry.Id, CollectionSite.NextMoe, "90", false, default);
+        Assert.Equal(ClientOutcome.ValidationFailure, (await binder.BindAsync(duplicate, default)).Outcome);
+        Assert.Null(library.Snapshot.Entries.Single(item => item.Id == entry.Id).CollectionBindings);
+
+        var stale = await binder.ReadAsync(entry.Id, CollectionSite.NextMoe, "91", false, default);
+        var newer = await binder.ReadAsync(entry.Id, CollectionSite.NextMoe, "92", false, default);
+        Assert.True((await binder.BindAsync(newer, default)).IsCommitted);
+        Assert.Equal(ClientOutcome.Conflict, (await binder.BindAsync(stale, default)).Outcome);
+        Assert.Equal("92", CollectionUpdate.WorkIdFor(library.Snapshot.Entries.Single(item => item.Id == entry.Id), CollectionSite.NextMoe));
+    }
+
+    [Fact] public async Task VerifiedBackgroundMergePreservesMetadataLayersAndExistingBindings()
+    {
+        await using var lab = new Lab();
+        await lab.Workspace.InitializeAsync();
+        Assert.True((await lab.Library.AddAsync("86", default)).IsCommitted);
+        var library = lab.Offline.Required();
+        var origin = Assert.Single(library.Snapshot.Entries);
+        await library.UpdateAsync(origin.Id, new() { Notes = "本地记录", Status = "completed", Rating = 8.5 });
+        using var direct = new HttpClient(new Handler((_, _) => Task.FromResult(
+            Json("""{"results":[{"id":"v20424","title":"Synthetic"}]}"""))));
+        var bindings = new CollectionBindingClient(lab.Offline, lab.Catalog, new(lab.Offline, new DirectMetadataSources(direct)));
+        var vndb = await bindings.ReadAsync(origin.Id, CollectionSite.Vndb, "v20424", false, default);
+        Assert.True((await bindings.BindAsync(vndb, default)).IsCommitted);
+        var layerOrigin = await library.ExtrasAsync(origin.Id);
+        var layer = origin.Metadata! with { Id = "vndb:v20424", Description = "已确认的补充资料",
+            References = [new("vndb", "v20424", "https://vndb.org/v20424")] };
+        await library.ApplySourceAsync(layerOrigin.Token, new("vndb", "v20424", layer, ["description"], false));
+        var oldBinding = await bindings.ReadAsync(origin.Id, CollectionSite.NextMoe, "86", false, default);
+        Assert.True((await bindings.BindAsync(oldBinding, default)).IsCommitted);
+
+        lab.Send = (request, _) => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/86", StringComparison.Ordinal) ? Merge("90") : Work("90"));
+        var details = await library.ExtrasAsync(origin.Id);
+        var work = await lab.Catalog.DetailsAsync("86", true, default);
+        var receipt = await library.RepairCatalogAssociationAsync(details, "86", work, false, default);
+        Assert.Equal("90", receipt.Value.Metadata!.Id);
+        var committed = Assert.Single(new NativeLibraryCodec().Decode(await lab.Offline.ExportBackupAsync(default)));
+        Assert.Equal(origin.Id, committed.Id);
+        Assert.Equal("90", committed.CollectionBindings!.NextMoe);
+        Assert.Equal("v20424", committed.CollectionBindings.Vndb);
+        Assert.Equal("已确认的补充资料", committed.Metadata?.Description);
+        Assert.Equal("本地记录", committed.Notes);
+        Assert.Equal("completed", committed.Status);
+        Assert.Equal(8.5, committed.PersonalRating);
+    }
+
     private sealed class CancelAtEof(byte[] bytes, Action cancel) : MemoryStream(bytes)
     {
         public bool WasDisposed;

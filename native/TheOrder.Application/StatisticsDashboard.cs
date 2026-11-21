@@ -15,6 +15,7 @@ public sealed record StatisticsDashboard(DateOnly Start, DateOnly End, int Libra
     string IntervalLabel, ImmutableArray<StatisticsBucket> Trend, ImmutableArray<StatisticsGame> Games,
     ImmutableArray<StatisticsStatus> Statuses, ImmutableArray<StatisticsWeekday> Weekdays, ImmutableArray<DailyPlaytime> Days)
 {
+    public ImmutableArray<StatisticsSessionBucket> SessionTimeline { get; init; } = [];
     public int CompletedGames => Statuses.First(x => x.Key == "completed").Count;
 }
 
@@ -28,16 +29,21 @@ public static class StatisticsDashboardBuilder
         if (!Enum.IsDefined(request.Period) || request.Today.Year is < 2 or > 9998) throw new ArgumentOutOfRangeException(nameof(request));
         cancellation.ThrowIfCancellationRequested();
         var entries = request.GameId is null ? request.Entries : [.. request.Entries.Where(x => x.Id == request.GameId)];
-        var report = PlaytimeStatistics.Build(entries, request.Zone, cancellation);
         var today = request.Today;
-        var available = report.Days.Where(x => x.Date <= today).ToImmutableArray();
-        var start = request.Period switch
+        DateOnly? requestedStart = request.Period switch
         {
             StatisticsPeriod.Last7Days => today.AddDays(-6),
             StatisticsPeriod.Last30Days => today.AddDays(-29),
             StatisticsPeriod.ThisYear => new DateOnly(today.Year, 1, 1),
-            _ => available.IsEmpty ? today.AddDays(-29) : available.Min(x => x.Date)
+            _ => null
         };
+        var sessions = new StatisticsSessionTimeline(request.Zone);
+        var report = PlaytimeStatistics.Build(entries, request.Zone, cancellation, (entry, day, start, end) =>
+        {
+            if (day <= today && (requestedStart is null || day >= requestedStart.Value)) sessions.Add(entry, day, start, end);
+        });
+        var available = report.Days.Where(x => x.Date <= today).ToImmutableArray();
+        var start = requestedStart ?? (available.IsEmpty ? today.AddDays(-29) : available.Min(x => x.Date));
         var days = available.Where(x => x.Date >= start).ToImmutableArray();
         var byDay = days.GroupBy(x => x.Date).ToDictionary(x => x.Key, x => x.Sum(y => y.Seconds));
         var games = days.GroupBy(x => x.GameId, StringComparer.Ordinal)
@@ -58,7 +64,10 @@ public static class StatisticsDashboardBuilder
         var trend = windows.Select((x, i) => new StatisticsBucket(x.Start, x.End, x.Label, values[i])).ToImmutableArray();
         return new(start, today, entries.Length, report.TotalSeconds, days.Sum(x => x.Seconds), byDay.Count(x => x.Value > 0), games.Count(x => x.Seconds > 0),
             report.UnknownSeconds, report.Days.Where(x => x.Date > today).Sum(x => x.Seconds), days.Sum(x => x.ManualSeconds), days.Any(x => x.Estimated), interval,
-            trend, games, statuses, weekdays, [.. days.OrderByDescending(x => x.Date).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.GameId, StringComparer.Ordinal)]);
+            trend, games, statuses, weekdays, [.. days.OrderByDescending(x => x.Date).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.GameId, StringComparer.Ordinal)])
+        {
+            SessionTimeline = sessions.Build(trend, cancellation)
+        };
     }
 
     private static ImmutableArray<(DateOnly Start, DateOnly End, string Label)> Windows(DateOnly start, DateOnly end, StatisticsPeriod period, out string interval)

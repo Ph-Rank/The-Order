@@ -65,6 +65,19 @@ public sealed class BangumiAccessSnapshot
             throw new BangumiAuthorizationException(BangumiAuthorizationFailure.InvalidResponse);
         if (token is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
     }
+    public void AuthorizeCollectionWrite(HttpRequestMessage request)
+    {
+        Changed.ThrowIfCancellationRequested();
+        if (!Authorized) throw new CollectionSyncException(CollectionSyncFailure.Unauthorized);
+        var uri = request.RequestUri;
+        if (request.Method != HttpMethod.Post || uri is null || uri.Scheme != "https" || !uri.IsDefaultPort
+            || uri.IdnHost != "api.bgm.tv" || uri.UserInfo.Length != 0 || uri.Fragment.Length != 0 || uri.Query.Length != 0
+            || !Regex.IsMatch(uri.OriginalString, @"\Ahttps://api\.bgm\.tv/v0/users/-/collections/[1-9][0-9]{0,9}\z", RegexOptions.CultureInvariant)
+            || request.Headers.Authorization is not null || request.Headers.Contains("Cookie"))
+            throw new CollectionSyncException(CollectionSyncFailure.Rejected);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    }
+
     private static bool AllowedRead(Uri uri)
     {
         if (uri.Query.Length == 0)

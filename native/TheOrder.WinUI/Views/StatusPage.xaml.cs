@@ -6,7 +6,7 @@ namespace TheOrder.WinUI.Views;
 
 internal sealed record StatusAction(string Label, Func<Task> Invoke, string? AutomationId = null);
 internal sealed record StatusNotice(string Title, string Message, InfoBarSeverity Severity = InfoBarSeverity.Informational,
-    StatusAction? Action = null, StatusAction? SecondaryAction = null, bool RequiresAction = false)
+    StatusAction? Action = null, StatusAction? SecondaryAction = null, bool RequiresAction = false, bool Dismissible = false)
 {
     public bool NeedsAttention => Severity == InfoBarSeverity.Error || RequiresAction;
 }
@@ -46,8 +46,8 @@ public sealed partial class StatusPage : Page
         RefreshMessages();
     }
 
-    internal bool HasNotice(string key) => active.ContainsKey(key);
-    internal string? NoticeTitle(string key) => active.GetValueOrDefault(key)?.Notice.Title;
+    internal bool HasNotice(string key) => active.GetValueOrDefault(key) is { Dismissed: false };
+    internal string? NoticeTitle(string key) => active.GetValueOrDefault(key) is { Dismissed: false } row ? row.Notice.Title : null;
     internal bool HasTask(string key) => running.ContainsKey(key);
 
     internal void SetNotice(string key, StatusNotice? notice)
@@ -56,7 +56,7 @@ public sealed partial class StatusPage : Page
         {
             if (previous.Notice == notice) return;
             active.Remove(key);
-            Messages.Children.Remove(previous.View);
+            if (!previous.Dismissed) Messages.Children.Remove(previous.View);
         }
         else if (notice is null) return;
 
@@ -107,7 +107,8 @@ public sealed partial class StatusPage : Page
     private void RefreshMessages()
     {
         EmptyMessages.Visibility = Messages.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        ClearMessages.Visibility = history.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        ClearMessages.Visibility = history.Count > 0 || active.Values.Any(row => row.CanDismiss)
+            ? Visibility.Visible : Visibility.Collapsed;
         bool unread = history.Any(IsUnreadAttention) || active.Values.Any(IsUnreadAttention);
         if (HasUnreadAttention == unread) return;
         HasUnreadAttention = unread;
@@ -131,13 +132,24 @@ public sealed partial class StatusPage : Page
         return button;
     }
 
-    private void OnClearMessages(object sender, RoutedEventArgs e) => ClearHistory();
+    private void OnClearMessages(object sender, RoutedEventArgs e)
+    {
+        foreach (var row in active.Values.Where(row => row.CanDismiss))
+        {
+            row.Dismissed = true;
+            row.Unread = false;
+            Messages.Children.Remove(row.View);
+        }
+        ClearHistory();
+    }
 
     private sealed class MessageRow(StatusNotice notice, InfoBar view, bool unread)
     {
         public StatusNotice Notice { get; } = notice;
         public InfoBar View { get; } = view;
         public bool Unread { get; set; } = unread;
+        public bool Dismissed { get; set; }
+        public bool CanDismiss => Notice.Dismissible && !Dismissed;
     }
 
     private sealed class TaskRow

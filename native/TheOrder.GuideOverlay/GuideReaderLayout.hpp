@@ -15,7 +15,7 @@ struct HeaderLayout {
 inline HeaderLayout header(const Layout& layout,int sourceCount,bool attribution) {
     const float s=layout.scale, inset=layout.controlInset, available=layout.width-2*inset;
     const float top=(layout.compact?6.f:9.f)*s, rowHeight=(layout.compact?24.f:27.f)*s;
-    const float closeWidth=(layout.compact?42.f:48.f)*s, gap=8*s;
+    const float closeWidth=(layout.compact?46.f:52.f)*s, gap=8*s;
     const float preferredSources=(sourceCount*(layout.compact?59.f:70.f)+std::max(0,sourceCount-1)*4.f)*s;
     const bool inlineSources=sourceCount>0 && available>=preferredSources+closeWidth+2*gap+86*s;
     const float sourceWidth=std::min(preferredSources,available);

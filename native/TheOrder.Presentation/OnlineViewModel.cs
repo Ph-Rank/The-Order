@@ -173,7 +173,8 @@ public sealed class OnlineViewModel(IOnlineCatalog catalog, ICredentialSettings 
     public void Leave() { if (SearchBusy) CancelSearch(); detailGeneration++; detailStop?.Cancel(); mutationStop?.Cancel(); connectionGeneration++; connectionStop?.Cancel(); if (ConnectionState == OnlineState.Loading) { ConnectionState = OnlineState.Idle; ConnectionMessage = UiText.Get("连接测试已取消。"); } if (DetailBusy) { DetailState = OnlineState.Idle; DetailMessage = UiText.Get("详情读取已取消。"); } Notify(); }
     public Task AddWishlistAsync() => Details is { } work ? Track(() => Mutate(c => library.AddAsync(work.Id, c))) : Task.CompletedTask;
     public Task AddWishlistAsync(string workId) => Track(() => Mutate(c => library.AddAsync(workId, c)));
-    public Task RefreshEntryAsync(string id) => Track(() => Mutate(c => library.RefreshAsync(id, c), id));
+    public Task RefreshEntryAsync(string id, Func<LibraryEntry, WorkMetadata, CancellationToken, Task<bool>>? confirmRedirect = null)
+        => Track(() => Mutate(c => library.RefreshAsync(id, c, confirmRedirect), id));
     public Task RemoveWishlistAsync(string id) => Track(() => Mutate(c => library.RemoveWishlistAsync(id, c)));
     private async Task Mutate(Func<CancellationToken, Task<ClientResult>> action, string? detailId = null)
     {

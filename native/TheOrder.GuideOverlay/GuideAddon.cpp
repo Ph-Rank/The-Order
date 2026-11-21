@@ -339,6 +339,24 @@ struct FlowImGuiPainter {
         ImGui::PushFont(nullptr,size);auto measured=ImGui::CalcTextSize(value.c_str(),nullptr,false,width);float height=std::max(size*1.5f,measured.y);
         if(draw){list->AddText(ImGui::GetFont(),size,{x,y},color(c),value.c_str(),nullptr,width);if(strong)list->AddText(ImGui::GetFont(),size,{x+.5f,y},color(c),value.c_str(),nullptr,width);}ImGui::PopFont();return height;
     }
+    float measureChatRun(std::string_view value, float size, int style) {
+        ImGui::PushFont(nullptr,size);
+        float width = ImGui::CalcTextSize(value.data(), value.data()+value.size(), false).x;
+        ImGui::PopFont();
+        return width + (style & guide::chat::bold ? std::max(.5f,size*.035f) : 0);
+    }
+    void drawChatRun(std::string_view value, float x, float y, float size, guide::flow::Color textColor, int style) {
+        ImGui::PushFont(nullptr,size);
+        const auto first = list->VtxBuffer.Size;
+        const auto* end = value.data()+value.size();
+        list->AddText(ImGui::GetFont(),size,{x,y},color(textColor),value.data(),end);
+        if (style & guide::chat::bold)
+            list->AddText(ImGui::GetFont(),size,{x+std::max(.5f,size*.035f),y},color(textColor),value.data(),end);
+        if (style & guide::chat::italic)
+            for (int i=first; i<list->VtxBuffer.Size; ++i)
+                list->VtxBuffer[i].pos.x += .18f * (y+size*.75f-list->VtxBuffer[i].pos.y);
+        ImGui::PopFont();
+    }
     void draft(const std::string& value,guide::flow::Rect r,float size,guide::flow::Color c,const guide::chat::Header&){clip(r);paragraph(value,r.x,r.y,r.w,size,c,false,true);unclip();}
     void image(guide::flow::Rect r,const guide::Reading&){if(localTexture.view.handle)list->AddImage(localTexture.view.handle,{r.x,r.y},{r.x+r.w,r.y+r.h});}
 };

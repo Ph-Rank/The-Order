@@ -9,6 +9,10 @@ public sealed class PersonalSyncLibrary(OfflineLibraryClient local) : IPersonalS
     { cancellation.ThrowIfCancellationRequested(); return Task.FromResult(local.Required().Snapshot.Entries); }
     public async Task ApplyStateAsync(LibraryEntry expected, string status, CancellationToken cancellation)
         => await local.Required().ApplySyncStateAsync(expected, status, cancellation).ConfigureAwait(false);
+    public Task<LibraryExtrasDetails> ReadAssociationAsync(string entryId, CancellationToken cancellation)
+        => local.Required().ExtrasAsync(entryId, cancellation);
+    public async Task RepairAssociationAsync(LibraryExtrasDetails details, string oldId, WorkMetadata canonical, bool confirmed, CancellationToken cancellation)
+        => await local.Required().RepairCatalogAssociationAsync(details, oldId, canonical, confirmed, cancellation).ConfigureAwait(false);
     public async Task<string> AddWishlistAsync(WorkMetadata metadata, CancellationToken cancellation)
     {
         await local.Required().AddAsync(metadata, cancellation).ConfigureAwait(false);

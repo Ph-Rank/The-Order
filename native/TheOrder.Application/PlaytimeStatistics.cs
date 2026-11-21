@@ -14,6 +14,10 @@ public static class PlaytimeStatistics
     // Historical sessions do not store pause intervals. Cross-day allocation is labelled an estimate.
     // Only dated, terminal records enter charts, using credited seconds rather than wall time.
     public static PlaytimeReport Build(IEnumerable<LibraryEntry> entries, TimeZoneInfo zone, CancellationToken cancellation = default)
+        => Build(entries, zone, cancellation, null);
+
+    internal static PlaytimeReport Build(IEnumerable<LibraryEntry> entries, TimeZoneInfo zone, CancellationToken cancellation,
+        Action<LibraryEntry, DateOnly, DateTimeOffset, DateTimeOffset>? addSessionWindow)
     {
         var rows = new Dictionary<(string, DateOnly), DailyPlaytime>(); long unknown = 0, total = 0;
         foreach (var e in entries)
@@ -35,6 +39,8 @@ public static class PlaytimeStatistics
                     var next = Midnight(day.AddDays(1), zone); var stop = next < end ? next : end;
                     if (stop <= cursor) continue;
                     var seconds = day == last ? left : Math.Min(left, (long)((decimal)duration * (stop - cursor).Ticks / (end - start).Ticks));
+                    if (duration > 0 && (s.Native is null or { Lifecycle: SessionLifecycle.Completed }))
+                        addSessionWindow?.Invoke(e, day, cursor, stop);
                     left -= seconds; cursor = stop; attributed += seconds;
                     Add(day, seconds, 0, first != last || duration != s.Seconds);
                 }

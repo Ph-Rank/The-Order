@@ -36,7 +36,9 @@ public sealed class LaunchViewModel(ILaunchLibrary library, ILaunchCommands serv
     public bool PositionChanged => prepared?.Outcome == LaunchOutcome.StaleInstallation && prepared.Snapshot is not null;
     public bool CanConfirm => !disposed && !busy && prepared?.Snapshot is not null && prepared.Outcome is LaunchOutcome.PositionReviewRequired or LaunchOutcome.StaleInstallation;
     public bool CanCancel => busy && launch is not null;
-    public Task OpenAsync(string gameId) => Track(async () =>
+    public Task OpenAsync(string gameId) => OpenCore(gameId, null);
+    public Task RefreshAsync() => GameId is { } id ? OpenCore(id, SelectedInstallationId) : Task.CompletedTask;
+    private Task OpenCore(string gameId, string? selectedInstallation) => Track(async () =>
     {
         Leave(); var intent = generation; var token = NewPreparation();
         try
@@ -46,7 +48,8 @@ public sealed class LaunchViewModel(ILaunchLibrary library, ILaunchCommands serv
             entry = loaded;
             Installations = loaded.Installations.Select(i => new LaunchInstallationItem(i.Id,
                 (i.Id == loaded.Preferred ? UiText.Get("首选 · ") : "") + i.Folder)).ToImmutableArray();
-            SelectedInstallationId = LaunchSelection.Select(loaded)?.Id;
+            SelectedInstallationId = LaunchSelection.Select(loaded, selectedInstallation)?.Id
+                ?? LaunchSelection.Select(loaded)?.Id;
             Notify();
             await PrepareCore(intent, token);
         }
@@ -86,6 +89,21 @@ public sealed class LaunchViewModel(ILaunchLibrary library, ILaunchCommands serv
             if (intent == generation) await PrepareCore(intent, NewPreparation());
         }
         catch (OperationCanceledException) { }
+        catch (Exception error) when (error is StaleLibraryRequestException or InvalidDataException
+            || error is LaunchValidationException { Outcome: LaunchOutcome.StaleInstallation })
+        {
+            // A saved edit may retire this page's snapshot. Re-read it for a NEW explicit
+            // confirmation; never approve a changed target or retry a launch implicitly.
+            if (intent == generation)
+            {
+                var reloadedIntent = generation + 1;
+                await RefreshAsync();
+                if (!disposed && generation == reloadedIntent && prepared?.Snapshot is not null)
+                    SetMessage(UiText.Get("启动位置或设置已变化，已重新读取。请核对后再次确认。"));
+            }
+        }
+        catch (LaunchValidationException error) { if (intent == generation) SetMessage(error.Message); }
+        catch (UnauthorizedAccessException) { if (intent == generation) SetMessage(UiText.Get("无法写入本机启动位置记录，请检查资料目录的访问权限后重试。")); }
         catch (Exception) { if (intent == generation) SetMessage(UiText.Get("位置未能保存或已经变化，请重新核对。")); }
         finally { busy = false; Notify(); }
     });

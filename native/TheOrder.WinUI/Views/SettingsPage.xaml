@@ -345,10 +345,10 @@
           <views:SelectedFirstComboBox Grid.Column="1" MinWidth="0" HorizontalAlignment="Stretch" x:Name="NextMoeAccessChoice" OptionChanged="OnNextMoeAccess" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" AutomationProperties.AutomationId="NextMoeAccessMode" l:Localize.Name="访问方式"><ComboBoxItem Content="匿名访问（默认）" /><ComboBoxItem Content="NextMoe 账号" /><ComboBoxItem Content="自定义 API Key" /></views:SelectedFirstComboBox>
          </Grid>
         </Border>
-        <TextBlock Text="{x:Bind NextMoe.AccessMessage, Mode=OneWay}" Visibility="{x:Bind VisibleText(NextMoe.AccessMessage), Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.AutomationId="NextMoeAccessState" />
         <TextBlock x:Name="NextMoeAccountText" Text="{x:Bind NextMoe.AccountName, Mode=OneWay}" Visibility="{x:Bind VisibleText(NextMoe.AccountName), Mode=OneWay}" Style="{StaticResource BodyTextStyle}" TextWrapping="Wrap" AutomationProperties.AutomationId="NextMoeAccount" />
         <Button x:Name="RecoverLoginButton" Content="重置本机登录" Click="OnRecoverLogin" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" HorizontalAlignment="Left" Visibility="Collapsed" />
-        <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8"><Button Content="登录 / 重新登录 NextMoe" Click="OnNextMoeLogin" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" AutomationProperties.AutomationId="NextMoeLogin" /><Button Content="退出本机登录" Click="OnNextMoeLogout" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" AutomationProperties.AutomationId="NextMoeLogout" /><Button Click="OnTestConnection" Content="测试当前访问方式" /><Button Content="取消当前操作" Click="OnCancelNextMoe" Visibility="{x:Bind Visible(NextMoe.Busy), Mode=OneWay}" AutomationProperties.AutomationId="NextMoeCancel" /></views:TagFlowPanel>
+        <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8"><Button Content="{x:Bind NextMoe.LoginAction, Mode=OneWay}" Click="OnNextMoeLogin" Style="{StaticResource AccentButtonStyle}" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" AutomationProperties.AutomationId="NextMoeLogin" /><Button Content="退出本机登录" Click="OnNextMoeLogout" Visibility="{x:Bind Visible(NextMoe.HasSavedAccount), Mode=OneWay}" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" AutomationProperties.AutomationId="NextMoeLogout" /><Button Click="OnTestConnection" Content="测试当前访问方式" /><Button Content="取消当前操作" Click="OnCancelNextMoe" Visibility="{x:Bind Visible(NextMoe.CanCancel), Mode=OneWay}" AutomationProperties.AutomationId="NextMoeCancel" /></views:TagFlowPanel>
+        <Button Content="一键读入评分" Click="OnImportNextMoeRatings" IsEnabled="{x:Bind NextMoe.CanImportRatings, Mode=OneWay}" Visibility="{x:Bind Visible(NextMoe.IsAccount), Mode=OneWay}" AutomationProperties.AutomationId="ImportNextMoeRatings" />
         <TextBlock Text="{x:Bind Online.ConnectionMessage, Mode=OneWay}" Visibility="{x:Bind VisibleConnectionMessage(Online.ConnectionMessage), Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
         <Border Height="1" Background="{ThemeResource DividerBrush}" Margin="0,2" />
         <Border Style="{StaticResource SettingsOptionRowStyle}">
@@ -367,49 +367,10 @@
          <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8"><Button x:Name="ChangeCredentialButton" Click="OnChangeCredential" Visibility="Collapsed" l:Localize.Content="更换密钥" /><Button x:Name="RemoveCredentialButton" Click="OnClearCredential" Visibility="Collapsed" l:Localize.Content="移除密钥" /></views:TagFlowPanel>
          <TextBlock Text="{x:Bind Online.CredentialMessage, Mode=OneWay}" Visibility="{x:Bind VisibleText(Online.CredentialMessage), Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
         </StackPanel></views:SmoothExpander>
-        <views:SmoothExpander x:Name="SyncSettingsGroup" Header="个人数据同步" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnSettingsDisclosureExpanding" Visibility="{x:Bind Visible(NextMoe.IsAccount), Mode=OneWay}" AutomationProperties.AutomationId="SettingsPersonalSync">
-        <StackPanel x:Name="PersonalSyncPanel" Spacing="12" Visibility="Collapsed" SizeChanged="OnSettingsSectionSizeChanged" AutomationProperties.AutomationId="NextMoePersonalSync">
-         <Border Style="{StaticResource SettingsOptionRowStyle}">
-          <Grid ColumnDefinitions="3*,2*" ColumnSpacing="12">
-           <TextBlock l:Localize.Text="游玩时长" VerticalAlignment="Center" TextWrapping="Wrap" />
-           <views:SelectedFirstComboBox Grid.Column="1" MinWidth="0" HorizontalAlignment="Stretch" OptionIndex="{x:Bind NextMoe.TimeDirection, Mode=TwoWay}" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" AutomationProperties.AutomationId="SyncPlaytime" l:Localize.Name="游玩时长"><ComboBoxItem Content="关闭" /><ComboBoxItem Content="从云端导入" /><ComboBoxItem Content="上传到云端" /><ComboBoxItem Content="双向同步" /></views:SelectedFirstComboBox>
-          </Grid>
-         </Border>
-         <Border Style="{StaticResource SettingsOptionRowStyle}">
-          <Grid ColumnDefinitions="3*,2*" ColumnSpacing="12">
-           <TextBlock l:Localize.Text="游玩状态" VerticalAlignment="Center" TextWrapping="Wrap" />
-           <views:SelectedFirstComboBox Grid.Column="1" MinWidth="0" HorizontalAlignment="Stretch" OptionIndex="{x:Bind NextMoe.StateDirection, Mode=TwoWay}" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" AutomationProperties.AutomationId="SyncState" l:Localize.Name="游玩状态"><ComboBoxItem Content="关闭" /><ComboBoxItem Content="从云端导入" /><ComboBoxItem Content="上传到云端" /><ComboBoxItem Content="双向同步" /></views:SelectedFirstComboBox>
-          </Grid>
-         </Border>
-         <Border Style="{StaticResource SettingsOptionRowStyle}">
-          <Grid ColumnDefinitions="3*,2*" ColumnSpacing="12">
-           <TextBlock l:Localize.Text="收藏夹" VerticalAlignment="Center" TextWrapping="Wrap" />
-           <views:SelectedFirstComboBox Grid.Column="1" MinWidth="0" HorizontalAlignment="Stretch" OptionIndex="{x:Bind NextMoe.FolderDirection, Mode=TwoWay}" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" AutomationProperties.AutomationId="SyncFolders" l:Localize.Name="收藏夹"><ComboBoxItem Content="关闭" /><ComboBoxItem Content="从云端导入" /><ComboBoxItem Content="上传到云端" /><ComboBoxItem Content="双向同步" /></views:SelectedFirstComboBox>
-          </Grid>
-         </Border>
-         <CheckBox Content="读取云端评分（只读，不替换本地评分）" IsChecked="{x:Bind NextMoe.ReadRatings, Mode=TwoWay}" AutomationProperties.AutomationId="SyncRatings" />
-         <CheckBox Content="自动同步已确认的项目" IsChecked="{x:Bind NextMoe.Automatic, Mode=TwoWay}" AutomationProperties.AutomationId="SyncAutomatic" />
-         <Button Content="暂停自动同步" Click="OnPauseSync" HorizontalAlignment="Left" AutomationProperties.AutomationId="SyncPause" />
-         <TextBlock Text="{x:Bind NextMoe.LastSync, Mode=OneWay}" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
-         <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8"><Button Content="预览差异" Click="OnPreviewSync" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" AutomationProperties.AutomationId="SyncPreview" /><Button Content="授权收藏夹访问" Click="OnFolderPermission" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" /><Button x:Name="SyncRetryButton" Content="恢复检查 / 重试" Click="OnRetrySync" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" AutomationProperties.AutomationId="SyncRetry" /></views:TagFlowPanel>
-         <Button x:Name="SyncReviewPendingButton" Content="核对并结束旧任务" Click="OnReviewPending" HorizontalAlignment="Left" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" />
-         <StackPanel x:Name="SyncFolderPicker" Spacing="12"><views:SelectedFirstComboBox x:Name="SyncFolderChoice" Header="选择云端收藏夹" OptionsSource="{x:Bind NextMoe.Folders}" DisplayMemberPath="Name" MaxWidth="400" Width="400" HorizontalAlignment="Left" />
-          <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8"><Button Content="设置本地成员" Click="OnMapSyncFolder" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" /><Button Content="创建云端收藏夹" Click="OnCreateSyncFolder" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" /></views:TagFlowPanel>
-          <views:SelectedFirstComboBox x:Name="MappedFolderChoice" Header="已关联的收藏列表" OptionsSource="{x:Bind NextMoe.Mappings}" DisplayMemberPath="Name" MaxWidth="400" Width="400" HorizontalAlignment="Left" /><Button Content="取消这项关联" Click="OnUnmapFolder" HorizontalAlignment="Left" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" />
-         </StackPanel><TextBlock Text="{x:Bind NextMoe.PreviewSummary, Mode=OneWay}" Visibility="{x:Bind VisibleText(NextMoe.PreviewSummary), Mode=OneWay}" TextWrapping="Wrap" />
-         <ListView x:Name="SyncPreviewRows" ItemsSource="{x:Bind NextMoe.Rows}" MaxHeight="520" SelectionMode="None" SizeChanged="OnSettingsSectionSizeChanged" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.IsVerticalScrollChainingEnabled="True" AutomationProperties.AutomationId="SyncPreviewRows">
-          <ListView.ItemTemplate><DataTemplate x:DataType="p:SyncRowView"><StackPanel Spacing="6" Padding="4,10" HorizontalAlignment="Stretch"><TextBlock Text="{x:Bind Title}" FontWeight="SemiBold" TextWrapping="Wrap" /><TextBlock Text="{x:Bind Values}" TextWrapping="Wrap" /><TextBlock Text="{x:Bind Explanation}" TextWrapping="Wrap" Style="{StaticResource MetadataTextStyle}" /><views:SelectedFirstComboBox OptionIndex="{x:Bind Choice, Mode=TwoWay}" MaxWidth="400" Width="400" HorizontalAlignment="Left"><ComboBoxItem Content="跳过" /><ComboBoxItem Content="从云端导入" /><ComboBoxItem Content="上传本地 / 明确移除云端成员" /></views:SelectedFirstComboBox></StackPanel></DataTemplate></ListView.ItemTemplate>
-         </ListView>
-         <CheckBox x:Name="SyncRemovalCheck" Content="我确认：仅对本次明确选中的移除项目删除云端收藏成员（不删除本地作品或游戏文件）" IsChecked="{x:Bind NextMoe.ConfirmCloudRemoval, Mode=TwoWay}" AutomationProperties.AutomationId="SyncConfirmRemoval" />
-         <Button x:Name="SyncApplyButton" Content="确认同步所选项目" Click="OnApplySync" IsEnabled="{x:Bind NextMoe.CanOperate, Mode=OneWay}" HorizontalAlignment="Left" Style="{StaticResource AccentButtonStyle}" AutomationProperties.AutomationId="SyncApply" />
-         <ProgressBar Value="{x:Bind NextMoe.Progress, Mode=OneWay}" Visibility="{x:Bind Visible(NextMoe.Busy), Mode=OneWay}" Maximum="100" Minimum="0" />
-        </StackPanel>
-        </views:SmoothExpander>
-        <TextBlock Text="{x:Bind NextMoe.Message, Mode=OneWay}" Visibility="{x:Bind VisibleText(NextMoe.Message), Mode=OneWay}" TextWrapping="Wrap" Style="{StaticResource SecondaryTextStyle}" AutomationProperties.AutomationId="NextMoeSyncState" AutomationProperties.LiveSetting="Polite" />
        </StackPanel>
         <Border Height="1" Background="{ThemeResource DividerBrush}" Margin="0,4" />
        <StackPanel x:Name="BangumiSection" Spacing="12" AutomationProperties.AutomationId="BangumiAuthorizationSection">
-        <TextBlock Text="番组计划 · 关联作品" FontSize="16" FontWeight="SemiBold" />
+        <TextBlock Text="番组计划 · 关联作品与收藏" FontSize="16" FontWeight="SemiBold" />
         <TextBlock Text="{x:Bind Bangumi.Status, Mode=OneWay}" Style="{StaticResource BodyTextStyle}" TextWrapping="Wrap" AutomationProperties.AutomationId="BangumiAuthorizationStatus" />
         <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8">
          <Button Content="{x:Bind Bangumi.ConnectionAction, Mode=OneWay}" Click="OnBangumiQuickLogin" IsEnabled="{x:Bind Bangumi.CanQuickLogin, Mode=OneWay}" Style="{StaticResource AccentButtonStyle}" AutomationProperties.AutomationId="BangumiQuickLogin" />
@@ -427,6 +388,28 @@
         </StackPanel>
         <TextBlock Text="{x:Bind Bangumi.Message, Mode=OneWay}" TextWrapping="Wrap" Visibility="{x:Bind VisibleText(Bangumi.Message), Mode=OneWay}" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="BangumiAuthorizationMessage" />
        </StackPanel>
+       <Border Height="1" Background="{ThemeResource DividerBrush}" Margin="0,4" />
+       <StackPanel x:Name="VndbSection" Spacing="12" AutomationProperties.AutomationId="VndbAuthorizationSection">
+        <TextBlock Text="VNDB · 游玩状态与评分" FontSize="16" FontWeight="SemiBold" />
+        <TextBlock Text="{x:Bind Vndb.Status, Mode=OneWay}" Style="{StaticResource BodyTextStyle}" TextWrapping="Wrap" AutomationProperties.AutomationId="VndbAuthorizationStatus" />
+        <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8">
+         <Button Content="用令牌连接 VNDB" Click="OnVndbAuthorize" IsEnabled="{x:Bind Vndb.CanOperate, Mode=OneWay}" Style="{StaticResource AccentButtonStyle}" AutomationProperties.AutomationId="VndbAuthorize" />
+         <Button Content="验证授权" Click="OnVndbTest" IsEnabled="{x:Bind Vndb.CanTest, Mode=OneWay}" Visibility="{x:Bind Visible(Vndb.Connected), Mode=OneWay}" AutomationProperties.AutomationId="VndbTestAuthorization" />
+         <Button Content="断开连接" Click="OnVndbRemove" IsEnabled="{x:Bind Vndb.CanOperate, Mode=OneWay}" Visibility="{x:Bind Visible(Vndb.Connected), Mode=OneWay}" AutomationProperties.AutomationId="VndbRemoveAuthorization" />
+        </views:TagFlowPanel>
+        <StackPanel x:Name="VndbEditor" Spacing="10" Visibility="Collapsed" SizeChanged="OnSettingsSectionSizeChanged">
+         <TextBlock Text="在 VNDB 创建令牌，勾选列表写入权限（listwrite），再粘贴到这里。" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
+         <views:ExternalLinkButton Content="在 VNDB 创建令牌" NavigateUri="https://vndb.org/u/tokens" AutomationProperties.AutomationId="VndbTokenPage" />
+         <PasswordBox x:Name="VndbToken" Header="VNDB 访问令牌" PasswordRevealMode="Hidden" MaxLength="72" MaxWidth="480" Width="480" HorizontalAlignment="Left" Loaded="OnSettingsControlLoaded" IsEnabled="{x:Bind Vndb.CanOperate, Mode=OneWay}" AutomationProperties.AutomationId="VndbAccessToken" />
+         <views:TagFlowPanel HorizontalSpacing="8" VerticalSpacing="8">
+          <Button Content="保存并验证" Click="OnVndbSave" IsEnabled="{x:Bind Vndb.CanOperate, Mode=OneWay}" Style="{StaticResource AccentButtonStyle}" AutomationProperties.AutomationId="VndbSaveAuthorization" />
+          <Button Content="收起" Click="OnVndbClose" IsEnabled="{x:Bind Vndb.CanOperate, Mode=OneWay}" />
+         </views:TagFlowPanel>
+        </StackPanel>
+        <TextBlock Text="{x:Bind Vndb.Message, Mode=OneWay}" Visibility="{x:Bind VisibleText(Vndb.Message), Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="VndbAuthorizationMessage" />
+       </StackPanel>
+       <Border Height="1" Background="{ThemeResource DividerBrush}" Margin="0,4" />
+       <Button x:Name="WriteCollectionsButton" Content="一键写入各平台" Click="OnWriteCollections" AutomationProperties.AutomationId="WriteAllCollections" />
      </StackPanel>
      <StackPanel x:Name="LibraryPanel" Spacing="20" Visibility="Collapsed">
        <StackPanel Spacing="16">

@@ -13,7 +13,7 @@
 <p>
   <a href="#下载与安装"><img src="https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=flat-square" alt="Windows 10 / 11 x64"></a>
   <a href="https://github.com/Ph-Rank/The-Order/releases/tag/v1.3.0"><img src="https://img.shields.io/badge/Stable-1.3.0-2EA44F?style=flat-square" alt="稳定版 1.3.0"></a>
-  <a href="https://github.com/Ph-Rank/The-Order/releases/tag/v1.3.1-beta.1"><img src="https://img.shields.io/badge/Beta-1.3.1%20beta%201-DB8A26?style=flat-square" alt="公开测试版 1.3.1-beta.1"></a>
+  <a href="https://github.com/Ph-Rank/The-Order/releases/tag/v1.3.1-beta.2"><img src="https://img.shields.io/badge/Beta-1.3.1%20beta%202-DB8A26?style=flat-square" alt="公开测试版 1.3.1-beta.2"></a>
   <a href="https://t.me/+ONE-Lif0uZBiNzJh"><img src="https://img.shields.io/badge/Telegram-加入交流群-26A5E4?style=flat-square&amp;logo=telegram&amp;logoColor=white" alt="Telegram 交流群"></a>
 </p>
 
@@ -31,7 +31,7 @@
 | 版本 | 适合谁 | 下载 |
 | --- | --- | --- |
 | **正式版 · 1.3.0** | 游戏内攻略、本地阅读与可选 AI 对话 | **[下载 Windows 安装包](https://github.com/Ph-Rank/The-Order/releases/download/v1.3.0/The-Order-1.3.0-Setup-x64.exe)** · [更新说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.3.0) |
-| **测试版 · 1.3.1-beta.1** | 高清游戏内助手、离线使用帮助与发现页改进 | **[下载 Beta 安装包](https://github.com/Ph-Rank/The-Order/releases/download/v1.3.1-beta.1/The-Order-1.3.1-beta.1-Setup-x64.exe)** · [更新说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.3.1-beta.1) |
+| **测试版 · 1.3.1-beta.2** | 启动确认修复、三平台同步与游玩时段图 | **[下载 Beta 安装包](https://github.com/Ph-Rank/The-Order/releases/download/v1.3.1-beta.2/The-Order-1.3.1-beta.2-Setup-x64.exe)** · [更新说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.3.1-beta.2) |
 
 **同一个程序，可在「设置 → 程序更新 → 更新通道」中选择正式版或 Beta。** 切换时沿用当前书架，安装前自动备份。只有主动选择 Beta 才会收到测试版；也可切回兼容的正式版。
 
@@ -120,8 +120,8 @@ Bangumi 连接跨媒体作品，各专业来源补充深度信息。不同季度
 ## 文档与开发
 
 - [稳定版使用指南](https://github.com/Ph-Rank/The-Order/blob/v1.3.0/docs/release/1.3.0/README.md) · [稳定版更新记录](https://github.com/Ph-Rank/The-Order/releases/tag/v1.3.0)
-- [Beta 发布说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.3.1-beta.1) · [Beta 验证范围](https://github.com/Ph-Rank/The-Order/releases/download/v1.3.1-beta.1/VALIDATION.md)
-- [稳定版构建说明](https://github.com/Ph-Rank/The-Order/blob/v1.3.0/docs/release/1.3.0/BUILD.md) · [Beta 构建说明](https://github.com/Ph-Rank/The-Order/blob/v1.3.1-beta.1/docs/release/1.3.1-beta.1/BUILD.md)
+- [Beta 发布说明](https://github.com/Ph-Rank/The-Order/releases/tag/v1.3.1-beta.2) · [Beta 验证范围](https://github.com/Ph-Rank/The-Order/releases/download/v1.3.1-beta.2/VALIDATION.md)
+- [稳定版构建说明](https://github.com/Ph-Rank/The-Order/blob/v1.3.0/docs/release/1.3.0/BUILD.md) · [Beta 构建说明](https://github.com/Ph-Rank/The-Order/blob/v1.3.1-beta.2/docs/release/1.3.1-beta.2/BUILD.md)
 - [开发与数据隔离](DEVELOPMENT.md) · [历史 Electron 文档](https://github.com/Ph-Rank/The-Order/blob/85f06e18976d7a97222d25e2a35bf4aa9d31a789/README.md)
 
 当前原生版本使用 **C# / WinUI 3**。稳定版与 Beta 的对应源码随各自 Release 提供；构建或贡献时，请先选择对应分支 / Tag，阅读其开发说明，并使用独立测试资料目录。

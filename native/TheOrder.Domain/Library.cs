@@ -46,6 +46,7 @@ public sealed record LibraryEntry(
     public ImmutableArray<ManualPlaytime> ManualPlaytime { get; init; } = [];
     public ImmutableArray<string> GuidePaths { get; init; } = [];
     public MetadataMix? MetadataMix { get; init; }
+    public CollectionBindings? CollectionBindings { get; init; }
     public ImmutableArray<MigrationOrigin> MigrationOrigins { get; init; } = [];
     public ImmutableArray<PlaySession> RecordedSessions
         => Sessions.RemoveAll(session => session.Native?.AwaitingRecordingMinimum == true);

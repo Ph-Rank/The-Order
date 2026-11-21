@@ -77,6 +77,8 @@ public sealed class WindowsPersonalSyncStore(NativeConfiguration configuration) 
                 || x.LocalMembers.Length > 10000 || x.LocalMembers.Any(y => !Id(y)))
             || state.Works.GroupBy(x => x.EntryId).Any(x => x.Count() > 1) || state.Folders.GroupBy(x => x.FolderId).Any(x => x.Count() > 1)
             || state.Imported.GroupBy(x => x.WorkId).Any(x => x.Count() > 1) || state.Pending.GroupBy(x => x.Id).Any(x => x.Count() > 1)
+            || state.CatalogRedirect is { } redirect && (!Safe(redirect.EntryId, 200)
+                || !Id(redirect.OldId) || !Id(redirect.NewId) || redirect.OldId == redirect.NewId)
             || !Cursor(state.PlaytimeCursor) || !Cursor(state.StateCursor) || !Cursor(state.RatingCursor) || state.LastSuccess is not null && !Date(state.LastSuccess))
             throw new OnlineException(OnlineFailure.CredentialStorageCorrupt);
     }

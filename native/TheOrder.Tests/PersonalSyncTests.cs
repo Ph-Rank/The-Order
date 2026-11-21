@@ -27,13 +27,37 @@ public sealed class PersonalSyncTests
         public Task<ImmutableArray<LibraryEntry>> SnapshotAsync(CancellationToken c) { c.ThrowIfCancellationRequested(); return Task.FromResult(Entries); }
         public Task ApplyStateAsync(LibraryEntry expected, string status, CancellationToken c)
         { c.ThrowIfCancellationRequested(); var actual = Entries.Single(x => x.Id == expected.Id); if (actual.Status != expected.Status || actual.Metadata?.Id != expected.Metadata?.Id) throw new StaleLibraryRequestException(); Entries = Entries.Replace(actual, actual with { Status = status }); Changes++; return Task.CompletedTask; }
+        public Task<LibraryExtrasDetails> ReadAssociationAsync(string entryId, CancellationToken cancellation)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            var entry = Entries.Single(item => item.Id == entryId);
+            return Task.FromResult(new LibraryExtrasDetails(entry, new(Guid.Empty, entryId, Guid.Empty, entry)));
+        }
+        public Task RepairAssociationAsync(LibraryExtrasDetails details, string oldId, WorkMetadata canonical, bool confirmed,
+            CancellationToken cancellation)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            var entry = Entries.Single(item => item.Id == details.Entry.Id);
+            if (entry.Metadata?.Id != oldId) throw new StaleLibraryRequestException();
+            if (Entries.Any(item => item.Id != entry.Id && item.Metadata?.Id == canonical.Id))
+                throw new InvalidDataException("已有作品使用目标编号。");
+            Entries = Entries.Replace(entry, entry with { Metadata = canonical });
+            return Task.CompletedTask;
+        }
         public Task<string> AddWishlistAsync(WorkMetadata work, CancellationToken c)
         { c.ThrowIfCancellationRequested(); var entry = Entry(work.Title) with { Id = "wishlist-" + work.Id, Metadata = work }; Entries = Entries.Add(entry); Added++; return Task.FromResult(entry.Id); }
     }
-    internal sealed class Catalog : IOnlineCatalog
+    internal sealed class Catalog : IOnlineCatalog, ICatalogSyncIdentities
     {
         public bool Merged;
-        public Task<WorkMetadata> DetailsAsync(string id, bool refresh, CancellationToken c) => Task.FromResult(Work(Merged ? "999" : id));
+        public readonly HashSet<string> Unavailable = new(StringComparer.Ordinal);
+        public readonly Dictionary<string, string> Redirects = new(StringComparer.Ordinal);
+        public Task<ImmutableArray<string>> ConfirmWorkIdsAsync(ImmutableArray<string> ids, CancellationToken cancellation)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            return Task.FromResult<ImmutableArray<string>>(Merged ? [] : [.. ids.Where(id => !Unavailable.Contains(id) && !Redirects.ContainsKey(id))]);
+        }
+        public Task<WorkMetadata> DetailsAsync(string id, bool refresh, CancellationToken c) => Task.FromResult(Work(Merged ? "999" : Redirects.GetValueOrDefault(id) ?? id));
         public Task<OnlinePage> SearchAsync(string q, string? cursor, CancellationToken c) => Task.FromResult(new OnlinePage([], null));
         public Task TestConnectionAsync(CancellationToken c) => Task.CompletedTask;
         public void ClearCache() { }
@@ -45,7 +69,7 @@ public sealed class PersonalSyncTests
         public ImmutableArray<CloudRating> Ratings = [];
         public ImmutableArray<CloudFolder> Folders = [new("10", "合成收藏夹", "42", 0, "2026-10-11T00:00:00Z")];
         public readonly Dictionary<string, ImmutableArray<string>> Members = new() { ["10"] = [] };
-        public int Reads, Writes, Deletes, Creates;
+        public int Reads, RatingReads, Writes, Deletes, Creates;
         public bool LoseResponse, Partial;
         public Func<CancellationToken, Task>? BeforeWrite;
         public Func<string?, CloudPage<CloudPlaytime>>? TimePages;
@@ -56,7 +80,7 @@ public sealed class PersonalSyncTests
         private readonly Dictionary<string, CloudFolder> creations = new(StringComparer.Ordinal);
         public Task<CloudPage<CloudPlaytime>> PlaytimesAsync(string? cursor, CancellationToken c) { Reads++; TimeCursors.Add(cursor); return Task.FromResult(TimePages?.Invoke(cursor) ?? new CloudPage<CloudPlaytime>(Times, null, false)); }
         public Task<CloudPage<CloudWorkState>> StatesAsync(string? cursor, CancellationToken c) { Reads++; return Task.FromResult(new CloudPage<CloudWorkState>(States, null, false)); }
-        public Task<CloudPage<CloudRating>> RatingsAsync(string? cursor, CancellationToken c) { Reads++; return Task.FromResult(new CloudPage<CloudRating>(Ratings, null, false)); }
+        public Task<CloudPage<CloudRating>> RatingsAsync(string? cursor, CancellationToken c) { Reads++; RatingReads++; return Task.FromResult(new CloudPage<CloudRating>(Ratings, null, false)); }
         public Task<CloudPage<CloudFolder>> FoldersAsync(string? cursor, CancellationToken c) { Reads++; return Task.FromResult(new CloudPage<CloudFolder>(Folders, null, false)); }
         public Task<CloudPage<string>> FolderItemsAsync(string id, string? cursor, CancellationToken c) { Reads++; return Task.FromResult(new CloudPage<string>(Members[id], null, false)); }
         public async Task<ImmutableArray<PersonalWriteResult>> WriteAsync(PersonalSyncKind kind, string? folder, ImmutableArray<PersonalWrite> items, string key, CancellationToken c)
@@ -92,17 +116,156 @@ public sealed class PersonalSyncTests
         public readonly NextMoeAuthTests.Fixture Identity = new(); public readonly Store Storage = new(); public readonly Local Library = new(); public readonly Remote Cloud = new(); public readonly Catalog Metadata = new();
         public readonly PersonalSyncCoordinator Sync;
         public Fixture() => Sync = new(Identity.Auth, Cloud, Storage, Library, Metadata, Identity.Time);
-        public Task Login() => Identity.Auth.SignInAsync(true, true, default);
+        public Task Login() => Identity.Auth.SignInAsync(default);
         public Task<AccountSyncState> State() => Sync.CurrentAsync(default);
         public async Task<PersonalSyncResult> Apply(PersonalSyncSettings settings)
         { var preview = await Sync.PreviewAsync(settings, default); return await Sync.ApplyAsync(preview, PersonalSyncCoordinator.DefaultChoices(preview), false, null, default); }
     }
     [Fact] public async Task LoginAloneAndOffPreviewNeverReadOrWritePersonalData()
     {
-        var f = new Fixture(); await f.Login(); var state = await f.State(); Assert.Equal(new PersonalSyncSettings(), state.Settings);
+        var f = new Fixture(); await f.Login(); var state = await f.State();
+        Assert.Equal(new PersonalSyncSettings(PersonalSyncDirection.Bidirectional, PersonalSyncDirection.Bidirectional, PersonalSyncDirection.Bidirectional,
+            Automatic: true), state.Settings);
         var preview = await f.Sync.PreviewAsync(new(), default); Assert.Empty(preview.Rows); Assert.Equal(0, f.Cloud.Reads); Assert.Equal(0, f.Cloud.Writes); Assert.Equal(0, f.Library.Changes);
         Assert.Null(await f.Sync.AutomaticAsync(default));
     }
+    [Fact] public async Task AutomaticSyncWritesVerifiedWorksAndKeepsUnavailableOnesRetryable()
+    {
+        var f = new Fixture();
+        await f.Login();
+        var entry = f.Library.Entries.Single() with { TotalPlaySeconds = 125 };
+        f.Library.Entries = [entry, entry with { Id = "unavailable", Name = "待核对作品", Metadata = Work("201"), TotalPlaySeconds = 245 }];
+        f.Metadata.Unavailable.Add("201");
+
+        var first = await f.Sync.AutomaticAsync(default);
+        Assert.NotNull(first);
+        Assert.Equal(1, first.Completed);
+        Assert.Contains("待核对作品", first.AssociationWarning);
+        Assert.Equal("200", Assert.Single(Assert.Single(f.Cloud.Bodies)).WorkId);
+        Assert.Equal("200", Assert.Single((await f.State()).Works).WorkId);
+
+        f.Metadata.Unavailable.Clear();
+        f.Identity.Time.Now += TimeSpan.FromMinutes(6);
+        var retry = await f.Sync.AutomaticAsync(default);
+        Assert.NotNull(retry);
+        Assert.Null(retry.AssociationWarning);
+        Assert.Equal("201", Assert.Single(f.Cloud.Bodies[1]).WorkId);
+        Assert.Equal(2, (await f.State()).Works.Length);
+    }
+
+    [Fact] public async Task OfficialMergeUpdatesAnAlreadySyncedWorkAndRechecksTheCanonicalCloudRecords()
+    {
+        var f = new Fixture();
+        await f.Login();
+        var entry = f.Library.Entries.Single() with { TotalPlaySeconds = 120 };
+        f.Library.Entries = [entry];
+        f.Metadata.Redirects.Add("200", "412");
+        f.Cloud.Times = [new("412", 2)];
+        f.Cloud.Members["10"] = ["412"];
+        await f.Storage.SaveAsync((await f.State()) with
+        {
+            Works = [new(entry.Id, "200", 120, 2, 2, "planned", null, null, [], Clock)],
+            Imported = [new("200", Rating: 8)],
+            Folders = [new("10", "local-fixture", "合成收藏夹", ["200"], ["200"], Authorized: true)]
+        }, default);
+
+        var result = Assert.IsType<PersonalSyncResult>(await f.Sync.AutomaticAsync(default));
+        Assert.Contains("已更新 1 部作品", result.Message);
+        Assert.Null(result.AssociationWarning);
+        Assert.True(result.Completed >= 1);
+        Assert.Equal("412", Assert.Single(f.Library.Entries).Metadata!.Id);
+        var persisted = await f.State();
+        Assert.Null(persisted.CatalogRedirect);
+        var checkpoint = Assert.Single(persisted.Works);
+        Assert.Equal("412", checkpoint.WorkId);
+        Assert.Equal(2, checkpoint.AgreedMinutes);
+        var folder = Assert.Single(persisted.Folders);
+        Assert.Equal(new[] { "412" }, folder.Members);
+        Assert.Equal(new[] { "412" }, folder.CloudBaseline);
+        Assert.Equal(8, Assert.Single(persisted.Imported).Rating);
+        Assert.Equal(0, f.Cloud.Writes);
+        Assert.Equal(0, f.Cloud.Deletes);
+    }
+
+    [Fact] public async Task OfficialMergeRetriesPreviouslyUnwrittenPlaytimeAgainstTheNewWork()
+    {
+        var f = new Fixture();
+        await f.Login();
+        f.Library.Entries = [f.Library.Entries.Single() with { TotalPlaySeconds = 125 }];
+        f.Metadata.Redirects.Add("200", "47");
+
+        var result = Assert.IsType<PersonalSyncResult>(await f.Sync.AutomaticAsync(default));
+        Assert.Equal(1, result.Completed);
+        Assert.Empty(result.AssociationIssues);
+        Assert.Equal(new PersonalWrite("47", 2), Assert.Single(Assert.Single(f.Cloud.Bodies)));
+        Assert.Equal("47", Assert.Single((await f.State()).Works).WorkId);
+    }
+
+    [Fact] public async Task ConvergingMergesLeaveBothLocalWorksForReview()
+    {
+        var f = new Fixture();
+        await f.Login();
+        var first = f.Library.Entries.Single() with { TotalPlaySeconds = 125 };
+        f.Library.Entries = [first, first with { Id = "another", Metadata = Work("201") }];
+        f.Metadata.Redirects.Add("200", "47");
+        f.Metadata.Redirects.Add("201", "47");
+
+        var result = Assert.IsType<PersonalSyncResult>(await f.Sync.AutomaticAsync(default));
+        Assert.Equal(2, result.AssociationIssues.Length);
+        Assert.All(result.AssociationIssues, issue => Assert.Equal("47", issue.SuggestedId));
+        Assert.Equal(new[] { "200", "201" }, f.Library.Entries.Select(entry => entry.Metadata!.Id));
+        Assert.Empty(f.Cloud.Bodies);
+        Assert.Null((await f.State()).CatalogRedirect);
+    }
+
+    [Fact] public async Task InterruptedLocalMergeFinishesItsBaselineMigrationOnRestart()
+    {
+        var f = new Fixture();
+        await f.Login();
+        var entry = f.Library.Entries.Single();
+        var fence = await f.Identity.Auth.AuthContext.CaptureAsync(default);
+        await f.Storage.SaveAsync((await f.State()) with { Imported = [new("200", Rating: 8)] }, default);
+        f.Storage.FailAt = f.Storage.Saves + 2;
+
+        var first = await f.Sync.RepairCollectionMergeAsync(entry.Id, "200", "47", fence, default);
+        Assert.Null(first.UpdatedId);
+        Assert.NotNull(first.Error);
+        Assert.Equal("47", Assert.Single(f.Library.Entries).Metadata!.Id);
+        Assert.NotNull((await f.State()).CatalogRedirect);
+
+        var restarted = new PersonalSyncCoordinator(f.Identity.Auth, f.Cloud, f.Storage, f.Library, f.Metadata, f.Identity.Time);
+        await restarted.AutomaticAsync(default);
+        var final = await restarted.CurrentAsync(default);
+        Assert.Null(final.CatalogRedirect);
+        Assert.Equal("47", Assert.Single(final.Imported).WorkId);
+    }
+
+    [Fact] public async Task SkipOfUnavailableCloudFolderMemberDoesNotTreatItAsALocalRemoval()
+    {
+        var f = new Fixture();
+        await f.Login();
+        f.Library.Entries = [f.Library.Entries.Single() with { TotalPlaySeconds = 125 }];
+        f.Cloud.Members["10"] = ["201"];
+        f.Metadata.Unavailable.Add("201");
+        await f.Storage.SaveAsync((await f.State()) with
+        {
+            Folders = [new("10", "local-fixture", "合成收藏夹", [], [], Authorized: true)]
+        }, default);
+
+        var partial = await f.Sync.AutomaticAsync(default);
+        Assert.NotNull(partial);
+        Assert.Contains("201", partial.AssociationWarning);
+        Assert.Empty(Assert.Single((await f.State()).Folders).CloudBaseline);
+        Assert.Equal(0, f.Library.Added);
+
+        f.Metadata.Unavailable.Clear();
+        f.Identity.Time.Now += TimeSpan.FromMinutes(6);
+        await f.Sync.AutomaticAsync(default);
+        Assert.Equal(1, f.Library.Added);
+        Assert.Contains("201", Assert.Single((await f.State()).Folders).Members);
+        Assert.Equal(0, f.Cloud.Deletes);
+    }
+
     [Fact] public async Task ImportMinutesPreservesSessionsInstallationsAndPersonalRating()
     {
         var f = new Fixture(); await f.Login(); var before = f.Library.Entries.Single(); f.Cloud.Times = [new("200", 123)];
@@ -230,7 +393,7 @@ public sealed class PersonalSyncTests
     [Fact] public async Task AccountSwitchInvalidatesPreviewAndKeepsSeparateCheckpoints()
     {
         var f = new Fixture(); await f.Login(); var preview = await f.Sync.PreviewAsync(new(Playtime: PersonalSyncDirection.Upload), default);
-        f.Identity.Protocol.Account = "99"; await f.Identity.Auth.SignInAsync(false, false, default);
+        f.Identity.Protocol.Account = "99"; await f.Identity.Auth.SignInAsync(default);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => f.Sync.ApplyAsync(preview, PersonalSyncCoordinator.DefaultChoices(preview), false, null, default));
         Assert.Equal("99", (await f.State()).AccountId); Assert.Empty((await f.State()).Works); Assert.Equal(0, f.Cloud.Writes);
     }

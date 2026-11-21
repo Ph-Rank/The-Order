@@ -88,13 +88,7 @@ public sealed class OfflineLibraryClient(ITransactionalLibraryFactory factory, I
             // Parsing/normalization is part of the Application operation, never a View responsibility.
             var patch = await Task.Run(() =>
             {
-                double? rating = null;
-                if (input.Rating.Length > 0)
-                {
-                    if (!double.TryParse(input.Rating, NumberStyles.Float, CultureInfo.CurrentCulture, out var parsed) || !double.IsFinite(parsed) || parsed is < 0 or > 10)
-                        throw new InvalidDataException(UiText.Get("个人评分须为 0 至 10，留空表示未评分。"));
-                    rating = parsed;
-                }
+                var rating = PersonalValues.ParseRating(input.Rating);
                 var old = details.Personal;
                 return new PersonalPatch
                 {
@@ -104,13 +98,19 @@ public sealed class OfflineLibraryClient(ITransactionalLibraryFactory factory, I
                     Tags = new(input.Tags != string.Join(", ", old.Tags), text.SplitLabels(input.Tags))
                 };
             }, cancellation).ConfigureAwait(false);
-            return Present(await Required().SavePersonalAsync(details.Token, patch, cancellation).ConfigureAwait(false));
+            var receipt = await Required().SavePersonalAsync(details.Token, patch, cancellation).ConfigureAwait(false);
+            var edit = CollectionEdit.From(receipt.Value, details.Token.Original.Status, details.Token.Original.Rating);
+            return Present(receipt) with { CollectionEdits = edit.Fields == CollectionFields.None ? [] : [edit] };
         }
         catch (Exception e) when (Expected(e)) { return Failure(e); }
     }
     public async Task<ClientResult> BatchAsync(ImmutableArray<string> ids, BulkPersonalPatch patch, CancellationToken cancellation)
     {
-        try { return Present(await Required().UpdateBatchAsync(ids, patch, cancellation).ConfigureAwait(false)); }
+        try
+        {
+            var receipt = await Required().UpdateBatchAsync(ids, patch, cancellation).ConfigureAwait(false);
+            return Present(receipt) with { CollectionEdits = receipt.Value };
+        }
         catch (Exception e) when (Expected(e)) { return Failure(e); }
     }
     internal static ClientResult Present<T>(CommitResult<T> receipt) => receipt.Warning is not null

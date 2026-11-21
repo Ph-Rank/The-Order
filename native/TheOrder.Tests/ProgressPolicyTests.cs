@@ -121,7 +121,7 @@ public sealed class ProgressPolicyTests
         Assert.Equal("planned", (string)raw["status"]!); Assert.Equal(4, (int)raw["nativeExtras"]!["version"]!);
         Assert.Equal("wish", (string)raw["nativeExtras"]!["progressStatus"]!); Assert.Equal("wish", Codec.Decode(bytes)[0].Status);
         Assert.Equal("planned", new LegacyLibraryCodec().Decode(bytes)[0].Status);
-        raw["nativeExtras"]!["version"] = 8;
+        raw["nativeExtras"]!["version"] = 9;
         Assert.Equal(LibraryAccess.ValidReadOnly, Codec.Inspect(JsonSerializer.SerializeToUtf8Bytes(tree), Date).Access);
     }
     [Theory] [InlineData(3, "wish")] [InlineData(4, "planned")] [InlineData(4, "unknown")]

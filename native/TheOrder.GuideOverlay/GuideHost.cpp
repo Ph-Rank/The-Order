@@ -197,6 +197,28 @@ struct FlowGdiPainter {
         g.MeasureString(label.c_str(),-1,&font,Gdiplus::RectF(x,y,width,100000),&format,&measured);float height=std::max(size*1.5f,measured.Height);
         if(draw){Gdiplus::SolidBrush brush(color(c));g.DrawString(label.c_str(),-1,&font,Gdiplus::RectF(x,y,width,height+size),&format,&brush);}return height;
     }
+    static int chatFontStyle(int style) {
+        return (style & guide::chat::bold ? Gdiplus::FontStyleBold : 0)
+            | (style & guide::chat::italic ? Gdiplus::FontStyleItalic : 0);
+    }
+    static void chatFormat(Gdiplus::StringFormat& format) {
+        format.SetFormatFlags(format.GetFormatFlags() | Gdiplus::StringFormatFlagsNoWrap | Gdiplus::StringFormatFlagsMeasureTrailingSpaces);
+    }
+    float measureChatRun(std::string_view value, float size, int style) {
+        const auto label = wide(std::string(value));
+        Gdiplus::Font font(style & guide::chat::code ? L"Consolas" : L"Microsoft YaHei UI", size, chatFontStyle(style), Gdiplus::UnitPixel);
+        Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic()); chatFormat(format);
+        Gdiplus::RectF measured;
+        g.MeasureString(label.c_str(), int(label.size()), &font, Gdiplus::PointF(0,0), &format, &measured);
+        return measured.Width;
+    }
+    void drawChatRun(std::string_view value, float x, float y, float size, guide::flow::Color textColor, int style) {
+        const auto label = wide(std::string(value));
+        Gdiplus::Font font(style & guide::chat::code ? L"Consolas" : L"Microsoft YaHei UI", size, chatFontStyle(style), Gdiplus::UnitPixel);
+        Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic()); chatFormat(format);
+        Gdiplus::SolidBrush brush(color(textColor));
+        g.DrawString(label.c_str(), int(label.size()), &font, Gdiplus::PointF(x,y), &format, &brush);
+    }
     void draft(const std::string& value,guide::flow::Rect r,float size,guide::flow::Color c,const guide::chat::Header& h){
         // Measure and draw with the same font/width on the output surface. The
         // hidden source editor's line wrapping need not match the scaled UI.
@@ -274,7 +296,10 @@ static void paint(HWND window) {
             light?guide::flow::Color{43,46,51}:guide::flow::Color{233,236,241},false);
         if(attribution&&!besideModes)
             controls.text(document.attribution,{controlInset,heading.attributionY,controlWidth,14*s},11*s,caption,false);
-        button(g,L"收起",width-controlInset-heading.closeWidth,heading.top,heading.closeWidth,heading.rowHeight,s,0);
+        const float closeX = width - controlInset - heading.closeWidth;
+        controls.text("收起", {closeX,heading.top,heading.closeWidth,heading.rowHeight}, 13*s,
+            light ? guide::flow::Color{43,44,47} : guide::flow::Color{233,235,239}, true);
+        hit(closeX, heading.top, heading.closeWidth, heading.rowHeight, 0, 0);
         Gdiplus::Pen divider(rule,s);
         g.DrawLine(&divider,controlInset,heading.ruleY,width-controlInset,heading.ruleY);
         guide::local::sourceBar(controls,localState,h,

@@ -3,7 +3,7 @@ using TheOrder.Domain;
 
 namespace TheOrder.Application;
 
-// No page-owned network logic. All remote writes pass an explicit preview/choice and durable journal.
+// All remote writes pass a validated plan and durable journal.
 public sealed partial class PersonalSyncCoordinator(INextMoeAccess auth, INextMoePersonalApi remote, IPersonalSyncStore store,
     IPersonalSyncLibrary library, IOnlineCatalog catalog, TimeProvider? clock = null)
 {
@@ -21,8 +21,8 @@ public sealed partial class PersonalSyncCoordinator(INextMoeAccess auth, INextMo
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellation, fence.Changed);
         var status = await auth.StatusAsync(stop.Token).ConfigureAwait(false);
         if (status.Mode != NextMoeAccessMode.Account || status.Account is null) throw new OnlineException(OnlineFailure.UserIdentityRequired);
-        var state = await store.LoadAsync(status.Account.Id, NextMoeOAuthIdentity.ClientId, stop.Token).ConfigureAwait(false)
-            ?? new(status.Account.Id, NextMoeOAuthIdentity.ClientId, new(), [], [], [], []);
+        var state = await store.LoadAsync(status.Account.Id, NextMoeOAuthIdentity.ClientId, stop.Token).ConfigureAwait(false);
+        state ??= new(status.Account.Id, NextMoeOAuthIdentity.ClientId, AuthorizedSettings(status), [], [], [], []);
         return auth.AuthContext.Accept(fence, () => { stop.Token.ThrowIfCancellationRequested(); return state; });
     }
     public Task<PersonalSyncPreview> PreviewAsync(PersonalSyncSettings settings, CancellationToken cancellation)
@@ -36,6 +36,7 @@ public sealed partial class PersonalSyncCoordinator(INextMoeAccess auth, INextMo
             var fence = await auth.AuthContext.CaptureAsync(cancellation).ConfigureAwait(false);
             using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellation, fence.Changed);
             var state = await CurrentAsync(stop.Token).ConfigureAwait(false);
+            state = await FinishCatalogRedirectAsync(state, fence, stop.Token).ConfigureAwait(false);
             var local = await library.SnapshotAsync(stop.Token).ConfigureAwait(false);
             var cloud = await ReadRemote(settings, state, stop.Token, incremental).ConfigureAwait(false);
             var rows = ImmutableArray.CreateBuilder<PersonalSyncRow>();
@@ -127,7 +128,7 @@ public sealed partial class PersonalSyncCoordinator(INextMoeAccess auth, INextMo
     }
     private sealed record ReadCache(string Account, long Generation, PersonalSyncSettings Settings, RemoteSnapshot Snapshot, DateTimeOffset FullRead);
     private ReadCache? readCache;
-    private DateTimeOffset nextAutomatic;
+    private (long Generation, DateTimeOffset Time) nextAutomatic;
     private static ImmutableArray<T> Merge<T>(ImmutableArray<T> old, ImmutableArray<T> incoming, Func<T, string> key)
     { var values = old.ToDictionary(key, StringComparer.Ordinal); foreach (var item in incoming) values[key(item)] = item; return [.. values.Values]; }
     internal static async Task<(ImmutableArray<T> Items, string? Cursor)> All<T>(Func<string?, CancellationToken, Task<CloudPage<T>>> read, int maximum, CancellationToken cancellation, string? startingCursor = null)
@@ -167,8 +168,13 @@ public sealed partial class PersonalSyncCoordinator(INextMoeAccess auth, INextMo
         }
         finally { serial.Release(); }
     }
-    public async Task<PersonalSyncResult> ApplyAsync(PersonalSyncPreview preview, IReadOnlyDictionary<string, PersonalSyncChoice> choices,
+    public Task<PersonalSyncResult> ApplyAsync(PersonalSyncPreview preview, IReadOnlyDictionary<string, PersonalSyncChoice> choices,
         bool confirmCloudRemoval, IProgress<(int Completed, int Total)>? progress, CancellationToken cancellation)
+        => ApplyCoreAsync(preview, choices, confirmCloudRemoval, progress, cancellation, automatic: false);
+
+    private async Task<PersonalSyncResult> ApplyCoreAsync(PersonalSyncPreview preview, IReadOnlyDictionary<string, PersonalSyncChoice> choices,
+        bool confirmCloudRemoval, IProgress<(int Completed, int Total)>? progress, CancellationToken cancellation, bool automatic,
+        bool repairAssociations = true, ImmutableArray<NextMoeAssociationIssue> previousIssues = default)
     {
         await serial.WaitAsync(cancellation).ConfigureAwait(false);
         try
@@ -177,31 +183,78 @@ public sealed partial class PersonalSyncCoordinator(INextMoeAccess auth, INextMo
             auth.AuthContext.Accept(preview.Auth, () => true);
             using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellation, preview.Auth.Changed);
             var state = await CurrentAsync(stop.Token).ConfigureAwait(false);
-            if (state.AccountId != preview.AccountId || state.Pending.Length != 0 || state.FolderCreations?.Length > 0) throw new OnlineException(OnlineFailure.Conflict);
+            if (state.AccountId != preview.AccountId || state.Pending.Length != 0 || state.FolderCreations?.Length > 0 || state.CatalogRedirect is not null)
+                throw new OnlineException(OnlineFailure.Conflict);
             var selected = preview.Rows.Where(x => choices.TryGetValue(x.Id, out var choice) && choice != PersonalSyncChoice.Skip).ToArray();
             if (choices.Keys.Except(preview.Rows.Select(x => x.Id), StringComparer.Ordinal).Any()) throw new OnlineException(OnlineFailure.InvalidRequest);
             if (selected.Any(row => !Enum.IsDefined(choices[row.Id])
                 || choices[row.Id] == PersonalSyncChoice.Upload && row.Upload is null && !row.DeleteCloud
                 || choices[row.Id] == PersonalSyncChoice.Import && row.Import is null)) throw new OnlineException(OnlineFailure.InvalidRequest);
             var freshLocal = await library.SnapshotAsync(stop.Token).ConfigureAwait(false);
-            var freshRemote = await ReadRemote(preview.Settings, state, stop.Token).ConfigureAwait(false);
-            if (selected.Any(x => x.Kind == PersonalSyncKind.Rating && x.Import?.Rating != freshRemote.Ratings.SingleOrDefault(y => y.WorkId == x.WorkId)?.Overall))
-                throw new OnlineException(OnlineFailure.Conflict);
-            var ids = selected.Select(x => x.WorkId).Distinct(StringComparer.Ordinal).ToArray();
+            var duplicateWorkIds = freshLocal.Where(MetadataMixing.HasNextMoeIdentity).GroupBy(x => x.Metadata!.Id, StringComparer.Ordinal)
+                .Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet(StringComparer.Ordinal);
+            IEnumerable<(string WorkId, string Title)> syncTargets = selected.Select(row => (row.WorkId, row.Title));
+            if (automatic)
+                syncTargets = syncTargets.Concat(freshLocal.Where(MetadataMixing.HasNextMoeIdentity).Select(entry => (entry.Metadata!.Id, entry.Name)));
+            var workTargets = syncTargets.DistinctBy(target => target.WorkId, StringComparer.Ordinal).ToArray();
+            var ids = workTargets.Select(target => target.WorkId).ToArray();
+            var unavailable = new HashSet<string>(StringComparer.Ordinal);
             if (catalog is ICatalogSyncIdentities batchIdentities)
+            {
                 foreach (var batch in ids.Chunk(100))
                 {
                     var confirmed = await batchIdentities.ConfirmWorkIdsAsync([.. batch], stop.Token).ConfigureAwait(false);
-                    if (batch.Except(confirmed, StringComparer.Ordinal).Any()) throw new OnlineException(OnlineFailure.Conflict);
+                    unavailable.UnionWith(batch.Except(confirmed, StringComparer.Ordinal));
+                    if (!automatic && unavailable.Count != 0) throw new OnlineException(OnlineFailure.Conflict);
                 }
-            else foreach (var id in ids)
-                if ((await catalog.DetailsAsync(id, false, stop.Token).ConfigureAwait(false)).Id != id) throw new OnlineException(OnlineFailure.Conflict);
+            }
+            else
+            {
+                foreach (var id in ids)
+                {
+                    try
+                    {
+                        if ((await catalog.DetailsAsync(id, false, stop.Token).ConfigureAwait(false)).Id == id) continue;
+                        if (!automatic) throw new OnlineException(OnlineFailure.Conflict);
+                        unavailable.Add(id);
+                    }
+                    catch (OnlineException e) when (automatic && e.Failure == OnlineFailure.NotFound)
+                    { unavailable.Add(id); }
+                }
+            }
+
+            string? associationWarning = null;
+            ImmutableArray<NextMoeAssociationIssue> associationIssues = [];
+            if (unavailable.Count > 0)
+            {
+                var repair = await RepairMissingAssociationsAsync(workTargets, unavailable, freshLocal, state, preview.Auth,
+                    previousIssues.IsDefault ? [] : previousIssues, automatic && repairAssociations, stop.Token).ConfigureAwait(false);
+                associationIssues = repair.Issues;
+                associationWarning = associationIssues.IsEmpty ? null : AssociationMessage(associationIssues);
+                if (repair.Repaired > 0)
+                    return new(0, 0, 0, "已更新 NextMoe 关联，正在重新核对同步。", associationWarning)
+                    { RepairedAssociations = repair.Repaired, AssociationIssues = associationIssues };
+
+                selected = selected.Where(row => !unavailable.Contains(row.WorkId)).ToArray();
+                if (selected.Length == 0)
+                    return new(0, 0, 0, associationWarning ?? "没有可同步的项目。", associationWarning)
+                    { AssociationIssues = associationIssues };
+            }
+
+            if (automatic && selected.Length == 0) return new(0, 0, preview.Rows.Count(row => row.Conflict), "本轮没有可同步的项目。");
+
+            var freshRemote = await ReadRemote(preview.Settings, state, stop.Token).ConfigureAwait(false);
+            if (selected.Any(x => x.Kind == PersonalSyncKind.Rating && x.Import?.Rating != freshRemote.Ratings.SingleOrDefault(y => y.WorkId == x.WorkId)?.Overall))
+                throw new OnlineException(OnlineFailure.Conflict);
+
             foreach (var row in selected)
             {
                 var local = row.EntryId is null ? null : freshLocal.SingleOrDefault(x => x.Id == row.EntryId);
                 var expected = row.EntryId is null ? null : preview.LocalSnapshot.SingleOrDefault(x => x.Id == row.EntryId);
-                if (row.EntryId is not null && (local is null || expected is null || local.Metadata?.Id != row.WorkId
-                    || local.EffectivePlaySeconds != expected.EffectivePlaySeconds || local.Status != expected.Status)) throw new OnlineException(OnlineFailure.Conflict);
+                if (duplicateWorkIds.Contains(row.WorkId)
+                    || row.EntryId is not null && (local is null || expected is null || !MetadataMixing.HasNextMoeIdentity(local)
+                        || local.Metadata?.Id != row.WorkId || local.EffectivePlaySeconds != expected.EffectivePlaySeconds || local.Status != expected.Status))
+                    throw new OnlineException(OnlineFailure.Conflict);
                 if (row.Kind == PersonalSyncKind.Playtime && !PersonalSyncPlanning.SameTime(activeRemote.Times.SingleOrDefault(x => x.WorkId == row.WorkId), freshRemote.Times.SingleOrDefault(x => x.WorkId == row.WorkId))
                     || row.Kind == PersonalSyncKind.State && !PersonalSyncPlanning.SameState(activeRemote.States.SingleOrDefault(x => x.WorkId == row.WorkId), freshRemote.States.SingleOrDefault(x => x.WorkId == row.WorkId))
                     || row.Kind == PersonalSyncKind.Folder && (!freshRemote.Members.TryGetValue(row.FolderId!, out var members) || members.Contains(row.WorkId) != activeRemote.Members[row.FolderId!].Contains(row.WorkId)))
@@ -281,6 +334,7 @@ public sealed partial class PersonalSyncCoordinator(INextMoeAccess auth, INextMo
                 if (timeRow is null && stateRow is null) continue;
                 var captured = preview.LocalSnapshot.Single(x => x.Id == entry.Id);
                 checkpoints.TryGetValue(entry.Id, out var before);
+                if (before?.WorkId != entry.Metadata!.Id) before = null;
                 var cloudTime = timeRow is null ? before?.CloudMinutes : choices[timeRow.Id] == PersonalSyncChoice.Upload ? timeRow.Upload!.Minutes : timeRow.Import!.Minutes;
                 var agreed = timeRow is null ? before?.AgreedMinutes : Math.Max(cloudTime ?? 0, captured.EffectivePlaySeconds / 60);
                 long carry = before?.CarriedSeconds ?? 0;
@@ -300,12 +354,25 @@ public sealed partial class PersonalSyncCoordinator(INextMoeAccess auth, INextMo
                     var baseline = members.ToHashSet(StringComparer.Ordinal);
                     foreach (var row in selected.Where(x => x.Kind == PersonalSyncKind.Folder && x.FolderId == folder.FolderId && successful.Contains(x.Id)))
                     { if (row.DeleteCloud && choices[row.Id] == PersonalSyncChoice.Upload || row.DeleteLocalMembership && choices[row.Id] == PersonalSyncChoice.Import) baseline.Remove(row.WorkId); else baseline.Add(row.WorkId); }
+                    // Unavailable works retain their previous baseline so skipped additions can be retried.
+                    if (unavailable.Count > 0)
+                    {
+                        baseline.ExceptWith(unavailable);
+                        baseline.UnionWith(folder.CloudBaseline.Where(unavailable.Contains));
+                    }
+                    // A skipped removal retains its baseline so a later poll cannot treat it as a new addition.
+                    foreach (var row in preview.Rows.Where(x => x.FolderId == folder.FolderId
+                        && (x.DeleteCloud || x.DeleteLocalMembership) && !successful.Contains(x.Id)))
+                        baseline.Add(row.WorkId);
                     mappings[folder.FolderId] = folder with { CloudBaseline = [.. baseline], Cursor = freshRemote.FolderCursors.GetValueOrDefault(folder.FolderId), UpdatedAt = Now.ToString("o"), Authorized = failed == 0 };
                 }
             state = state with { Works = checkpoints.Values.ToArray(), Folders = mappings.Values.ToArray(), LastSuccess = failed == 0 ? Now.ToString("o") : state.LastSuccess,
                 PlaytimeCursor = freshRemote.TimeCursor ?? state.PlaytimeCursor, StateCursor = freshRemote.StateCursor ?? state.StateCursor, RatingCursor = freshRemote.RatingCursor ?? state.RatingCursor };
             await SaveFenced(state, preview.Auth, stop.Token).ConfigureAwait(false); active = null; activeRemote = null; activeState = null;
-            return new(successful.Count, failed, preview.Rows.Count(x => x.Conflict && (!choices.TryGetValue(x.Id, out var choice) || choice == PersonalSyncChoice.Skip)), failed == 0 ? "所选项目已同步，本地历史和私人资料保留。" : $"已完成 {successful.Count} 项，{failed} 项未成功；失败项没有标记为已同步，请重新预览后重试。");
+            var message = failed > 0 ? $"已完成 {successful.Count} 项，{failed} 项未成功。失败项可重新预览后重试。"
+                : associationWarning is null ? "所选项目已同步，本地历史和私人资料保留。" : $"已完成 {successful.Count} 项。";
+            return new(successful.Count, failed, preview.Rows.Count(x => x.Conflict && (!choices.TryGetValue(x.Id, out var choice) || choice == PersonalSyncChoice.Skip)),
+                message, associationWarning) { AssociationIssues = associationIssues };
         }
         finally { serial.Release(); }
     }
@@ -354,7 +421,7 @@ public sealed partial class PersonalSyncCoordinator(INextMoeAccess auth, INextMo
                     Folders = [.. state.Folders.Where(x => x.FolderId != folder.Id), new(folder.Id, Guid.NewGuid().ToString("D"), folder.Name, creation.LocalMembers, [])] };
                 await SaveFenced(state, fence, stop.Token).ConfigureAwait(false); succeeded++;
             }
-            var fresh = await ReadRemote(state.Settings, state, stop.Token).ConfigureAwait(false);
+            var fresh = await ReadRemote(state.Settings with { ReadRatings = false }, state, stop.Token).ConfigureAwait(false);
             foreach (var intent in state.Pending)
             {
                 if (!DateTimeOffset.TryParse(intent.CreatedAt, out var at) || Now - at > TimeSpan.FromHours(23) || intent.Before?.Length != intent.Items.Length)
@@ -386,46 +453,122 @@ public sealed partial class PersonalSyncCoordinator(INextMoeAccess auth, INextMo
         }
         finally { serial.Release(); }
     }
-    public async Task<PersonalSyncResult?> AutomaticAsync(CancellationToken cancellation)
+    public async Task<int> ImportRatingsAsync(CancellationToken cancellation)
     {
-        var state = await CurrentAsync(cancellation).ConfigureAwait(false);
-        if (!state.Settings.Automatic || state.LastSuccess is null || state.Pending.Length > 0 || state.FolderCreations?.Length > 0) return null;
-        var local = await library.SnapshotAsync(cancellation).ConfigureAwait(false);
+        await serial.WaitAsync(cancellation).ConfigureAwait(false);
+        try
+        {
+            var fence = await auth.AuthContext.CaptureAsync(cancellation).ConfigureAwait(false);
+            using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellation, fence.Changed);
+            var state = await CurrentAsync(stop.Token).ConfigureAwait(false);
+            var cloud = await All(remote.RatingsAsync, 20000, stop.Token).ConfigureAwait(false);
+            if (cloud.Items.GroupBy(rating => rating.WorkId, StringComparer.Ordinal).Any(group => group.Count() > 1))
+                throw new OnlineException(OnlineFailure.InvalidResponse);
+
+            var local = await library.SnapshotAsync(stop.Token).ConfigureAwait(false);
+            var ratings = cloud.Items.ToDictionary(rating => rating.WorkId, StringComparer.Ordinal);
+            var imported = state.Imported.ToDictionary(facts => facts.WorkId, StringComparer.Ordinal);
+            var count = 0;
+            var changed = false;
+            foreach (var group in local.Where(MetadataMixing.HasNextMoeIdentity).GroupBy(entry => entry.Metadata!.Id, StringComparer.Ordinal))
+            {
+                if (group.Count() != 1) continue;
+                var id = group.Key;
+                ratings.TryGetValue(id, out var rating);
+                if (rating is not null) count++;
+                imported.TryGetValue(id, out var previous);
+                if (rating?.Overall == previous?.Rating) continue;
+                var facts = (previous ?? new ImportedPersonalFacts(id)) with
+                { Rating = rating?.Overall, FetchedAt = rating?.UpdatedAt ?? previous?.FetchedAt };
+                if (facts.Rating is null && facts.Minutes is null && facts.State is null) imported.Remove(id);
+                else imported[id] = facts;
+                changed = true;
+            }
+            if (changed)
+                await SaveFenced(state with { Imported = [.. imported.Values] }, fence, stop.Token).ConfigureAwait(false);
+            return auth.AuthContext.Accept(fence, () => { stop.Token.ThrowIfCancellationRequested(); return count; });
+        }
+        finally { serial.Release(); }
+    }
+
+    private static PersonalSyncSettings AuthorizedSettings(NextMoeAuthStatus status)
+    {
+        var folders = status.CanWriteFolders ? PersonalSyncDirection.Bidirectional
+            : status.CanReadFolders ? PersonalSyncDirection.Import : PersonalSyncDirection.Off;
+        return new(PersonalSyncDirection.Bidirectional, PersonalSyncDirection.Bidirectional, folders,
+            Automatic: !status.NeedsLogin && status.CanWriteFolders);
+    }
+
+    public async Task<PersonalSyncResult?> AutomaticAsync(CancellationToken cancellation, bool force = false)
+    {
+        var fence = await auth.AuthContext.CaptureAsync(cancellation).ConfigureAwait(false);
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellation, fence.Changed);
+        var status = await auth.StatusAsync(stop.Token).ConfigureAwait(false);
+        if (status is not { Mode: NextMoeAccessMode.Account, Account: { }, NeedsLogin: false, CanWriteFolders: true }) return null;
+        if (!force && nextAutomatic.Generation == fence.Generation && nextAutomatic.Time > Now) return null;
+
+        var state = await CurrentAsync(stop.Token).ConfigureAwait(false);
+        if (state.Pending.Length != 0 || state.FolderCreations?.Length > 0)
+            return new(0, 0, 0, "有未核对结果的 NextMoe 同步任务。");
+        var local = await library.SnapshotAsync(stop.Token).ConfigureAwait(false);
         if (local.Any(x => x.Sessions.Any(s => s.Native is { IsTerminal: false }))) return null;
-        // Poll remote changes at a bounded cadence, using real cursors where available. Full folder snapshots detect removals.
-        var workChanged = state.Works.Any(b => local.Any(x => x.Id == b.EntryId && (state.Settings.Playtime != PersonalSyncDirection.Off && x.EffectivePlaySeconds != b.LocalSeconds
-            || state.Settings.State != PersonalSyncDirection.Off && x.Status != b.LocalState)));
-        var folderChanged = state.Settings.Folders != PersonalSyncDirection.Off && state.Folders.Any(x => x.Authorized && !x.Members.Order().SequenceEqual(x.CloudBaseline.Order()));
-        if (!workChanged && !folderChanged && nextAutomatic > Now) return null;
-        nextAutomatic = Now.AddMinutes(5);
-        var preview = await PreviewCore(state.Settings, true, cancellation).ConfigureAwait(false);
+        if (state.Folders.Length == 0 && !local.Any(MetadataMixing.HasNextMoeIdentity)) return null;
+
+        nextAutomatic = (fence.Generation, Now.AddMinutes(5));
+        var preview = await PreviewCore(AuthorizedSettings(status), true, stop.Token).ConfigureAwait(false);
+        state = await CurrentAsync(stop.Token).ConfigureAwait(false);
+        var choices = AuthorizedChoices(preview, state);
+        var result = await ApplyCoreAsync(preview, choices, false, null, stop.Token, automatic: true).ConfigureAwait(false);
+        if (result.RepairedAssociations == 0)
+            return !force && choices.Count == 0 && result.AssociationWarning is null ? null : result;
+
+        preview = await PreviewCore(preview.Settings, false, stop.Token).ConfigureAwait(false);
+        state = await CurrentAsync(stop.Token).ConfigureAwait(false);
+        choices = AuthorizedChoices(preview, state);
+        var retried = choices.Count == 0
+            ? new PersonalSyncResult(0, 0, preview.Rows.Count(row => row.Conflict), "本轮没有可同步的项目。",
+                result.AssociationWarning) { AssociationIssues = result.AssociationIssues }
+            : await ApplyCoreAsync(preview, choices, false, null, stop.Token, automatic: true, repairAssociations: false,
+                previousIssues: result.AssociationIssues).ConfigureAwait(false);
+        return retried with { Message = $"已更新 {result.RepairedAssociations} 部作品的 NextMoe 关联。{retried.Message}" };
+    }
+
+    private static Dictionary<string, PersonalSyncChoice> AuthorizedChoices(PersonalSyncPreview preview, AccountSyncState state)
+    {
         var choices = DefaultChoices(preview);
-        if (preview.Rows.Any(x => x.Conflict)) return new(0, 0, preview.Rows.Count(x => x.Conflict), "自动同步发现冲突，已暂停相关项目。请打开同步预览选择要保留的记录。");
-        // New/unbaselined works are never silently included in a previously authorized job.
+        var selected = new Dictionary<string, PersonalSyncChoice>(StringComparer.Ordinal);
+        var imported = state.Imported.ToDictionary(x => x.WorkId, StringComparer.Ordinal);
         foreach (var row in preview.Rows)
         {
-            bool permitted = row.Kind switch { PersonalSyncKind.Rating => false,
-                PersonalSyncKind.Folder => state.Folders.Any(x => x.FolderId == row.FolderId && x.Authorized),
-                _ => row.EntryId is not null && state.Works.Any(x => x.EntryId == row.EntryId && x.WorkId == row.WorkId) };
-            if (!permitted) choices[row.Id] = PersonalSyncChoice.Skip;
-            if (row.Kind is PersonalSyncKind.Playtime or PersonalSyncKind.State)
+            if (row.Conflict || row.DeleteCloud || row.DeleteLocalMembership) continue;
+            var choice = choices[row.Id];
+            if (choice == PersonalSyncChoice.Skip) continue;
+            if (row.Kind == PersonalSyncKind.Folder)
             {
-                var basis = state.Works.SingleOrDefault(x => x.EntryId == row.EntryId && x.WorkId == row.WorkId);
-                var entry = preview.LocalSnapshot.SingleOrDefault(x => x.Id == row.EntryId);
-                if (basis is null || entry is null) continue;
-                bool unchanged = row.Kind == PersonalSyncKind.Playtime
-                    ? entry.EffectivePlaySeconds == basis.LocalSeconds && activeRemote!.Times.SingleOrDefault(x => x.WorkId == row.WorkId)?.Minutes == basis.CloudMinutes
-                    : entry.Status == basis.LocalState && activeRemote!.States.SingleOrDefault(x => x.WorkId == row.WorkId) is { } status && status.State == basis.CloudState && status.Completion == basis.Completion;
-                if (unchanged) choices[row.Id] = PersonalSyncChoice.Skip;
-                // The API offers replacement writes but no compare-and-swap. A bidirectional remote overwrite requires a manual preview.
-                var direction = row.Kind == PersonalSyncKind.Playtime ? state.Settings.Playtime : state.Settings.State;
-                if (choices[row.Id] == PersonalSyncChoice.Upload && direction == PersonalSyncDirection.Bidirectional)
-                    choices[row.Id] = PersonalSyncChoice.Skip;
+                selected.Add(row.Id, choice);
+                continue;
+            }
+
+            imported.TryGetValue(row.WorkId, out var previous);
+            if (row.Kind == PersonalSyncKind.Playtime)
+            {
+                if (row.Import is { } cloudTime && (choice == PersonalSyncChoice.Import || row.Upload?.Minutes == cloudTime.Minutes))
+                {
+                    if (cloudTime.Minutes != previous?.Minutes) selected.Add(row.Id, PersonalSyncChoice.Import);
+                }
+                else if (row.Upload?.Minutes > (row.Import?.Minutes ?? 0))
+                    selected.Add(row.Id, PersonalSyncChoice.Upload);
+            }
+            else if (row.Kind == PersonalSyncKind.State)
+            {
+                if (row.Import is { } cloudState && (choice == PersonalSyncChoice.Import || row.Upload?.State == cloudState.State))
+                {
+                    if (cloudState.State != previous?.State || cloudState.Completion != previous?.Completion)
+                        selected.Add(row.Id, PersonalSyncChoice.Import);
+                }
             }
         }
-        if (choices.Values.All(x => x == PersonalSyncChoice.Skip)) return workChanged
-            ? new(0, 0, 0, "发现本地新记录。双向上传需要打开预览并确认，避免覆盖其他设备刚更新的累计值或状态。") : null;
-        return await ApplyAsync(preview, choices, false, null, cancellation).ConfigureAwait(false);
+        return selected;
     }
     // Explicit recovery escape hatch: inspect current cloud state, retire ambiguous intents without resending them.
     public async Task<PersonalSyncResult> ReviewPendingAsync(CancellationToken cancellation)
@@ -438,7 +581,8 @@ public sealed partial class PersonalSyncCoordinator(INextMoeAccess auth, INextMo
             var state = await CurrentAsync(stop.Token).ConfigureAwait(false);
             var settings = state.Settings with { Playtime = state.Pending.Any(x => x.Kind == PersonalSyncKind.Playtime) ? PersonalSyncDirection.Import : state.Settings.Playtime,
                 State = state.Pending.Any(x => x.Kind == PersonalSyncKind.State) ? PersonalSyncDirection.Import : state.Settings.State,
-                Folders = state.FolderCreations?.Length > 0 || state.Pending.Any(x => x.Kind == PersonalSyncKind.Folder) ? PersonalSyncDirection.Import : state.Settings.Folders };
+                Folders = state.FolderCreations?.Length > 0 || state.Pending.Any(x => x.Kind == PersonalSyncKind.Folder) ? PersonalSyncDirection.Import : state.Settings.Folders,
+                ReadRatings = false };
             await ReadRemote(settings, state, stop.Token).ConfigureAwait(false);
             await SaveFenced(state with { Pending = [], FolderCreations = [] }, fence, stop.Token).ConfigureAwait(false);
             active = null; activeRemote = null; activeState = null;

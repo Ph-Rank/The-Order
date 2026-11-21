@@ -547,12 +547,53 @@ public sealed partial class LibraryPage : Page, IImageHost
             { await new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = UiText.Get("请选择作品"), Content = UiText.Get("批量修改支持 1 至 1000 个条目。"), CloseButtonText = UiText.Get("知道了") }.ShowInShellAsync(); return; }
             var status = new SelectedFirstComboBox { Header = UiText.Get("游玩状态"), OptionsSource = new[] { UiText.Get("保持不变") }.Concat(TheOrder.Domain.GameProgress.Ordered.Select(StatusNames.Display)).ToArray(), OptionIndex = 0 };
             var favorite = new SelectedFirstComboBox { Header = UiText.Get("收藏"), OptionsSource = new[] { UiText.Get("保持不变"), UiText.Get("收藏"), UiText.Get("取消收藏") }, OptionIndex = 0 };
-            var categories = new TextBox { Header = UiText.Get("分类（逗号或换行分隔）") }; var tags = new TextBox { Header = UiText.Get("个人标签（逗号或换行分隔）") };
+            var rating = new TextBox { Header = UiText.Get("个人评分"), PlaceholderText = UiText.Get("0–10，留空保持不变"), MaxLength = 20 };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(rating, "BatchPersonalRating");
+            var categories = new TextBox { Header = UiText.Get("分类（逗号或换行分隔）") };
+            var tags = new TextBox { Header = UiText.Get("个人标签（逗号或换行分隔）") };
             var remove = new CheckBox { Content = UiText.Get("移除这些分类和标签（默认追加）") };
-            var panel = new StackPanel { Spacing = 12 }; foreach (var element in new UIElement[] { status, favorite, categories, tags, remove }) panel.Children.Add(element);
-            var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = UiText.Format($"批量修改 {ids.Length} 部作品"), Content = panel, PrimaryButtonText = UiText.Get("保存一次修改"), CloseButtonText = UiText.Get("取消"), DefaultButton = ContentDialogButton.Primary };
-            if (await dialog.ShowInShellAsync() == ContentDialogResult.Primary)
-                await ViewModel.ApplyBatchAsync(ids, PreferenceValidation.Statuses[status.OptionIndex], new[] { "keep", "yes", "no" }[favorite.OptionIndex], categories.Text, tags.Text, remove.IsChecked == true);
+            var failure = new InfoBar { Severity = InfoBarSeverity.Error, IsClosable = false };
+            var panel = new StackPanel { Spacing = 12 };
+            foreach (var element in new UIElement[] { status, rating, favorite, categories, tags, remove, failure }) panel.Children.Add(element);
+            var scroll = new ScrollViewer { Content = panel, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+            var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme, Title = UiText.Format($"批量修改 {ids.Length} 部作品"),
+                Content = scroll, PrimaryButtonText = UiText.Get("保存一次修改"), CloseButtonText = UiText.Get("取消"), DefaultButton = ContentDialogButton.Primary };
+            bool saving = false;
+            dialog.Opened += (_, _) => scroll.MaxHeight = Math.Clamp((XamlRoot?.Size.Height ?? 800) - 230, 160, 560);
+            dialog.Closing += (_, e) => { if (saving) e.Cancel = true; };
+            dialog.PrimaryButtonClick += async (_, e) =>
+            {
+                e.Cancel = true;
+                var deferral = e.GetDeferral();
+                saving = true;
+                scroll.IsEnabled = dialog.IsPrimaryButtonEnabled = false;
+                failure.IsOpen = false;
+                try
+                {
+                    var result = await ViewModel.ApplyBatchAsync(ids, PreferenceValidation.Statuses[Math.Max(0, status.OptionIndex)],
+                        new[] { "keep", "yes", "no" }[Math.Max(0, favorite.OptionIndex)], categories.Text, tags.Text, remove.IsChecked == true, rating.Text);
+                    e.Cancel = !result.IsCommitted;
+                    if (e.Cancel)
+                    {
+                        failure.Message = result.Message;
+                        failure.IsOpen = true;
+                        failure.StartBringIntoView();
+                    }
+                }
+                catch (Exception)
+                {
+                    failure.Message = UiText.Get("保存未能完成，请重试。修改仍保留在窗口中。");
+                    failure.IsOpen = true;
+                }
+                finally
+                {
+                    saving = false;
+                    scroll.IsEnabled = dialog.IsPrimaryButtonEnabled = true;
+                    deferral.Complete();
+                }
+            };
+            await dialog.ShowInShellAsync();
         }
         catch (Exception) { ViewModel.ReportUnexpected(); }
     }
