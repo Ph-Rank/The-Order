@@ -235,7 +235,7 @@ public sealed partial class SettingsPage : Page
     private IEnumerable<Microsoft.UI.Xaml.FrameworkElement> SettingsControls()
     {
         foreach (var control in Descendants(SettingsColumn))
-            if (control is ComboBox or PasswordBox) yield return control;
+            if (control is SelectedFirstComboBox or PasswordBox) yield return control;
         yield return ApiCredential;
         yield return BangumiToken;
     }
@@ -298,7 +298,7 @@ public sealed partial class SettingsPage : Page
             }).ToArray(),
             actionCaptions = Descendants(column).OfType<Button>().Where(IsVisible)
                 .Select(button => button.Content as string).Where(caption => caption is not null).ToArray(),
-            controls = Descendants(SettingsColumn).Where(element => element is ComboBox or PasswordBox).Select(control =>
+            controls = Descendants(SettingsColumn).Where(element => element is SelectedFirstComboBox or PasswordBox).Select(control =>
             {
                 var point = control.TransformToVisual(SettingsColumn).TransformPoint(new Windows.Foundation.Point());
                 return new { control.Name, visible = IsLoaded && IsVisible(control), alignment = control.HorizontalAlignment.ToString(),

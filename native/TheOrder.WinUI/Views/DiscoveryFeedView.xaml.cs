@@ -324,7 +324,7 @@ public sealed partial class DiscoveryFeedView : UserControl
         while (calendarBands.Count > bands.Length) calendarBands.RemoveAt(calendarBands.Count - 1);
     }
 
-    private void ToggleDay(DateOnly day)
+    internal void ToggleDay(DateOnly day)
     {
         selectedDay = selectedDay == day ? null : day;
         RefreshDaySelection();

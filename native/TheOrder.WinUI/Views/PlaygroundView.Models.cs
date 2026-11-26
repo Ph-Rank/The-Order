@@ -18,7 +18,7 @@ public sealed partial class PlaygroundView
     private bool modelPickerCredentialAvailable, modelPickerCheckingCredential;
     private string? modelPickerCredentialBinding;
     private Action? dismissModelPicker;
-    private static string OptionsBinding(PlaygroundConversationOptions options) => options.Provider + "|" + options.Endpoint;
+    private static string OptionsBinding(PlaygroundConversationOptions options) => options.Provider + "|" + options.Endpoint + "|" + options.ChatGptAccountId;
     private PlaygroundConversationOptions CatalogueOptions => modelPickerOptions ?? Draft;
     private string ModelBinding => OptionsBinding(CatalogueOptions);
     private bool CatalogueCredentialAvailable => modelPickerOptions is not null
@@ -30,7 +30,7 @@ public sealed partial class PlaygroundView
     private string ModelCatalogueStatus => modelLoadErrors.GetValueOrDefault(ModelBinding) ?? (modelsLoading ? "正在读取模型目录…"
         : modelPickerOptions is not null && modelPickerCheckingCredential ? "正在读取连接状态…"
         : !PlaygroundAuthorizationPolicy.CanSend(service.Snapshot.Settings) ? "尚未授予全局发送授权。"
-        : !CatalogueCredentialAvailable ? "此连接尚未保存 API Key。"
+        : !CatalogueCredentialAvailable ? CatalogueOptions.Provider == PlaygroundProviderKind.ChatGPT ? "请在「连接与授权 → OpenAI」中登录 ChatGPT 并授权使用额度。" : "此连接尚未保存 API Key。"
         : modelCatalogues.GetValueOrDefault(ModelBinding) is not { } catalogue ? "尚未读取此连接的模型目录。"
         : catalogue.Models.IsEmpty ? catalogue.RawCount == 0 ? "接口返回的模型目录为空。" : "目录中没有符合系列筛选的对话型号。" : "");
 
@@ -48,7 +48,7 @@ public sealed partial class PlaygroundView
     }
     private void SyncModelCatalogue()
     {
-        currentModelProvider.Text = ProviderNames[(int)Draft.Provider];
+        currentModelProvider.Text = ProviderName(Draft.Provider);
         var selectedModels = modelCatalogues.GetValueOrDefault(OptionsBinding(Draft))?.Models ?? [];
         currentModelTitle.Text = string.IsNullOrWhiteSpace(Draft.Model) ? "选择模型" : ModelDisplayName(Draft.Model, selectedModels.FirstOrDefault(x => x.Id == Draft.Model)?.Name);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(currentModel, "选择模型：" + currentModelTitle.Text);
@@ -82,7 +82,7 @@ public sealed partial class PlaygroundView
             && pickerRequest == (modelPickerOptions is not null);
         try
         {
-            var raw = await service.ListModelsAsync(options.Provider, options.Endpoint, cancellation.Token);
+            var raw = await service.ListModelsAsync(options.Provider, options.Endpoint, cancellation.Token, options.ChatGptAccountId);
             if (!CurrentRequest()) return;
             var latest = PlaygroundModelSelection.SelectLatest(options.Provider, raw);
             modelCatalogues[binding] = new(latest, raw.Length);

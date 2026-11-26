@@ -47,9 +47,9 @@ public sealed partial class RefractionGallery
     private bool FrostActive => frostRequested && frostCurrent && UsesOwnedScene && sceneOpticalActive;
     // Mode 3 = 完全清透: continuous material over the sharp scene; no blurred copy needed.
     private bool ClearActive => bodyMode == 3 && UsesOwnedScene && sceneOpticalActive;
-    private bool UsesOptical => ComparisonMode.SelectedIndex is 3 or 4;
+    private bool UsesOptical => ComparisonMode.OptionIndex is 3 or 4;
     private bool MaterialActive => lens is not null || (optical?.Ready == true && (!UsesOwnedScene || sceneOpticalActive));
-    private OpticalProfile Profile => ComparisonMode.SelectedIndex == 3 ? OpticalProfile.Reference : OpticalProfile.Daily;
+    private OpticalProfile Profile => ComparisonMode.OptionIndex == 3 ? OpticalProfile.Reference : OpticalProfile.Daily;
     private object OpticalEvidence => new
     {
         ProcessGraphics = OpticalRenderer.Diagnostics(),
@@ -171,7 +171,7 @@ public sealed partial class RefractionGallery
     private void TestReleasePendingSnapshot()
     {
         if (!UsesOptical || optical?.Ready != true || snapshotBusy) throw new InvalidOperationException("Ready optical owner required for snapshot race");
-        BackgroundMode.SelectedIndex = BackgroundMode.SelectedIndex == 0 ? 1 : 0;
+        BackgroundMode.OptionIndex = BackgroundMode.OptionIndex == 0 ? 1 : 0;
         if (!snapshotBusy) throw new InvalidOperationException("Snapshot race did not enter an in-flight capture");
         snapshotRaceChecks++;
         ReleaseOptical(); // Old capture finishes/discards before the latest owner captures.
@@ -281,7 +281,7 @@ public sealed partial class RefractionGallery
         if (snapshotScale != scale) snapshotDirty = true;
         if (snapshotDirty)
         {
-            scene ??= GalleryScene.Create(BackgroundMode.SelectedIndex,
+            scene ??= GalleryScene.Create(BackgroundMode.OptionIndex,
                 Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_MATERIAL_REFERENCE"),
                 Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_PERFORMANCE_COVERS"));
             frostCurrent = false; // any scene revision invalidates the native copy

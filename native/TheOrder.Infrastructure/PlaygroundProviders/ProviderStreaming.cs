@@ -36,9 +36,10 @@ internal sealed partial class NativePlaygroundProvider
         if (request.Phase != PlaygroundPhase.Discussion) throw new PlaygroundProviderException(new(PlaygroundFailureKind.Unsupported, "公开检索必须使用独立的检索入口。"));
         JsonArray items = InitialItems(request); JsonObject body = BuildRequest(request, items, true);
         var round = new ProviderRound(this, request);
-        using var response = await RequestAsync(request.Endpoint, GenerationPath, HttpMethod.Post, body, cancellation).ConfigureAwait(false);
+        using var response = await RequestAsync(request.Endpoint, GenerationPath, HttpMethod.Post, body, cancellation, request.ChatGptAccountId).ConfigureAwait(false);
         if (response.Content.Headers.ContentType?.MediaType?.Equals("text/event-stream", StringComparison.OrdinalIgnoreCase) != true)
         {
+            if (Kind == PlaygroundProviderKind.ChatGPT) throw Invalid("ChatGPT 额度接口没有返回所需的事件流；未重试或切换计费方式。");
             var json = await ReadJsonAsync(response, cancellation).ConfigureAwait(false);
             foreach (var ev in round.Final(json)) yield return ev;
         }
@@ -123,7 +124,9 @@ internal sealed partial class NativePlaygroundProvider
             }
             if (Terminal) yield break;
             if (type == "error" || type == "response.failed")
-            { ReadUsage(json["response"] ?? json); Failure = new(StructuredErrorKind(json["error"] ?? json["response"]?["error"]) ?? PlaygroundFailureKind.Network, "服务商在生成过程中返回错误；未自动重发请求。"); Terminal = true; yield break; }
+            { ReadUsage(json["response"] ?? json); var error = json["error"] ?? json["response"]?["error"];
+                Failure = owner.Kind == PlaygroundProviderKind.ChatGPT ? ChatGptFailure(StructuredErrorCode(error))
+                    : new(StructuredErrorKind(error) ?? PlaygroundFailureKind.Network, "服务商在生成过程中返回错误；未自动重发请求。"); Terminal = true; yield break; }
             if (owner.Kind == PlaygroundProviderKind.Claude)
             {
                 if (type == "message_start") ReadUsage(json["message"]);
@@ -289,7 +292,8 @@ internal sealed partial class NativePlaygroundProvider
         }
         public IEnumerable<PlaygroundProviderEvent> Final(JsonNode root)
         {
-            if (root["error"] is not null) { ReadUsage(root); Failure = new(PlaygroundFailureKind.InvalidResponse, "服务商未完成本次回复。"); Terminal = true; yield break; }
+            if (root["error"] is not null) { ReadUsage(root); Failure = owner.Kind == PlaygroundProviderKind.ChatGPT
+                ? ChatGptFailure(StructuredErrorCode(root["error"])) : new(PlaygroundFailureKind.InvalidResponse, "服务商未完成本次回复。"); Terminal = true; yield break; }
             if (owner.Kind == PlaygroundProviderKind.Claude)
             {
                 var content = root["content"] as JsonArray ?? throw Invalid(); Output = new(new JsonObject { ["role"] = "assistant", ["content"] = content.DeepClone() });
@@ -310,6 +314,8 @@ internal sealed partial class NativePlaygroundProvider
             {
                 string status = String(root["status"]); Terminal = status is "completed" or "incomplete";
                 StopReason = status == "incomplete" ? "max_tokens" : "end_turn";
+                if (owner.Kind == PlaygroundProviderKind.ChatGPT && status == "incomplete")
+                    Failure = new(PlaygroundFailureKind.InvalidResponse, "ChatGPT 回复未完整完成，已保留收到的正文；未自动重发请求。");
                 Output = root["output"]?.DeepClone() as JsonArray ?? new JsonArray(blocks.Values.Select(v => v.DeepClone()).ToArray());
                 foreach (var item in Output) SearchData(item);
             }
@@ -336,6 +342,8 @@ internal sealed partial class NativePlaygroundProvider
                 {
                     string type = String(call?["type"]); if (type is not ("function_call" or "tool_use")) continue;
                     string name = String(call?["name"]), id = String(call?[owner.Kind == PlaygroundProviderKind.Claude || owner.Kind == PlaygroundProviderKind.Gemini ? "id" : "call_id"]);
+                    if (owner.Kind == PlaygroundProviderKind.ChatGPT && call?["namespace"] is not null && String(call["namespace"]) != "the_order")
+                        throw Invalid("ChatGPT 请求了本会话未授权的工具命名空间。");
                     if (id.Length is < 1 or > 200 || !ids.Add(id) || !owner.Capabilities(request.Model, request.Endpoint).Tools
                         || !request.Tools.Any(t => t.Name == name)) throw Invalid("服务商请求了未授权或重复的工具调用。");
                     string args = owner.Kind == PlaygroundProviderKind.Claude ? call?["input"]?.ToJsonString() ?? "{}"
@@ -467,7 +475,7 @@ internal sealed partial class NativePlaygroundProvider
         {
             // OpenAI reports hosted search invocations as typed output items,
             // not as citations. Missing completion status stays unknown.
-            if (owner.Kind != PlaygroundProviderKind.OpenAI) return;
+            if (owner.Kind is not (PlaygroundProviderKind.OpenAI or PlaygroundProviderKind.ChatGPT)) return;
             var calls = Output.Where(item => String(item?["type"]) == "web_search_call").ToArray();
             if (calls.Any(item => String(item?["status"]) != "completed" || String(item?["id"]).Length == 0)
                 || calls.Select(item => String(item?["id"])).Distinct(StringComparer.Ordinal).Count() != calls.Length) return;

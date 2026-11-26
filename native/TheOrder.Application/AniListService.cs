@@ -9,10 +9,10 @@ public sealed partial class AniListService(IAniListProvider provider, IAniListCa
 {
     private readonly IMediaIdentityDecisions decisions = identityDecisions ?? (disk as IMediaIdentityDecisionOwner)?.IdentityDecisions ?? new SessionMediaIdentityDecisions();
     public static readonly TimeSpan FreshFor = TimeSpan.FromHours(24), SearchFreshFor = TimeSpan.FromHours(6), MaximumStaleAge = TimeSpan.FromDays(14);
-    private readonly object gate = new(); private readonly SemaphoreSlim commits = new(1);
-    private readonly Dictionary<string, AniListCacheValue> memory = new();
+    private readonly SemaphoreSlim commits = new(1);
+    private readonly MediaMetadataMemory<AniListCacheValue> memory = new(static value => value.Key, static value => value);
+    private object Gate => memory.Gate;
     private readonly Dictionary<string, long> latest = new(); private long sequence;
-    private long cacheMutation;
     private DateTimeOffset Now => (clock ?? (() => DateTimeOffset.UtcNow))();
     public Task<AniListMatch> MatchAsync(AniListSource source, string? query, bool refresh, CancellationToken cancellation)
         => MatchCoreAsync(source, query, refresh, true, cancellation);
@@ -145,7 +145,7 @@ public sealed partial class AniListService(IAniListProvider provider, IAniListCa
             if (disk is not null) await disk.WriteAsync(value, cancellation).ConfigureAwait(false);
             // A completed atomic replacement is the committed state, even if
             // cancellation arrived after the namespace switch.
-            lock (gate) { Remember(value); cacheMutation++; }
+            lock (Gate) memory.Commit(value);
             return binding;
         }
         finally { commits.Release(); }
@@ -156,7 +156,7 @@ public sealed partial class AniListService(IAniListProvider provider, IAniListCa
         cancellation.ThrowIfCancellationRequested(); var previous = await ReadAsync(key, cancellation).ConfigureAwait(false);
         var needsPlayback = previous?.Details is { Media.Kind: AniListMediaKind.Anime, HasPlaybackMetadata: false };
         if (!refresh && previous is not null && !needsPlayback && Now - previous.CachedAtUtc < fresh) return (previous, true, false, null);
-        long version; lock (gate) latest[key] = version = ++sequence;
+        long version; lock (Gate) latest[key] = version = ++sequence;
         try
         {
             var value = await fetch(cancellation).ConfigureAwait(false); cancellation.ThrowIfCancellationRequested();
@@ -172,54 +172,28 @@ public sealed partial class AniListService(IAniListProvider provider, IAniListCa
         {
             await SaveIfCurrentAsync(key, version, new(key, Now, Rejected: true), cancellation).ConfigureAwait(false); throw;
         }
-        finally { lock (gate) { if (latest.GetValueOrDefault(key) == version) latest.Remove(key); } }
+        finally { lock (Gate) { if (latest.GetValueOrDefault(key) == version) latest.Remove(key); } }
     }
     private async Task SaveIfCurrentAsync(string key, long version, AniListCacheValue value, CancellationToken cancellation)
     {
         await commits.WaitAsync(cancellation).ConfigureAwait(false);
         try
         {
-            bool owns; lock (gate) owns = latest.GetValueOrDefault(key) == version;
+            bool owns; lock (Gate) owns = latest.GetValueOrDefault(key) == version;
             if (!owns) return;
             var persisted = false;
             if (disk is not null) try { await disk.WriteAsync(value, cancellation).ConfigureAwait(false); persisted = true; }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
             if (!persisted) cancellation.ThrowIfCancellationRequested();
-            lock (gate)
+            lock (Gate)
             {
-                if (persisted || latest.GetValueOrDefault(key) == version) { Remember(value); cacheMutation++; }
+                if (persisted || latest.GetValueOrDefault(key) == version) memory.Commit(value);
             }
         }
         finally { commits.Release(); }
     }
-    private async Task<AniListCacheValue?> ReadAsync(string key, CancellationToken cancellation)
-    {
-        bool Valid(AniListCacheValue? value) => value is not null && value.Key == key && AniListValidation.Cache(value) && !value.Rejected
-            && value.CachedAtUtc <= Now.AddMinutes(5) && (value.Binding is not null || Now - value.CachedAtUtc <= MaximumStaleAge);
-        while (true)
-        {
-            cancellation.ThrowIfCancellationRequested(); long observedMutation;
-            lock (gate)
-            {
-                if (memory.TryGetValue(key, out var current))
-                { if (!Valid(current)) return null; Remember(current); return current; }
-                observedMutation = cacheMutation;
-            }
-            if (disk is null) return null;
-            AniListCacheValue? value = null;
-            try { value = await disk.ReadAsync(key, cancellation).ConfigureAwait(false); }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
-            cancellation.ThrowIfCancellationRequested();
-            lock (gate)
-            {
-                // A single bounded epoch also covers a newer value that was
-                // committed and then evicted while this disk read was pending.
-                if (cacheMutation != observedMutation) continue;
-                if (!Valid(value)) return null;
-                Remember(value!); return value;
-            }
-        }
-    }
-    private void Remember(AniListCacheValue value)
-    { memory.Remove(value.Key); memory[value.Key] = value; while (memory.Count > 64) memory.Remove(memory.Keys.First()); }
+    private Task<AniListCacheValue?> ReadAsync(string key, CancellationToken cancellation) =>
+        memory.ReadAsync(key, value => value is not null && value.Key == key && AniListValidation.Cache(value) && !value.Rejected
+            && value.CachedAtUtc <= Now.AddMinutes(5) && (value.Binding is not null || Now - value.CachedAtUtc <= MaximumStaleAge),
+            disk is null ? null : disk.ReadAsync, cancellation);
 }

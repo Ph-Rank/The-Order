@@ -8,7 +8,9 @@ namespace TheOrder.Infrastructure.PlaygroundProviders;
 
 internal sealed partial class NativePlaygroundProvider
 {
-    public async Task<ImmutableArray<PlaygroundModel>> ListModelsAsync(string endpoint, CancellationToken cancellation)
+    public Task<ImmutableArray<PlaygroundModel>> ListModelsAsync(string endpoint, CancellationToken cancellation)
+        => ListModelsForAccountAsync(endpoint, null, cancellation);
+    public async Task<ImmutableArray<PlaygroundModel>> ListModelsForAccountAsync(string endpoint, string? accountId, CancellationToken cancellation)
     {
         endpoint = PlaygroundProviderEndpoints.Normalize(Kind, endpoint);
         var result = ImmutableArray.CreateBuilder<PlaygroundModel>();
@@ -24,15 +26,16 @@ internal sealed partial class NativePlaygroundProvider
                 // This is a directory byte/page boundary, not a paid tool-call
                 // allowance. Never return a silently truncated partial catalog.
                 if (pages.Count >= 100 || !pages.Add(path)) throw Invalid("模型目录分页重复或超过安全容量；未返回不完整列表。");
-                using var response = await RequestAsync(endpoint, path, HttpMethod.Get, null, cancellation).ConfigureAwait(false);
+                using var response = await RequestAsync(endpoint, path, HttpMethod.Get, null, cancellation, accountId).ConfigureAwait(false);
                 var json = await ReadJsonAsync(response, cancellation).ConfigureAwait(false);
-                if (json is not JsonObject || json[Kind == PlaygroundProviderKind.Gemini ? "models" : "data"] is not JsonArray models)
+                if (json is not JsonObject || json[Kind is PlaygroundProviderKind.Gemini or PlaygroundProviderKind.ChatGPT ? "models" : "data"] is not JsonArray models)
                     throw Invalid("模型目录缺少有效列表；未将接口异常当成空目录。");
                 foreach (var item in models)
                 {
                     if (item is not JsonObject) throw Invalid("模型目录条目格式异常。");
+                    if (Kind == PlaygroundProviderKind.ChatGPT && String(item["visibility"]) != "list") continue;
                     string id;
-                    try { id = CleanModel(String(item[Kind == PlaygroundProviderKind.Gemini ? "name" : "id"])); }
+                    try { id = CleanModel(String(item[Kind == PlaygroundProviderKind.Gemini ? "name" : Kind == PlaygroundProviderKind.ChatGPT ? "slug" : "id"])); }
                     catch (PlaygroundProviderException) { throw Invalid("模型目录包含无效编号；未将格式异常当作空目录。"); }
                     if (!modelIds.Add(id)) continue;
                     if (result.Count >= 10000) throw Invalid("模型目录超过安全容量；未返回不完整列表。");

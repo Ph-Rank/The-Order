@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using TheOrder.Application.Playground;
@@ -63,7 +64,10 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
     private readonly StackPanel empty = new() { Spacing = 10, MaxWidth = 440, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock emptyTitle = new() { FontSize = 21, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock emptyDescription = new() { FontSize = 14, LineHeight = 24, TextWrapping = TextWrapping.Wrap };
-    private readonly Button emptyConfigure = new() { Content = "配置服务商", HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly Button emptyConfigure = new() { Content = "连接与授权", HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly TextBlock openAiUsage = new() { Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Center,
+        Margin = new Thickness(8, 0, 10, 0), TextTrimming = TextTrimming.CharacterEllipsis };
+    private readonly Button emptyChatGpt = new() { Content = "连接 OpenAI", HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed };
     private readonly Button retryInitialization = new() { Content = "重试读取", Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly Button restoreState = new() { Content = "恢复上一个有效版本", Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBox composer = new() { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 32, MaxHeight = 184, Padding = new Thickness(0), FontSize = 15.5,
@@ -119,9 +123,9 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
         if (RequestedTheme != theme) RequestedTheme = theme;
         PaintWorkspace("window-theme"); QueueThemePaint("window-theme");
     }
-    public PlaygroundView(PlaygroundService service)
+    public PlaygroundView(PlaygroundService service, IChatGptAccounts? chatGptAccounts = null)
     {
-        this.service = service; PlaygroundAppearance.Scope(this); IsTabStop = false; workbenchFrame.Child = layout; Content = workbenchFrame;
+        this.service = service; this.chatGptAccounts = chatGptAccounts; PlaygroundAppearance.Scope(this); IsTabStop = false; workbenchFrame.Child = layout; Content = workbenchFrame;
         FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI");
         AutomationProperties.SetAutomationId(this, "PlaygroundWorkspace");
         layout.RowDefinitions.Add(new());
@@ -216,6 +220,9 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
         ScrollViewer.SetHorizontalScrollMode(messages, ScrollMode.Disabled); ScrollViewer.SetHorizontalScrollBarVisibility(messages, ScrollBarVisibility.Disabled);
         messages.MinWidth = composer.MinWidth = 0; messages.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         empty.Children.Add(emptyTitle); empty.Children.Add(emptyDescription); empty.Children.Add(emptyConfigure); empty.Children.Add(retryInitialization); empty.Children.Add(restoreState); reading.Children.Add(empty);
+        empty.Children.Insert(2, emptyChatGpt); PlaygroundAppearance.Apply(emptyChatGpt, "PGButton");
+        AutomationProperties.SetAutomationId(emptyChatGpt, "PlaygroundConnectChatGpt");
+        emptyChatGpt.Click += async (_, _) => await RunAsync(() => ShowConnectionForProviderAsync(PlaygroundProviderKind.ChatGPT));
         emptyConfigure.Click += async (_, _) => await RunAsync(ShowConnectionAsync);
         retryInitialization.Click += async (_, _) => { initialize = null; await InitializeAsync(); };
         restoreState.Click += async (_, _) => await RestoreAsync();
@@ -246,7 +253,10 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
         attach.HorizontalAlignment = HorizontalAlignment.Left; attach.Click += async (_, _) => await RunAsync(PickFilesAsync); inputActions.Children.Add(attach);
         PlaygroundAppearance.Apply(send, "PGPrimaryButton"); send.Content = PlaygroundAppearance.Icon("\uE74A", 16);
         AutomationProperties.SetAutomationId(send, "PlaygroundSend"); send.Click += async (_, _) => { if (service.IsGenerating && service.ActiveConversationId == selected) service.Stop(); else await SendAsync(); };
-        send.VerticalAlignment = VerticalAlignment.Bottom; Grid.SetColumn(send, 1); inputActions.Children.Add(send); Grid.SetRow(inputActions, 2); inputContent.Children.Add(inputActions);
+        openAiUsage.Style = PlaygroundAppearance.Style("PGMetadataTextStyle");
+        AutomationProperties.SetAutomationId(openAiUsage, "PlaygroundOpenAiUsage");
+        var submit = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Bottom, Children = { openAiUsage, send } };
+        Grid.SetColumn(submit, 1); inputActions.Children.Add(submit); Grid.SetRow(inputActions, 2); inputContent.Children.Add(inputActions);
         goActive.Click += async (_, _) => { if (service.ActiveConversationId is { } id) await RunAsync(() => SelectAsync(id)); };
         Grid.SetRow(input, 2); reader.Children.Add(input);
         PlaygroundAppearance.Apply(emptyConfigure, "PGButton"); PlaygroundAppearance.Apply(retryInitialization, "PGButton"); PlaygroundAppearance.Apply(restoreState, "PGButton");
@@ -286,13 +296,11 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
     private void AppearanceChanged() => DispatcherQueue.TryEnqueue(() => QueueThemePaint("policy"));
     private MenuFlyout StyledMenu()
     {
-        var menu = new MenuFlyout(); var style = new Style(typeof(MenuFlyoutPresenter)) { BasedOn = PlaygroundAppearance.Style("PGMenuFlyoutPresenter") };
-        style.Setters.Add(new Setter(Control.BackgroundProperty, PlaygroundAppearance.Brush(this, "PGPanelBrush")));
-        style.Setters.Add(new Setter(Control.ForegroundProperty, PlaygroundAppearance.Brush(this, "PGTextBrush")));
-        style.Setters.Add(new Setter(Control.BorderBrushProperty, PlaygroundAppearance.Brush(this, "PGBorderBrush")));
-        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
-        style.Setters.Add(new Setter(Control.CornerRadiusProperty, new CornerRadius(12)));
-        menu.MenuFlyoutPresenterStyle = style; return menu;
+        var style = new Style(typeof(MenuFlyoutPresenter))
+        { BasedOn = (Style)Microsoft.UI.Xaml.Application.Current.Resources["OrderDropDownMenuStyle"] };
+        style.Setters.Add(new Setter(FrameworkElement.RequestedThemeProperty, PlaygroundAppearance.ThemeFor(this)));
+        return new MenuFlyout { MenuFlyoutPresenterStyle = style, ShouldConstrainToRootBounds = true,
+            Placement = FlyoutPlacementMode.BottomEdgeAlignedRight };
     }
     private void ServiceChanged(PlaygroundChange change)
     {
@@ -467,6 +475,7 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
             : !PlaygroundAuthorizationPolicy.CanSend(service.Snapshot.Settings) ? "先完成发送授权" : "开始对话";
         emptyDescription.Visibility = Visibility.Collapsed;
         emptyConfigure.Visibility = !credentialAvailable || !PlaygroundAuthorizationPolicy.CanSend(service.Snapshot.Settings) ? Visibility.Visible : Visibility.Collapsed;
+        emptyChatGpt.Visibility = chatGptAccounts is not null && !credentialAvailable ? Visibility.Visible : Visibility.Collapsed;
         if (forceOptions) SyncOptions();
         SyncGenerationSettings(); UpdateConnectionStatus(); UpdateActions(); ArrangeWorkspace();
         if (replacedSelection) _ = RefreshCredentialAsync();
@@ -519,7 +528,8 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
     private PlaygroundConversationOptions DefaultOptions()
     {
         var connection = service.Snapshot.Settings.Connections.FirstOrDefault();
-        return connection is null ? new() : new() { Provider = connection.Provider, Endpoint = connection.Endpoint, Model = connection.Model };
+        return connection is null ? new() : new() { Provider = connection.Provider, Endpoint = connection.Endpoint, Model = connection.Model,
+            ChatGptAccountId = connection.ChatGptAccountId };
     }
     private async Task<Guid?> CreateAsync(bool temporary, bool preserveComposer = false)
     {
@@ -620,7 +630,7 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
         goActive.Visibility = other ? Visibility.Visible : Visibility.Collapsed;
         activity.Text = other ? "另一会话正在回复；本 Profile 同时只运行一轮。"
             : own ? service.Snapshot.Messages.LastOrDefault(x => x.ConversationId == selected && x.Status == PlaygroundMessageStatus.Generating)?.Activities.LastOrDefault() ?? "正在回复…"
-            : !credentialAvailable ? "尚未配置此服务商的 API Key。"
+            : !credentialAvailable ? Draft.Provider == PlaygroundProviderKind.ChatGPT ? "请登录 ChatGPT 并授权使用额度。" : "尚未配置此服务商的 API Key。"
             : !PlaygroundAuthorizationPolicy.CanSend(service.Snapshot.Settings) ? "尚未授予全局发送授权。"
             : Draft.Search == PlaygroundSearchMode.Off ? "联网搜索已关闭；对话仍由所选服务商 API 处理。" : "";
         activity.Visibility = string.IsNullOrWhiteSpace(activity.Text) ? Visibility.Collapsed : Visibility.Visible;
@@ -699,21 +709,22 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
         finally { restoreState.IsEnabled = retryInitialization.IsEnabled = true; }
     }
     private void ShowError(string message) { if (!disposed) ReportNotice?.Invoke(message, InfoBarSeverity.Warning); }
-    private async Task<ContentDialogResult> DialogAsync(string heading, object content, string primary = "保存")
+    private async Task<ContentDialogResult> DialogAsync(string heading, object content, string primary = "保存", Action<ContentDialog>? configure = null)
     {
         var dialog = new ContentDialog { XamlRoot = XamlRoot, Title = heading, Content = content, PrimaryButtonText = primary, CloseButtonText = "取消", DefaultButton = ContentDialogButton.None,
             RequestedTheme = PaletteTheme, HorizontalContentAlignment = HorizontalAlignment.Stretch };
         PlaygroundAppearance.Scope(dialog); dialog.Style = PlaygroundAppearance.Style("PGDialog"); dialog.PrimaryButtonStyle = PlaygroundAppearance.Style("PGDialogPrimaryAction"); dialog.CloseButtonStyle = PlaygroundAppearance.Style("PGDialogAction"); StyleContent(content);
         dialog.Resources["ContentDialogMaxWidth"] = 760d;
+        configure?.Invoke(dialog);
         return await dialog.ShowInShellAsync();
     }
     private Brush Brush(string key) => PlaygroundAppearance.Brush(this, key switch { "TextSecondaryBrush" => "PGSecondaryBrush", "DividerBrush" => "PGBorderBrush", _ => key });
     private static void StyleContent(object? value)
     {
+        if (value is SelectedFirstComboBox) return;
         if (value is TextBox text) PlaygroundAppearance.Apply(text, "PGTextBox");
         else if (value is PasswordBox password) PlaygroundAppearance.Apply(password, "PGPasswordBox");
         else if (value is NumberBox number) PlaygroundAppearance.Apply(number, "PGNumberBox");
-        else if (value is ComboBox combo) PlaygroundAppearance.Apply(combo, "PGComboBox");
         else if (value is Button button) PlaygroundAppearance.Apply(button, "PGButton");
         else if (value is CheckBox check) PlaygroundAppearance.Apply(check, "PGCheckBox");
         else if (value is ListView list) list.ItemContainerStyle = PlaygroundAppearance.Style("PGListViewItem");

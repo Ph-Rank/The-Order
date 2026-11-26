@@ -42,7 +42,7 @@ public sealed partial class MainWindow
         detailsPage.OpenLaunchSettings = async () => { if (ViewModel.SelectedId is { } id) await OpenLaunchSettingsAsync(id); };
         libraryPage.OpenStatistics = () => Navigate(WorkspacePage.Statistics); libraryPage.ConfigureP1();
         detailsPage.OpenGameTools = async () => { if (ViewModel.SelectedId is { } id && await ResolveUnsavedAsync()) await OpenGameToolsAsync(id); };
-        installationsPage.ChooseHelper = () => PickFile(".exe"); installationsPage.LocalResources = resources;
+        installationsPage.LocalResources = resources;
         sourceTimer.Tick += async (_, _) => { if (!p1Stopping && sourceOperation.IsCompleted) await (sourceOperation = CheckSourcesAsync()); };
     }
     private async Task InitializeP1Async()
@@ -424,7 +424,7 @@ public sealed partial class MainWindow
             var result = await ViewModel.ExecuteFileMutationAsync(async token => { using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, cancel.Token); return await action(details, linked.Token); }, id, preserveSelection: true); notice.Text = result.Message;
             if (result.IsCommitted) { details = await extras.LoadAsync(id, CancellationToken.None); RefreshTime(); RefreshGuides(); RefreshLayers(); if (walkthroughSessions is { } companion) await companion.RefreshLocalFilesAsync(id, cancel.Token); }
         }
-        var date = new CalendarDatePicker { Header = "日期", Date = DateTimeOffset.Now, MaxDate = DateTimeOffset.Now, MinDate = new DateTimeOffset(1900, 1, 1, 0, 0, 0, TimeSpan.Zero) };
+        var date = new CalendarDatePicker { CornerRadius = new(8), MinHeight = 34, Header = "日期", Date = DateTimeOffset.Now, MaxDate = DateTimeOffset.Now, MinDate = new DateTimeOffset(1900, 1, 1, 0, 0, 0, TimeSpan.Zero) };
         var hours = new NumberBox { Header = "小时", Minimum = 0, Maximum = 8784, Value = 1, SmallChange = .5, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact };
         var mode = new SelectedFirstComboBox { Header = "方式", OptionIndex = 0 }; mode.Options.Add("补记时长"); mode.Options.Add("将当天时长修正为"); var note = new TextBox { Header = "备注（可选）", MaxLength = 2000 };
         void RefreshTime()

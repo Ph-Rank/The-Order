@@ -5,169 +5,353 @@
  xmlns:l="using:TheOrder.WinUI.Localization"
  AutomationProperties.AutomationId="StatisticsPage" SizeChanged="OnStatisticsViewportSizeChanged">
  <Page.Resources>
-  <Style x:Key="StatisticsCard" TargetType="Border" BasedOn="{StaticResource SurfaceStyle}">
-   <Setter Property="Padding" Value="20,16,20,18" />
-   <Setter Property="CornerRadius" Value="12" />
-  </Style>
-  <Style x:Key="MetricCell" TargetType="Border">
-   <Setter Property="Padding" Value="18,12,18,14" />
-   <Setter Property="BorderBrush" Value="{ThemeResource DividerBrush}" />
-  </Style>
-  <Style x:Key="MetricValue" TargetType="TextBlock">
-   <Setter Property="FontSize" Value="30" />
-   <Setter Property="FontWeight" Value="SemiBold" />
-   <Setter Property="TextWrapping" Value="Wrap" />
-   <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
-  </Style>
-  <Style x:Key="StatisticsChartHeading" TargetType="TextBlock" BasedOn="{StaticResource SectionTitleStyle}">
-   <Setter Property="FontSize" Value="18" />
-   <Setter Property="AutomationProperties.HeadingLevel" Value="Level2" />
-  </Style>
-  <Style x:Key="RankingBarFill" TargetType="Border">
-   <Setter Property="Background" Value="{ThemeResource AccentFillColorDefaultBrush}" />
-   <Setter Property="CornerRadius" Value="2" />
-  </Style>
-  <Style x:Key="StatisticsPlotTarget" TargetType="Button">
-   <Setter Property="UseSystemFocusVisuals" Value="False" />
-   <Setter Property="Template">
-    <Setter.Value>
-     <ControlTemplate TargetType="Button">
-      <Border Background="Transparent">
-       <ContentPresenter Content="{TemplateBinding Content}" />
-      </Border>
-     </ControlTemplate>
-    </Setter.Value>
-   </Setter>
-  </Style>
+  <ResourceDictionary>
+   <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Light">
+     <SolidColorBrush x:Key="StatsSegmentTrackBackground" Color="#0A000000" />
+     <SolidColorBrush x:Key="StatsSegmentTrackBorder" Color="#14000000" />
+     <SolidColorBrush x:Key="StatsSegmentActiveBackground" Color="#FFFFFFFF" />
+     <SolidColorBrush x:Key="StatsSegmentActiveBorder" Color="#1A000000" />
+     <SolidColorBrush x:Key="StatsSegmentActiveForeground" Color="{StaticResource TextFillColorPrimary}" />
+     <SolidColorBrush x:Key="StatsReadoutBackground" Color="#FFFCFCFC" />
+     <SolidColorBrush x:Key="StatsReadoutBorder" Color="#24000000" />
+     <SolidColorBrush x:Key="StatsMetricTrackBrush" Color="#0F000000" />
+     <SolidColorBrush x:Key="StatsWeekdayRailBackground" Color="#04000000" />
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Dark">
+     <SolidColorBrush x:Key="StatsSegmentTrackBackground" Color="#0EFFFFFF" />
+     <SolidColorBrush x:Key="StatsSegmentTrackBorder" Color="#16FFFFFF" />
+     <SolidColorBrush x:Key="StatsSegmentActiveBackground" Color="#FF383838" />
+     <SolidColorBrush x:Key="StatsSegmentActiveBorder" Color="#24FFFFFF" />
+     <SolidColorBrush x:Key="StatsSegmentActiveForeground" Color="{StaticResource TextFillColorPrimary}" />
+     <SolidColorBrush x:Key="StatsReadoutBackground" Color="#FF313131" />
+     <SolidColorBrush x:Key="StatsReadoutBorder" Color="#28FFFFFF" />
+     <SolidColorBrush x:Key="StatsMetricTrackBrush" Color="#14FFFFFF" />
+     <SolidColorBrush x:Key="StatsWeekdayRailBackground" Color="#05FFFFFF" />
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="HighContrast">
+     <SolidColorBrush x:Key="StatsSegmentTrackBackground" Color="{ThemeResource SystemColorWindowColor}" />
+     <SolidColorBrush x:Key="StatsSegmentTrackBorder" Color="{ThemeResource SystemColorWindowTextColor}" />
+     <SolidColorBrush x:Key="StatsSegmentActiveBackground" Color="{ThemeResource SystemColorHighlightColor}" />
+     <SolidColorBrush x:Key="StatsSegmentActiveBorder" Color="{ThemeResource SystemColorHighlightColor}" />
+     <SolidColorBrush x:Key="StatsSegmentActiveForeground" Color="{ThemeResource SystemColorHighlightTextColor}" />
+     <SolidColorBrush x:Key="StatsReadoutBackground" Color="{ThemeResource SystemColorWindowColor}" />
+     <SolidColorBrush x:Key="StatsReadoutBorder" Color="{ThemeResource SystemColorWindowTextColor}" />
+     <SolidColorBrush x:Key="StatsMetricTrackBrush" Color="{ThemeResource SystemColorWindowColor}" />
+     <SolidColorBrush x:Key="StatsWeekdayRailBackground" Color="{ThemeResource SystemColorWindowColor}" />
+    </ResourceDictionary>
+   </ResourceDictionary.ThemeDictionaries>
+
+   <Style x:Key="StatisticsCard" TargetType="Border" BasedOn="{StaticResource SurfaceStyle}">
+    <Setter Property="Padding" Value="24,20,24,22" />
+    <Setter Property="CornerRadius" Value="12" />
+   </Style>
+   <Style x:Key="MetricCell" TargetType="Border">
+    <Setter Property="Padding" Value="22,12,18,12" />
+    <Setter Property="BorderBrush" Value="{ThemeResource DividerBrush}" />
+   </Style>
+   <Style x:Key="HeroMetricValue" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="40" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LineHeight" Value="44" />
+    <Setter Property="LineStackingStrategy" Value="BlockLineHeight" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
+   </Style>
+   <Style x:Key="MetricValue" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LineHeight" Value="32" />
+    <Setter Property="LineStackingStrategy" Value="BlockLineHeight" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
+   </Style>
+   <Style x:Key="StatisticsChartHeading" TargetType="TextBlock" BasedOn="{StaticResource SectionTitleStyle}">
+    <Setter Property="FontSize" Value="18" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="AutomationProperties.HeadingLevel" Value="Level2" />
+   </Style>
+   <Style x:Key="StatsPrimaryLabel" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="13.5" />
+    <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+   </Style>
+   <Style x:Key="StatsTertiaryCaption" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{ThemeResource TextTertiaryBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+   </Style>
+   <Style x:Key="RankingBarFill" TargetType="Border">
+    <Setter Property="Background" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+    <Setter Property="CornerRadius" Value="2" />
+   </Style>
+   <Style x:Key="StatisticsPlotTarget" TargetType="Button">
+    <Setter Property="UseSystemFocusVisuals" Value="False" />
+    <Setter Property="Template">
+     <Setter.Value>
+      <ControlTemplate TargetType="Button">
+       <Border Background="Transparent">
+        <ContentPresenter Content="{TemplateBinding Content}" />
+       </Border>
+      </ControlTemplate>
+     </Setter.Value>
+    </Setter>
+   </Style>
+   <Style x:Key="StatsSegmentTrack" TargetType="Border">
+    <Setter Property="Background" Value="{ThemeResource StatsSegmentTrackBackground}" />
+    <Setter Property="BorderBrush" Value="{ThemeResource StatsSegmentTrackBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="3" />
+   </Style>
+   <Style x:Key="StatsSegmentItem" TargetType="ToggleButton">
+    <Setter Property="Padding" Value="11,3" />
+    <Setter Property="MinHeight" Value="26" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
+    <Setter Property="Template">
+     <Setter.Value>
+      <ControlTemplate TargetType="ToggleButton">
+       <Border x:Name="SegmentRoot" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}"
+               Padding="{TemplateBinding Padding}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+        <VisualStateManager.VisualStateGroups>
+         <VisualStateGroup x:Name="CommonStates">
+          <VisualState x:Name="Normal" />
+          <VisualState x:Name="PointerOver">
+           <VisualState.Setters>
+            <Setter Target="SegmentRoot.Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}" />
+            <Setter Target="SegmentContent.Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+           </VisualState.Setters>
+          </VisualState>
+          <VisualState x:Name="Pressed">
+           <VisualState.Setters>
+            <Setter Target="SegmentRoot.Background" Value="{ThemeResource SubtleFillColorTertiaryBrush}" />
+            <Setter Target="SegmentContent.Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+           </VisualState.Setters>
+          </VisualState>
+          <VisualState x:Name="Checked">
+           <VisualState.Setters>
+            <Setter Target="SegmentRoot.Background" Value="{ThemeResource StatsSegmentActiveBackground}" />
+            <Setter Target="SegmentRoot.BorderBrush" Value="{ThemeResource StatsSegmentActiveBorder}" />
+            <Setter Target="SegmentContent.Foreground" Value="{ThemeResource StatsSegmentActiveForeground}" />
+            <Setter Target="SegmentContent.FontWeight" Value="SemiBold" />
+           </VisualState.Setters>
+          </VisualState>
+          <VisualState x:Name="CheckedPointerOver">
+           <VisualState.Setters>
+            <Setter Target="SegmentRoot.Background" Value="{ThemeResource StatsSegmentActiveBackground}" />
+            <Setter Target="SegmentRoot.BorderBrush" Value="{ThemeResource StatsSegmentActiveBorder}" />
+            <Setter Target="SegmentContent.Foreground" Value="{ThemeResource StatsSegmentActiveForeground}" />
+            <Setter Target="SegmentContent.FontWeight" Value="SemiBold" />
+           </VisualState.Setters>
+          </VisualState>
+          <VisualState x:Name="CheckedPressed">
+           <VisualState.Setters>
+            <Setter Target="SegmentRoot.Background" Value="{ThemeResource StatsSegmentActiveBackground}" />
+            <Setter Target="SegmentRoot.BorderBrush" Value="{ThemeResource StatsSegmentActiveBorder}" />
+            <Setter Target="SegmentContent.Foreground" Value="{ThemeResource StatsSegmentActiveForeground}" />
+            <Setter Target="SegmentContent.FontWeight" Value="SemiBold" />
+           </VisualState.Setters>
+          </VisualState>
+          <VisualState x:Name="Disabled">
+           <VisualState.Setters>
+            <Setter Target="SegmentRoot.Opacity" Value="0.5" />
+           </VisualState.Setters>
+          </VisualState>
+          <VisualState x:Name="CheckedDisabled">
+           <VisualState.Setters>
+            <Setter Target="SegmentRoot.Background" Value="{ThemeResource StatsSegmentActiveBackground}" />
+            <Setter Target="SegmentRoot.Opacity" Value="0.6" />
+           </VisualState.Setters>
+          </VisualState>
+         </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+        <ContentPresenter x:Name="SegmentContent" Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
+                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+       </Border>
+      </ControlTemplate>
+     </Setter.Value>
+    </Setter>
+   </Style>
+  </ResourceDictionary>
  </Page.Resources>
+
  <ScrollViewer x:Name="StatisticsScroll" HorizontalContentAlignment="Left" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-  <StackPanel x:Name="StatisticsBody" MaxWidth="1280" HorizontalAlignment="Left" Margin="24,0,24,32" Spacing="16" SizeChanged="OnStatisticsSizeChanged">
+  <StackPanel x:Name="StatisticsBody" MaxWidth="1280" HorizontalAlignment="Left" Margin="24,0,24,36" Spacing="16" SizeChanged="OnStatisticsSizeChanged">
+
+   <!-- Header: Page title paired with single-click period selector, work scope filter, and refresh -->
    <Grid x:Name="StatisticsHeader" ColumnSpacing="16" RowSpacing="12">
     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
     <TextBlock Style="{StaticResource PageTitleStyle}" VerticalAlignment="Center" AutomationProperties.HeadingLevel="Level1" l:Localize.Text="游玩统计" />
-    <views:TagFlowPanel x:Name="StatisticsFilters" Grid.Column="1" HorizontalSpacing="8" VerticalSpacing="8" VerticalAlignment="Center">
-     <views:SelectedFirstComboBox x:Name="PeriodChoice" Width="134" OptionIndex="1" OptionChanged="OnPeriodChanged" AutomationProperties.AutomationId="StatisticsPeriod" l:Localize.Name="统计区间">
-      <ComboBoxItem l:Localize.Content="最近 7 天" /><ComboBoxItem l:Localize.Content="最近 30 天" />
-      <ComboBoxItem l:Localize.Content="今年" /><ComboBoxItem l:Localize.Content="全部记录" />
-     </views:SelectedFirstComboBox>
-     <views:SelectedFirstComboBox x:Name="GameChoice" Width="210" DisplayMemberPath="Name" OptionChanged="OnGameChanged" AutomationProperties.AutomationId="StatisticsGame" l:Localize.Name="统计作品" />
-     <Button Click="OnRefresh" Style="{StaticResource SubtleButtonStyle}" Width="36" Height="34" Padding="0"
+    <views:TagFlowPanel x:Name="StatisticsFilters" Grid.Column="1" HorizontalSpacing="8" VerticalSpacing="8" VerticalAlignment="Center" MaximumItemWidth="500">
+     <Border x:Name="PeriodTrack" Style="{StaticResource StatsSegmentTrack}" VerticalAlignment="Center" AutomationProperties.AutomationId="StatisticsPeriod" l:Localize.Name="统计区间">
+      <StackPanel Orientation="Horizontal" Spacing="2">
+       <ToggleButton x:Name="Period7Days" Style="{StaticResource StatsSegmentItem}" Tag="0" Checked="OnPeriodSegmentChanged" Unchecked="OnPeriodSegmentChanged"
+                     AutomationProperties.AutomationId="StatisticsPeriod:Last7Days" l:Localize.Content="7 天" l:Localize.Name="最近 7 天" />
+       <ToggleButton x:Name="Period30Days" Style="{StaticResource StatsSegmentItem}" Tag="1" IsChecked="True" Checked="OnPeriodSegmentChanged" Unchecked="OnPeriodSegmentChanged"
+                     AutomationProperties.AutomationId="StatisticsPeriod:Last30Days" l:Localize.Content="30 天" l:Localize.Name="最近 30 天" />
+       <ToggleButton x:Name="PeriodThisYear" Style="{StaticResource StatsSegmentItem}" Tag="2" Checked="OnPeriodSegmentChanged" Unchecked="OnPeriodSegmentChanged"
+                     AutomationProperties.AutomationId="StatisticsPeriod:ThisYear" l:Localize.Content="今年" l:Localize.Name="今年" />
+       <ToggleButton x:Name="PeriodAllTime" Style="{StaticResource StatsSegmentItem}" Tag="3" Checked="OnPeriodSegmentChanged" Unchecked="OnPeriodSegmentChanged"
+                     AutomationProperties.AutomationId="StatisticsPeriod:AllTime" l:Localize.Content="全部" l:Localize.Name="全部记录" />
+      </StackPanel>
+     </Border>
+     <views:SelectedFirstComboBox x:Name="GameChoice" Width="204" VerticalAlignment="Center" DisplayMemberPath="Name"
+                                  OptionChanged="OnGameChanged" AutomationProperties.AutomationId="StatisticsGame"
+                                  l:Localize.PlaceholderText="全部作品" l:Localize.Name="统计作品" />
+     <Button Click="OnRefresh" Style="{StaticResource SubtleButtonStyle}" Width="34" Height="34" Padding="0" VerticalAlignment="Center"
              l:Localize.ToolTip="刷新统计" l:Localize.Name="刷新统计" AutomationProperties.AutomationId="StatisticsRefresh">
-      <FontIcon Glyph="&#xE72C;" FontSize="16" />
+      <FontIcon Glyph="&#xE72C;" FontSize="15" />
      </Button>
     </views:TagFlowPanel>
     <ProgressBar x:Name="StatisticsLoadingBar" Grid.RowSpan="2" Grid.ColumnSpan="2" IsIndeterminate="True"
                  Height="2" Margin="0,0,0,-8" VerticalAlignment="Bottom" Visibility="Collapsed" AutomationProperties.AutomationId="StatisticsLoading" />
    </Grid>
+
    <StackPanel x:Name="StatisticsUnavailable" Visibility="Collapsed" Spacing="12" HorizontalAlignment="Center" Margin="0,36,0,0">
     <TextBlock Text="暂时无法读取统计" TextAlignment="Center" Style="{StaticResource SectionTitleStyle}" />
     <Button Content="查看状态" HorizontalAlignment="Center" Click="OnOpenStatus" />
    </StackPanel>
-   <Border x:Name="EmptyShelf" Style="{StaticResource StatisticsCard}" Visibility="Collapsed" Padding="28">
+
+   <Border x:Name="EmptyShelf" Style="{StaticResource StatisticsCard}" Visibility="Collapsed" Padding="32">
     <StackPanel Spacing="12" HorizontalAlignment="Center">
      <FontIcon Glyph="&#xE9D9;" FontSize="32" Foreground="{ThemeResource TextSecondaryBrush}" />
      <TextBlock TextAlignment="Center" Style="{StaticResource SectionTitleStyle}" l:Localize.Text="还没有可统计的作品" />
      <Button HorizontalAlignment="Center" Click="OnImport" l:Localize.Content="导入游戏" />
     </StackPanel>
    </Border>
-   <StackPanel x:Name="Dashboard" Spacing="16" Visibility="Collapsed">
-    <Border Style="{StaticResource StatisticsCard}" Padding="0">
+
+   <StackPanel x:Name="Dashboard" Spacing="20" Visibility="Collapsed">
+
+    <!-- Band 1: Direct-on-Canvas Editorial Metrics Strip (Asymmetric hero metric + 3 quiet companions) -->
+    <Border x:Name="SummaryBand" BorderBrush="{ThemeResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,6,0,0">
      <Grid x:Name="SummaryGrid">
-      <Border x:Name="PeriodCard" Style="{StaticResource MetricCell}">
-       <StackPanel Spacing="3">
-        <TextBlock Style="{StaticResource SecondaryTextStyle}" l:Localize.Text="区间时长" />
-        <TextBlock x:Name="PeriodValue" Style="{StaticResource MetricValue}" AutomationProperties.AutomationId="StatisticsPeriodTime">
-         <Run x:Name="PeriodNumber" /><Run x:Name="PeriodUnit" FontSize="13" FontWeight="Normal" Foreground="{ThemeResource TextSecondaryBrush}" />
+      <Border x:Name="PeriodCard" Style="{StaticResource MetricCell}" Padding="2,10,24,6">
+       <StackPanel Spacing="4">
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+         <Border Width="16" Height="2.5" CornerRadius="1.25" Background="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" />
+         <TextBlock Style="{StaticResource SecondaryTextStyle}" FontSize="13" l:Localize.Text="区间时长" />
+        </StackPanel>
+        <TextBlock x:Name="PeriodValue" Style="{StaticResource HeroMetricValue}" AutomationProperties.AutomationId="StatisticsPeriodTime">
+         <Run x:Name="PeriodNumber" /><Run x:Name="PeriodUnit" FontSize="14" FontWeight="Normal" Foreground="{ThemeResource TextSecondaryBrush}" />
         </TextBlock>
-        <TextBlock x:Name="PeriodCaption" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
+        <TextBlock x:Name="PeriodCaption" Style="{StaticResource MetadataTextStyle}" Typography.NumeralAlignment="Tabular" TextWrapping="Wrap" />
        </StackPanel>
       </Border>
       <Border x:Name="LifetimeCard" Style="{StaticResource MetricCell}">
-       <StackPanel Spacing="3">
-        <TextBlock Style="{StaticResource SecondaryTextStyle}" l:Localize.Text="累计游玩" />
+       <StackPanel Spacing="4" VerticalAlignment="Top">
+        <TextBlock Style="{StaticResource SecondaryTextStyle}" FontSize="13" l:Localize.Text="累计游玩" />
         <TextBlock x:Name="LifetimeValue" Style="{StaticResource MetricValue}" AutomationProperties.AutomationId="StatisticsLifetime">
          <Run x:Name="LifetimeNumber" /><Run x:Name="LifetimeUnit" FontSize="13" FontWeight="Normal" Foreground="{ThemeResource TextSecondaryBrush}" />
         </TextBlock>
-        <TextBlock x:Name="LifetimeCaption" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
+        <TextBlock x:Name="LifetimeCaption" Style="{StaticResource MetadataTextStyle}" Typography.NumeralAlignment="Tabular" TextWrapping="Wrap" />
        </StackPanel>
       </Border>
       <Border x:Name="DaysCard" Style="{StaticResource MetricCell}">
-       <StackPanel Spacing="3">
-        <TextBlock Style="{StaticResource SecondaryTextStyle}" l:Localize.Text="活跃天数" />
+       <StackPanel Spacing="4" VerticalAlignment="Top">
+        <TextBlock Style="{StaticResource SecondaryTextStyle}" FontSize="13" l:Localize.Text="活跃天数" />
         <TextBlock x:Name="DaysValue" Style="{StaticResource MetricValue}" AutomationProperties.AutomationId="StatisticsActiveDays">
          <Run x:Name="DaysNumber" /><Run FontSize="13" FontWeight="Normal" Foreground="{ThemeResource TextSecondaryBrush}" Text="天" />
         </TextBlock>
-        <TextBlock x:Name="DaysCaption" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
+        <TextBlock x:Name="DaysCaption" Style="{StaticResource MetadataTextStyle}" Typography.NumeralAlignment="Tabular" TextWrapping="Wrap" />
        </StackPanel>
       </Border>
       <Border x:Name="GamesCard" Style="{StaticResource MetricCell}">
-       <StackPanel Spacing="3">
-        <TextBlock Style="{StaticResource SecondaryTextStyle}" l:Localize.Text="游玩作品" />
+       <StackPanel Spacing="4" VerticalAlignment="Top">
+        <TextBlock Style="{StaticResource SecondaryTextStyle}" FontSize="13" l:Localize.Text="游玩作品" />
         <TextBlock x:Name="GamesValue" Style="{StaticResource MetricValue}" AutomationProperties.AutomationId="StatisticsPlayedGames">
          <Run x:Name="GamesNumber" /><Run FontSize="13" FontWeight="Normal" Foreground="{ThemeResource TextSecondaryBrush}" Text="部" />
         </TextBlock>
+        <TextBlock x:Name="GamesCaption" Style="{StaticResource MetadataTextStyle}" Typography.NumeralAlignment="Tabular" TextWrapping="Wrap" />
        </StackPanel>
       </Border>
      </Grid>
     </Border>
+
+    <!-- Band 2: Elevated Primary Visual Stage — Playtime Trend & Session Timeline -->
     <Border x:Name="TrendCard" Style="{StaticResource StatisticsCard}">
-     <StackPanel Spacing="10">
-      <Grid ColumnSpacing="12">
+     <StackPanel Spacing="14">
+      <Grid x:Name="TrendHeader" ColumnSpacing="12" RowSpacing="0">
+       <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-       <StackPanel Spacing="2" VerticalAlignment="Center">
+       <StackPanel Spacing="3" VerticalAlignment="Center">
         <TextBlock Style="{StaticResource StatisticsChartHeading}" l:Localize.Text="游玩趋势" />
-        <TextBlock x:Name="TrendInterval" Style="{StaticResource MetadataTextStyle}" TextWrapping="Wrap" />
+        <TextBlock x:Name="TrendInterval" Style="{StaticResource MetadataTextStyle}" Typography.NumeralAlignment="Tabular" TextWrapping="Wrap" />
        </StackPanel>
-       <Border Grid.Column="1" VerticalAlignment="Center" Background="{ThemeResource ControlFillColorSecondaryBrush}" CornerRadius="8" Padding="3">
-        <StackPanel Orientation="Horizontal" Spacing="3">
-         <ToggleButton x:Name="DurationTrendMode" IsChecked="True" Checked="OnTrendModeChanged" Unchecked="OnTrendModeChanged" Padding="9,4" MinHeight="30"
+       <Border x:Name="TrendModeTrack" Grid.Column="1" Style="{StaticResource StatsSegmentTrack}" VerticalAlignment="Center" HorizontalAlignment="Right">
+        <StackPanel Orientation="Horizontal" Spacing="2">
+         <ToggleButton x:Name="DurationTrendMode" Style="{StaticResource StatsSegmentItem}" IsChecked="True"
+                       Checked="OnTrendModeChanged" Unchecked="OnTrendModeChanged"
                        AutomationProperties.AutomationId="StatisticsDurationMode" l:Localize.Content="时长" />
-         <ToggleButton x:Name="SessionTrendMode" Checked="OnTrendModeChanged" Unchecked="OnTrendModeChanged" Padding="9,4" MinHeight="30"
+         <ToggleButton x:Name="SessionTrendMode" Style="{StaticResource StatsSegmentItem}"
+                       Checked="OnTrendModeChanged" Unchecked="OnTrendModeChanged"
                        AutomationProperties.AutomationId="StatisticsSessionsMode" l:Localize.Content="游玩时段" />
         </StackPanel>
        </Border>
       </Grid>
-      <views:StatisticsTrendChart x:Name="TrendChart" Height="200" Accent="{ThemeResource AccentFillColorDefaultBrush}"
+      <views:StatisticsTrendChart x:Name="TrendChart" Height="252" Accent="{ThemeResource AccentFillColorDefaultBrush}"
         Gridline="{ThemeResource DividerBrush}" LabelBrush="{ThemeResource TextSecondaryBrush}" Ink="{ThemeResource TextPrimaryBrush}"
-        ReadoutBackground="{ThemeResource CanvasBrush}" TargetStyle="{StaticResource StatisticsPlotTarget}" AutomationProperties.AutomationId="StatisticsTrendChart" />
-      <views:StatisticsTrendChart x:Name="SessionChart" SessionPeriods="True" Height="274" Visibility="Collapsed"
+        ReadoutBackground="{ThemeResource StatsReadoutBackground}" ReadoutBorder="{ThemeResource StatsReadoutBorder}"
+        TargetStyle="{StaticResource StatisticsPlotTarget}" AutomationProperties.AutomationId="StatisticsTrendChart" />
+      <views:StatisticsTrendChart x:Name="SessionChart" SessionPeriods="True" Height="252" Visibility="Collapsed"
         Accent="{ThemeResource AccentFillColorDefaultBrush}" Gridline="{ThemeResource DividerBrush}"
         LabelBrush="{ThemeResource TextSecondaryBrush}" Ink="{ThemeResource TextPrimaryBrush}"
-        ReadoutBackground="{ThemeResource CanvasBrush}" TargetStyle="{StaticResource StatisticsPlotTarget}"
-        AutomationProperties.AutomationId="StatisticsSessionChart" />
+        ReadoutBackground="{ThemeResource StatsReadoutBackground}" ReadoutBorder="{ThemeResource StatsReadoutBorder}"
+        TargetStyle="{StaticResource StatisticsPlotTarget}" AutomationProperties.AutomationId="StatisticsSessionChart" />
      </StackPanel>
     </Border>
+
+    <!-- Band 3: Asymmetric Editorial Split — Ranked Leaderboard + Sculptural Shelf Progress -->
     <Grid x:Name="BreakdownGrid" ColumnSpacing="16" RowSpacing="16">
-     <Border x:Name="RankingCard" Style="{StaticResource StatisticsCard}" VerticalAlignment="Top">
-      <Grid RowSpacing="9">
+     <Border x:Name="RankingCard" Style="{StaticResource StatisticsCard}" VerticalAlignment="Stretch">
+      <Grid RowSpacing="12">
        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-       <TextBlock Style="{StaticResource StatisticsChartHeading}" l:Localize.Text="游玩时长排行" />
+       <Grid ColumnSpacing="12">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+        <TextBlock Style="{StaticResource StatisticsChartHeading}" l:Localize.Text="游玩时长排行" />
+        <TextBlock x:Name="RankingSummary" Grid.Column="1" Style="{StaticResource MetadataTextStyle}" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center" />
+       </Grid>
        <TextBlock x:Name="RankingEmpty" Grid.Row="1" Style="{StaticResource MetadataTextStyle}" VerticalAlignment="Top"
                   TextWrapping="Wrap" l:Localize.Text="当前区间暂无游玩时长。" />
-       <ScrollViewer x:Name="RankingScroll" Grid.Row="1" MaxHeight="420" VerticalScrollBarVisibility="Auto"
+       <ScrollViewer x:Name="RankingScroll" Grid.Row="1" MaxHeight="296" VerticalScrollBarVisibility="Auto"
                      HorizontalScrollBarVisibility="Disabled" VerticalScrollMode="Enabled" Visibility="Collapsed"
                      AutomationProperties.AutomationId="StatisticsRanking" l:Localize.Name="游玩时长排行">
-        <ItemsRepeater x:Name="RankingRows" Margin="0,0,12,0">
-         <ItemsRepeater.Layout><StackLayout Spacing="2" /></ItemsRepeater.Layout>
+        <ItemsRepeater x:Name="RankingRows" Margin="0,0,10,0">
+         <ItemsRepeater.Layout><StackLayout Spacing="6" /></ItemsRepeater.Layout>
          <ItemsRepeater.ItemTemplate>
           <DataTemplate x:DataType="views:StatisticsRankingRow">
-           <Button Style="{StaticResource SubtleButtonStyle}" Click="OnRankingClick" Tag="{x:Bind}" Padding="4"
+           <Button Style="{StaticResource SubtleButtonStyle}" Click="OnRankingClick" Tag="{x:Bind}" Padding="8,7,8,8" CornerRadius="8"
                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                    ToolTipService.ToolTip="{x:Bind Tooltip}" AutomationProperties.Name="{x:Bind AccessibleName}"
                    AutomationProperties.AutomationId="{x:Bind AutomationId}">
             <Grid ColumnSpacing="10">
-             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" MinWidth="24" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+             <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="26" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
+             </Grid.ColumnDefinitions>
              <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-             <TextBlock Text="{x:Bind Rank}" Style="{StaticResource MetadataTextStyle}" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center" />
+             <TextBlock Text="{x:Bind Rank}" FontSize="12.5" FontWeight="{x:Bind RankWeight}" Foreground="{ThemeResource TextSecondaryBrush}"
+                        Opacity="{x:Bind RankOpacity}" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center" />
              <TextBlock Grid.Column="1" Text="{x:Bind Game.Name}" FontSize="14" FontWeight="{x:Bind NameWeight}"
-                        TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-             <TextBlock Grid.Column="2" Text="{x:Bind Duration}" Style="{StaticResource MetadataTextStyle}"
-                        Typography.NumeralAlignment="Tabular" VerticalAlignment="Center" />
-             <views:StatisticsRankingBar Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Height="3"
-                                        Margin="0,4,0,0" IsHitTestVisible="False" Row="{x:Bind}">
-              <Border Style="{StaticResource RankingBarFill}" Opacity="{x:Bind BarOpacity}" />
-             </views:StatisticsRankingBar>
+                        Foreground="{ThemeResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+             <TextBlock Grid.Column="2" Text="{x:Bind ShareText}" Visibility="{x:Bind ShareVisibility}" FontSize="12"
+                        Foreground="{ThemeResource TextTertiaryBrush}" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center" />
+             <TextBlock Grid.Column="3" Text="{x:Bind Duration}" FontSize="13.5" FontWeight="{x:Bind DurationWeight}"
+                        Foreground="{ThemeResource TextPrimaryBrush}" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center" />
+             <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Height="4" Margin="0,6,0,0" IsHitTestVisible="False">
+              <Border CornerRadius="2" Background="{ThemeResource StatsMetricTrackBrush}" />
+              <views:StatisticsRankingBar Row="{x:Bind}">
+               <Border Style="{StaticResource RankingBarFill}" Opacity="{x:Bind BarOpacity}" />
+              </views:StatisticsRankingBar>
+             </Grid>
             </Grid>
            </Button>
           </DataTemplate>
@@ -176,46 +360,76 @@
        </ScrollViewer>
       </Grid>
      </Border>
-     <StackPanel x:Name="BreakdownSide" Spacing="16" VerticalAlignment="Top" SizeChanged="OnBreakdownSideSizeChanged">
-      <Border x:Name="ProgressCard" Style="{StaticResource StatisticsCard}">
-       <StackPanel Spacing="12">
+
+     <Border x:Name="ProgressCard" Style="{StaticResource StatisticsCard}" VerticalAlignment="Stretch">
+      <Grid RowSpacing="14">
+       <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+       <Grid ColumnSpacing="12">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
         <TextBlock Style="{StaticResource StatisticsChartHeading}" l:Localize.Text="书架进度" />
-        <Grid x:Name="StatusContent" MaxWidth="336" ColumnSpacing="22" RowSpacing="10" SizeChanged="OnStatusSizeChanged">
-         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-         <Grid x:Name="StatusDial" Width="136" Height="136" HorizontalAlignment="Center" VerticalAlignment="Center">
-          <views:StatisticsStatusChart x:Name="StatusChart" Track="{ThemeResource DividerBrush}"
-            LabelBrush="{ThemeResource TextPrimaryBrush}" AutomationProperties.AutomationId="StatisticsStatusChart" />
-          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="1" IsHitTestVisible="False">
-           <Viewbox MaxWidth="100" StretchDirection="DownOnly">
-            <TextBlock x:Name="CompletionValue" FontSize="25" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular" />
-           </Viewbox>
-           <TextBlock x:Name="CompletionLabel" Style="{StaticResource MetadataTextStyle}" HorizontalAlignment="Center" l:Localize.Text="玩过" />
-          </StackPanel>
-         </Grid>
-         <StackPanel x:Name="StatusLegend" Grid.Column="1" Spacing="1" VerticalAlignment="Center" />
+        <TextBlock x:Name="ProgressSummary" Grid.Column="1" Style="{StaticResource MetadataTextStyle}" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center" />
+       </Grid>
+       <Grid x:Name="StatusContent" Grid.Row="1" VerticalAlignment="Center" ColumnSpacing="24" RowSpacing="12" SizeChanged="OnStatusSizeChanged">
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+        <Grid x:Name="StatusDial" Width="156" Height="156" HorizontalAlignment="Center" VerticalAlignment="Center">
+         <views:StatisticsStatusChart x:Name="StatusChart" Track="{ThemeResource DividerBrush}"
+           LabelBrush="{ThemeResource TextPrimaryBrush}" AutomationProperties.AutomationId="StatisticsStatusChart" />
+         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="1" IsHitTestVisible="False">
+          <Viewbox MaxWidth="112" StretchDirection="DownOnly">
+           <TextBlock x:Name="CompletionValue" FontSize="26" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular" />
+          </Viewbox>
+          <TextBlock x:Name="CompletionLabel" Style="{StaticResource MetadataTextStyle}" HorizontalAlignment="Center" l:Localize.Text="玩过" />
+          <TextBlock x:Name="CompletionShare" FontSize="11.5" Foreground="{ThemeResource TextTertiaryBrush}" Typography.NumeralAlignment="Tabular" HorizontalAlignment="Center" />
+         </StackPanel>
         </Grid>
-       </StackPanel>
-      </Border>
-      <Border x:Name="WeekdayCard" Style="{StaticResource StatisticsCard}">
-       <StackPanel Spacing="10">
-        <TextBlock Style="{StaticResource StatisticsChartHeading}" l:Localize.Text="每周节奏" />
-        <views:StatisticsTrendChart x:Name="WeekdayChart" Height="156" Bars="True" Accent="{ThemeResource AccentFillColorDefaultBrush}"
-          Gridline="{ThemeResource DividerBrush}" LabelBrush="{ThemeResource TextSecondaryBrush}" Ink="{ThemeResource TextPrimaryBrush}"
-          ReadoutBackground="{ThemeResource CanvasBrush}" TargetStyle="{StaticResource StatisticsPlotTarget}" AutomationProperties.AutomationId="StatisticsWeekdayChart" />
-       </StackPanel>
-      </Border>
-     </StackPanel>
+        <StackPanel x:Name="StatusLegend" Grid.Column="1" Spacing="3" VerticalAlignment="Center" />
+       </Grid>
+      </Grid>
+     </Border>
     </Grid>
-    <views:SmoothExpander x:Name="DailyDetails" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Expanding="OnDailyExpanding" AutomationProperties.AutomationId="StatisticsDailyDetails">
-     <StackPanel Spacing="12"><StackPanel x:Name="DailyRows" Spacing="8" /><views:ScrollPageFooter x:Name="DailyPageFooter" /></StackPanel>
+
+    <!-- Band 4: Direct-on-Canvas Landscape Feature — Weekly Rhythm Crystal Stage -->
+    <Border x:Name="WeekdayCard" BorderBrush="{ThemeResource DividerBrush}" BorderThickness="0,1,0,1" Padding="4,22,4,22">
+     <Grid x:Name="WeekdayLayout" ColumnSpacing="28" RowSpacing="16">
+      <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="232" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+      <StackPanel x:Name="WeekdayAside" Spacing="12" VerticalAlignment="Center">
+       <StackPanel Spacing="4">
+        <TextBlock Style="{StaticResource StatisticsChartHeading}" l:Localize.Text="每周节奏" />
+        <TextBlock x:Name="WeekdayHeadline" FontSize="22" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}"
+                   TextWrapping="Wrap" Margin="0,6,0,0" />
+        <TextBlock x:Name="WeekdayPeakDetail" Style="{StaticResource MetadataTextStyle}" Typography.NumeralAlignment="Tabular" TextWrapping="Wrap" />
+       </StackPanel>
+       <StackPanel x:Name="WeekdayBalancePanel" Spacing="6" Margin="0,6,0,0" Visibility="Collapsed">
+        <Grid>
+         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+         <TextBlock x:Name="WorkdayShareText" Style="{StaticResource MetadataTextStyle}" Typography.NumeralAlignment="Tabular" />
+         <TextBlock x:Name="WeekendShareText" Grid.Column="1" Style="{StaticResource MetadataTextStyle}" Typography.NumeralAlignment="Tabular" />
+        </Grid>
+        <Grid x:Name="WeekdayBalanceTrack" Height="5" ColumnSpacing="3">
+         <Grid.ColumnDefinitions>
+          <ColumnDefinition x:Name="WorkdayBarCol" Width="1*" />
+          <ColumnDefinition x:Name="WeekendBarCol" Width="1*" />
+         </Grid.ColumnDefinitions>
+         <Border x:Name="WorkdayBarFill" CornerRadius="2.5" Background="{ThemeResource AccentFillColorDefaultBrush}" Opacity="0.45" />
+         <Border x:Name="WeekendBarFill" Grid.Column="1" CornerRadius="2.5" Background="{ThemeResource AccentFillColorDefaultBrush}" Opacity="0.95" />
+        </Grid>
+        <TextBlock x:Name="WeekdaySplitDetail" FontSize="12" Foreground="{ThemeResource TextTertiaryBrush}" Typography.NumeralAlignment="Tabular" TextWrapping="Wrap" />
+       </StackPanel>
+      </StackPanel>
+      <views:StatisticsTrendChart x:Name="WeekdayChart" Grid.Column="1" Height="188" Bars="True" Accent="{ThemeResource AccentFillColorDefaultBrush}"
+        Gridline="{ThemeResource DividerBrush}" LabelBrush="{ThemeResource TextSecondaryBrush}" Ink="{ThemeResource TextPrimaryBrush}"
+        ReadoutBackground="{ThemeResource StatsReadoutBackground}" ReadoutBorder="{ThemeResource StatsReadoutBorder}"
+        TargetStyle="{StaticResource StatisticsPlotTarget}" AutomationProperties.AutomationId="StatisticsWeekdayChart" />
+     </Grid>
+    </Border>
+
+    <views:SmoothExpander x:Name="DailyDetails" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" CornerRadius="10"
+                          Expanding="OnDailyExpanding" AutomationProperties.AutomationId="StatisticsDailyDetails">
+     <StackPanel Spacing="10"><StackPanel x:Name="DailyRows" Spacing="2" /><views:ScrollPageFooter x:Name="DailyPageFooter" /></StackPanel>
     </views:SmoothExpander>
-    <views:SmoothExpander Header="统计说明" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-     <StackPanel Spacing="10">
-      <TextBlock x:Name="ProvenanceText" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" Visibility="Collapsed" />
-      <TextBlock Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" l:Localize.Text="书架进度采用你设置的状态，不按时长猜测通关；同一作品的多个安装不会重复计数。统计不上传个人游玩记录。" />
-     </StackPanel>
-    </views:SmoothExpander>
+
    </StackPanel>
   </StackPanel>
  </ScrollViewer>

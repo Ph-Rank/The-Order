@@ -35,6 +35,8 @@ public static class PlaygroundModelSelection
     public static ImmutableArray<PlaygroundModel> SelectLatest(PlaygroundProviderKind provider, IEnumerable<PlaygroundModel> catalog)
     {
         ArgumentNullException.ThrowIfNull(catalog);
+        // SIWC already returns an account-specific, ordered display catalogue.
+        if (provider == PlaygroundProviderKind.ChatGPT) return catalog.ToImmutableArray();
         var order = Families(provider);
         var selected = new Dictionary<string, Candidate>(StringComparer.Ordinal);
         string prefix = provider switch

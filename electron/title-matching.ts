@@ -7,7 +7,7 @@ export interface GameTitleComparison {
   distinctive: boolean
 }
 
-const MAX_LENGTH = 500
+export const MAX_TITLE_LENGTH = 500
 const MAX_VARIANTS = 8
 const GENERIC_NAMES = new Set([
   'game', 'games', 'gamedata', 'game32', 'game64', 'data', 'datafiles', 'engine', 'content', 'assets', 'plugins',
@@ -21,8 +21,13 @@ const PACKAGING = /^(?:(?:pc|windows|win(?:32|64)|x(?:86|64)|chs|cht|cn|jp|en)|(
 const PACKAGING_SUFFIX = /(?:[\s._-]+(?:chs|cht|x64|x86|win32|win64)|[\s._-]*(?:(?:简体|繁体|官方)中文(?:版)?|官中(?:版)?|汉化(?:硬盘|整合)?版|免安装(?:版)?|硬盘版|绿色版|直装版|解压即玩))$/i
 
 function prepared(value: string): string {
-  if (typeof value !== 'string' || value.length > MAX_LENGTH) return ''
-  let result = value.normalize('NFKC').replace(/[\u0000-\u001f\u007f]/g, ' ').trim()
+  if (typeof value !== 'string' || value.length > MAX_TITLE_LENGTH) return ''
+  return stripTitlePackaging(value.normalize('NFKC').replace(/[\u0000-\u001f\u007f]/g, ' '))
+}
+
+// Both evidence collection and title comparison exclude the same packaging labels.
+export function stripTitlePackaging(value: string): string {
+  let result = value.trim()
   result = result.replace(/\[([^\[\]]*)\]|【([^【】]*)】|\(([^()]*)\)/g, (all, square, chinese, round) => {
     const tokens = String(square ?? chinese ?? round).trim().split(/[\s,+/|・]+/).filter(Boolean)
     return tokens.length && tokens.every(token => PACKAGING.test(token)) ? ' ' : all
@@ -138,7 +143,7 @@ export function hasExplicitGameVersion(value: string): boolean {
 /** Query variants are retrieval hints only; a base-title fallback does not prove
  * that an edition/expansion and its base work are the same release. */
 export function gameTitleVariants(value: string): string[] {
-  if (typeof value !== 'string' || value.length > MAX_LENGTH) return []
+  if (typeof value !== 'string' || value.length > MAX_TITLE_LENGTH) return []
   const primary = value.trim(), cleaned = prepared(value), normalized = normalizeGameTitle(value)
   if (!meaningful(normalized)) return []
   const parsed = parse(value), candidates = [primary, cleaned]

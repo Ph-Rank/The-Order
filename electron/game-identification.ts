@@ -3,7 +3,7 @@ import path from 'node:path'
 import type { LibraryGame, WorkMetadata, ReleaseIdentity } from '../src/shared/types'
 import { collectLocalGameEvidence } from './local-game-evidence'
 import { readLocalTextEvidence } from './local-text-evidence'
-import { gameTitleVariants, compareGameTitles, normalizeGameTitle } from './title-matching'
+import { gameTitleVariants, compareGameTitles, normalizeGameTitle, stripTitlePackaging, MAX_TITLE_LENGTH } from './title-matching'
 import { rankEvidenceMatches, type IdentityEvidence, type TitleEvidence, type ReferenceEvidence } from './evidence-matching'
 
 export interface TitleIndexRecord { names: string[]; references: string[] }
@@ -19,24 +19,14 @@ export interface RankedMetadataMatch { work: WorkMetadata; confidence: number; r
 
 const MAX_NAMES = 8
 const MAX_REFERENCES = 8
-const MAX_TITLE_LENGTH = 500
 const SOURCE_ORDER = ['vndb', 'bangumi', 'steam'] as const
 const GENERIC_EXECUTABLE = /^(?:game(?:32|64)?|start|startup|launch(?:er)?|play|player|advhd|siglusengine|bgi|rio|entisgls|reallive|malie|kirikiri|artemis|unityplayer|main|config|settings|setup|uninstall)$/i
-const NOISE = /^(?:(?:pc|windows|win(?:32|64)|x(?:86|64)|chs|cht|cn|jp|en)|(?:简体|繁体|官方)?中文(?:版)?|官中(?:版)?|汉化(?:硬盘|整合)?版?|(?:日文|英文|日语|英语|简中|繁中)版?|免安装(?:版)?|硬盘版|绿色版|直装版|解压即玩)$/i
-const TRAILING_NOISE = /(?:[\s._-]+(?:chs|cht|x64|x86|win32|win64)|[\s._-]*(?:(?:简体|繁体|官方)中文(?:版)?|官中(?:版)?|汉化(?:硬盘|整合)?版|免安装(?:版)?|硬盘版|绿色版|直装版|解压即玩))$/i
 
 // Only packaging/language labels are removed. Episode numbers and edition names
 // (FD, Remake, REFLECTION BLUE, etc.) remain part of a title's identity.
 function cleanName(value: unknown): string {
   if (typeof value !== 'string' || value.length > MAX_TITLE_LENGTH) return ''
-  let result = value.normalize('NFKC').trim()
-  result = result.replace(/\[([^\[\]]*)\]|【([^【】]*)】|\(([^()]*)\)/g, (all, square, chinese, round) => {
-    const tokens = String(square ?? chinese ?? round).trim().split(/[\s,+/|・]+/).filter(Boolean)
-    return tokens.length && tokens.every(token => NOISE.test(token)) ? ' ' : all
-  })
-  let previous: string
-  do { previous = result; result = result.replace(TRAILING_NOISE, '').trim() } while (result !== previous)
-  return result.replace(/\s+/g, ' ').trim()
+  return stripTitlePackaging(value.normalize('NFKC'))
 }
 
 function normalizedName(value: unknown): string {

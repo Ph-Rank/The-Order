@@ -39,7 +39,7 @@ internal sealed partial class NativePlaygroundProvider(PlaygroundProviderKind ki
         model = string.IsNullOrWhiteSpace(model) ? "" : CleanModel(model);
         bool verified = Kind switch
         {
-            PlaygroundProviderKind.OpenAI => model is "gpt-6-astra" or "gpt-6.1-sol" or "gpt-6.1-terra" or "gpt-6-luna" or "gpt-5.4" or "gpt-5.5",
+            PlaygroundProviderKind.OpenAI or PlaygroundProviderKind.ChatGPT => model is "gpt-6.2-sol" or "gpt-6.2-astra" or "gpt-6-astra" or "gpt-6.1-sol" or "gpt-6.1-terra" or "gpt-6-luna" or "gpt-5.4" or "gpt-5.5",
             PlaygroundProviderKind.Gemini => model is "gemini-4-hydrogen" or "gemini-4-carbon" or "gemini-4-argon" or "gemini-3.8-flash" or "gemini-3.6-flash",
             PlaygroundProviderKind.Claude => model is "claude-opus-5-5" or "claude-opus-5" or "claude-opus-4-6" or "claude-sonnet-4-6",
             PlaygroundProviderKind.Grok => model is "grok-4.7",
@@ -51,9 +51,10 @@ internal sealed partial class NativePlaygroundProvider(PlaygroundProviderKind ki
             ImageInput = verified && (Kind != PlaygroundProviderKind.DeepSeek || model == "deepseek-flash"),
             // DeepSeek medium is a documented compatibility alias for high,
             // not an additional native tier; the notice exposes that limit.
-            ReasoningEfforts = Kind == PlaygroundProviderKind.OpenAI ? model switch
+            ReasoningEfforts = Kind is PlaygroundProviderKind.OpenAI or PlaygroundProviderKind.ChatGPT ? model switch
             {
                 "gpt-6-astra" or "gpt-6.1-sol" => ["low", "medium", "high", "xhigh", "max"],
+                "gpt-6.2-sol" or "gpt-6.2-astra" => ["low", "medium", "high", "xhigh", "max"],
                 "gpt-6.1-terra" or "gpt-6-luna" => ["none", "low", "medium", "high", "xhigh", "max"],
                 "gpt-5.4" or "gpt-5.5" => ["none", "low", "medium", "high", "xhigh"],
                 _ => []

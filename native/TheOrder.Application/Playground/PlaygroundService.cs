@@ -64,7 +64,8 @@ public sealed partial class PlaygroundService : IAsyncDisposable
             if (s.Conversations.Length >= 500) throw new InvalidOperationException("会话数量已达上限，请先整理现有会话。");
             var connection = s.Settings.Connections.FirstOrDefault();
             var options = new PlaygroundConversationOptions { UseSavedContext = !temporary };
-            if (connection is not null) options = options with { Provider = connection.Provider, Endpoint = connection.Endpoint, Model = connection.Model };
+            if (connection is not null) options = options with { Provider = connection.Provider, Endpoint = connection.Endpoint, Model = connection.Model,
+                ChatGptAccountId = connection.ChatGptAccountId };
             return s with { Conversations = s.Conversations.Add(new(id, temporary ? "临时会话" : "新会话", now, now, options, temporary)) };
         }, cancellation, !temporary).ConfigureAwait(false);
         Notify(id, null, "conversation"); return id;
@@ -82,6 +83,7 @@ public sealed partial class PlaygroundService : IAsyncDisposable
         var current = Snapshot.Conversations.FirstOrDefault(c => c.Id == id);
         if (current is not null && (current.Options.UseSavedContext && !options.UseSavedContext || current.Options.Spoiler != options.Spoiler
             || current.Options.Search != options.Search || current.Options.SystemInstructions != options.SystemInstructions
+            || current.Options.Provider != options.Provider || current.Options.ChatGptAccountId != options.ChatGptAccountId
             || current.Options.WorkProgress.Count != options.WorkProgress.Count
             || current.Options.WorkProgress.Any(p => !options.WorkProgress.TryGetValue(p.Key, out var value) || value != p.Value))) Invalidate();
         return ChangeConversation(id, c => c with { Options = options, UpdatedAt = clock() }, cancellation);
@@ -161,7 +163,8 @@ public sealed partial class PlaygroundService : IAsyncDisposable
     { Invalidate(); await credentials.SaveAsync(provider, Endpoint(provider, endpoint), key, cancellation).ConfigureAwait(false); Notify(null, null, "credentials"); }
     public async Task ClearCredentialAsync(PlaygroundProviderKind provider, string endpoint, CancellationToken cancellation = default)
     { Invalidate(); await credentials.ClearAsync(provider, Endpoint(provider, endpoint), cancellation).ConfigureAwait(false); Notify(null, null, "credentials"); }
-    public async Task<ImmutableArray<PlaygroundModel>> ListModelsAsync(PlaygroundProviderKind provider, string endpoint, CancellationToken cancellation = default)
+    public async Task<ImmutableArray<PlaygroundModel>> ListModelsAsync(PlaygroundProviderKind provider, string endpoint, CancellationToken cancellation = default,
+        string? chatGptAccountId = null)
     {
         var s = Snapshot; endpoint = Endpoint(provider, endpoint);
         if (!PlaygroundAuthorizationPolicy.CanSend(s.Settings))
@@ -169,7 +172,7 @@ public sealed partial class PlaygroundService : IAsyncDisposable
         lock (gate) if (configurationUncertain) throw new InvalidOperationException("授权设置尚未安全保存，请先重新保存设置。");
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(TimeSpan.FromSeconds(s.Settings.TimeoutSeconds));
-        try { return await Provider(provider).ListModelsAsync(endpoint, deadline.Token).ConfigureAwait(false); }
+        try { return await Provider(provider).ListModelsForAccountAsync(endpoint, chatGptAccountId, deadline.Token).ConfigureAwait(false); }
         catch (OperationCanceledException) when (!cancellation.IsCancellationRequested && deadline.IsCancellationRequested)
         { throw new PlaygroundProviderException(new(PlaygroundFailureKind.Timeout, "模型列表读取超时；可手动重试，或直接填写模型 ID。")); }
     }

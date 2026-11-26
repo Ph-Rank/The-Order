@@ -1,8 +1,9 @@
 using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 
 namespace TheOrder.Application.Playground;
 
-public enum PlaygroundProviderKind { OpenAI, Gemini, Claude, Grok, DeepSeek }
+public enum PlaygroundProviderKind { OpenAI, Gemini, Claude, Grok, DeepSeek, ChatGPT }
 public enum PlaygroundSearchMode { Off, Smart, Deep }
 public enum PlaygroundSpoilerMode { Strict, Progress, Full, LibraryStatus }
 public enum PlaygroundPhase { Discussion, PublicResearch }
@@ -14,7 +15,8 @@ public enum PlaygroundFailureKind { Authentication, AccessDenied, RateLimited, Q
 
 public sealed record PlaygroundIdentity(Guid ProfileId, Guid StoreId);
 public sealed record PlaygroundPermissions(bool Library = false, bool History = false, bool Memory = false, bool AutoMemory = false);
-public sealed record PlaygroundConnection(PlaygroundProviderKind Provider, string Endpoint, string Model = "", bool Consented = false);
+public sealed record PlaygroundConnection(PlaygroundProviderKind Provider, string Endpoint, string Model = "", bool Consented = false)
+{ [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ChatGptAccountId { get; init; } }
 public sealed record PlaygroundSettings
 {
     // Legacy storage compatibility; no longer an independent sending gate.
@@ -32,6 +34,8 @@ public sealed record PlaygroundSettings
 }
 public sealed record PlaygroundConversationOptions
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ChatGptAccountId { get; init; }
     public PlaygroundProviderKind Provider { get; init; }
     public string Endpoint { get; init; } = "https://api.openai.com/v1";
     public string Model { get; init; } = "";
@@ -127,10 +131,14 @@ public interface IPlaygroundStore
 }
 public interface IPlaygroundCredentials
 {
+    Task<bool> HasForAccountAsync(PlaygroundProviderKind provider, string endpoint, string? accountId, CancellationToken cancellation)
+        => HasAsync(provider, endpoint, cancellation);
     Task<bool> HasAsync(PlaygroundProviderKind provider, string endpoint, CancellationToken cancellation);
     Task<string?> ReadAsync(PlaygroundProviderKind provider, string endpoint, CancellationToken cancellation);
     Task SaveAsync(PlaygroundProviderKind provider, string endpoint, string key, CancellationToken cancellation);
     Task ClearAsync(PlaygroundProviderKind provider, string endpoint, CancellationToken cancellation);
+    Task<string?> ReadForAccountAsync(PlaygroundProviderKind provider, string endpoint, string? accountId, CancellationToken cancellation)
+        => ReadAsync(provider, endpoint, cancellation);
 }
 
 public sealed record PlaygroundModel(string Id, string Name, PlaygroundCapabilities Capabilities)
@@ -175,6 +183,7 @@ public sealed class PlaygroundConversationTape(string binding, string data)
 public sealed record PlaygroundProviderRequest(Guid ConversationId, Guid TurnId, PlaygroundProviderKind Provider,
     string Endpoint, string Model, string Instructions, ImmutableArray<PlaygroundWireMessage> Messages)
 {
+    public string? ChatGptAccountId { get; init; }
     public PlaygroundPhase Phase { get; init; }
     public ImmutableArray<PlaygroundToolDefinition> Tools { get; init; } = [];
     public ImmutableArray<PlaygroundWireMessage> ToolResults { get; init; } = [];
@@ -201,10 +210,14 @@ public sealed record PlaygroundProviderEvent(PlaygroundProviderEventKind Kind)
 public sealed record PlaygroundPublicSearchRequest(Guid ConversationId, Guid TurnId, PlaygroundProviderKind Provider,
     string Endpoint, string Model, string Query, int MaximumSearches = 0, int MaximumOutputTokens = 65536)
 {
+    public string? ChatGptAccountId { get; init; }
     public string? ReasoningEffort { get; init; } = "high";
 }
 public sealed record PlaygroundPublicFetchRequest(Guid ConversationId, Guid TurnId, PlaygroundProviderKind Provider,
-    string Endpoint, string Model, string Url);
+    string Endpoint, string Model, string Url)
+{
+    public string? ChatGptAccountId { get; init; }
+}
 public sealed record PlaygroundResearchResult(string Text, ImmutableArray<PlaygroundSource> Sources, PlaygroundUsage? Usage = null)
 {
     public PlaygroundRetention Retention { get; init; }
@@ -216,6 +229,8 @@ public interface IPlaygroundProvider
     string DefaultEndpoint { get; }
     PlaygroundCapabilities Capabilities(string model, string endpoint);
     Task<ImmutableArray<PlaygroundModel>> ListModelsAsync(string endpoint, CancellationToken cancellation);
+    Task<ImmutableArray<PlaygroundModel>> ListModelsForAccountAsync(string endpoint, string? accountId, CancellationToken cancellation)
+        => ListModelsAsync(endpoint, cancellation);
     IAsyncEnumerable<PlaygroundProviderEvent> SendAsync(PlaygroundProviderRequest request, CancellationToken cancellation);
     Task<PlaygroundResearchResult> SearchAsync(PlaygroundPublicSearchRequest request, CancellationToken cancellation);
     Task<PlaygroundResearchResult> FetchAsync(PlaygroundPublicFetchRequest request, CancellationToken cancellation)

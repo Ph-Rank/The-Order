@@ -27,7 +27,8 @@ internal sealed partial class NativePlaygroundProvider
                 || String(envelope["model"]) != CleanModel(request.Model)
                 || String(envelope["endpoint"]) != PlaygroundProviderEndpoints.Normalize(Kind, request.Endpoint)
                 || String(envelope["conversation"]) != request.ConversationId.ToString("N")
-                || String(envelope["turn"]) != request.TurnId.ToString("N")) throw Invalid("已拒绝跨会话或跨服务商续接。");
+                || String(envelope["turn"]) != request.TurnId.ToString("N")
+                || Kind == PlaygroundProviderKind.ChatGPT && String(envelope["account"]) != request.ChatGptAccountId) throw Invalid("已拒绝跨会话、账号或服务商续接。");
             items = envelope["items"]?.DeepClone() as JsonArray ?? throw Invalid();
         }
         else
@@ -97,7 +98,7 @@ internal sealed partial class NativePlaygroundProvider
         var capabilities = Capabilities(request.Model, request.Endpoint);
         var wireItems = ExpandImages(request, items);
         if (research && ImageCatalog(request).Count != 0) throw Invalid("公开检索不能携带本地图片。");
-        var body = new JsonObject { ["model"] = CleanModel(request.Model), ["stream"] = stream };
+        var body = new JsonObject { ["model"] = CleanModel(request.Model), ["stream"] = Kind == PlaygroundProviderKind.ChatGPT || stream };
         int maximum = Math.Clamp(request.MaximumOutputTokens, 64, 65536);
         var tools = new JsonArray();
         if (!research && capabilities.Tools)
@@ -129,15 +130,18 @@ internal sealed partial class NativePlaygroundProvider
         { body["messages"] = wireItems; body["system"] = request.Instructions; body["max_tokens"] = maximum; }
         else
         {
-            body["input"] = wireItems; body["instructions"] = request.Instructions; body["max_output_tokens"] = maximum;
+            body["input"] = wireItems; body["instructions"] = request.Instructions;
+            if (Kind != PlaygroundProviderKind.ChatGPT) body["max_output_tokens"] = maximum;
             if (Kind != PlaygroundProviderKind.DeepSeek) body["store"] = false;
-            if (Kind == PlaygroundProviderKind.OpenAI)
+            if (Kind is PlaygroundProviderKind.OpenAI or PlaygroundProviderKind.ChatGPT)
             {
                 if (research) body["include"] = new JsonArray("web_search_call.action.sources");
                 else if (capabilities.Tools && tools.Count > 0) body["include"] = new JsonArray("reasoning.encrypted_content");
             }
         }
-        if (tools.Count > 0) body["tools"] = tools;
+        if (tools.Count > 0) body["tools"] = Kind == PlaygroundProviderKind.ChatGPT && !research
+            ? new JsonArray(new JsonObject { ["type"] = "namespace", ["name"] = "the_order",
+                ["description"] = "The Order tools allowed for this conversation.", ["tools"] = tools }) : tools;
         // Advanced parameters are only sent after model-specific verification.
         // Unknown/model-enumeration-only IDs remain usable for basic chat.
         string? effort = request.ReasoningEffort ?? (capabilities.ReasoningEfforts.Contains("high", StringComparer.Ordinal) ? "high" : null);
@@ -149,7 +153,7 @@ internal sealed partial class NativePlaygroundProvider
                 body["thinking"] = new JsonObject { ["type"] = "adaptive" };
                 body["output_config"] = new JsonObject { ["effort"] = effort };
             }
-            else if (Kind is PlaygroundProviderKind.OpenAI or PlaygroundProviderKind.DeepSeek or PlaygroundProviderKind.Grok) body["reasoning"] = new JsonObject { ["effort"] = effort };
+            else if (Kind is PlaygroundProviderKind.OpenAI or PlaygroundProviderKind.ChatGPT or PlaygroundProviderKind.DeepSeek or PlaygroundProviderKind.Grok) body["reasoning"] = new JsonObject { ["effort"] = effort };
         }
         return body;
     }
@@ -168,6 +172,8 @@ internal sealed partial class NativePlaygroundProvider
         var data = new JsonObject { ["wire"] = Wire, ["provider"] = Kind.ToString(), ["model"] = CleanModel(request.Model),
             ["endpoint"] = PlaygroundProviderEndpoints.Normalize(Kind, request.Endpoint), ["conversation"] = request.ConversationId.ToString("N"),
             ["turn"] = request.TurnId.ToString("N"), ["items"] = items }.ToJsonString();
+        if (Kind == PlaygroundProviderKind.ChatGPT)
+        { var envelope = JsonNode.Parse(data)!; envelope["account"] = request.ChatGptAccountId; data = envelope.ToJsonString(); }
         if (data.Length > MaximumPrivateStateCharacters) throw Invalid("本轮服务商上下文超过安全上限，无法继续调用工具。");
         return new(request.Binding, data);
     }

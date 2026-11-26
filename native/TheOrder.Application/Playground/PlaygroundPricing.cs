@@ -85,6 +85,7 @@ public static class PlaygroundPricing
     }
     public static string Describe(PlaygroundProviderKind provider, string model, DateTimeOffset at)
     {
+        if (provider == PlaygroundProviderKind.ChatGPT) return "使用 ChatGPT 额度";
         var rate = Rates(provider, model, at);
         if (rate is null) return "收费标准尚未核实";
         string Range(decimal value) => provider == PlaygroundProviderKind.DeepSeek ? Number(value / 2) + "–" + Number(value) : Number(value);
@@ -94,6 +95,7 @@ public static class PlaygroundPricing
     public static PlaygroundCostEstimate Calculate(PlaygroundProviderKind provider, string model, PlaygroundUsage? usage,
         DateTimeOffset at, PlaygroundChargeKind kind = PlaygroundChargeKind.Discussion)
     {
+        if (provider == PlaygroundProviderKind.ChatGPT) return Unknown("使用 ChatGPT 额度；可在 ChatGPT 用量设置中查看和管理。");
         if (usage is null || !IsValidUsage(usage)) return Unknown("未取得完整计费用量；请求可能已经计费。");
         if (provider == PlaygroundProviderKind.Grok && usage.ReportedCostUsd is { } actual) return new("USD", actual, actual, true, true,
             "服务商返回的本次实际收费，已含其工具与折扣；不是账户余额。");

@@ -103,22 +103,6 @@ public sealed partial class LibraryPage : Page, IImageHost
     // ---- Query chrome ----------------------------------------------------------------------------------
     private static string Value(SelectedFirstComboBox box, string fallback = "all") => (box.SelectedOption as ComboBoxItem)?.Tag as string ?? fallback;
     private static void Select(SelectedFirstComboBox box, string value) => box.SelectedOption = box.Options.OfType<ComboBoxItem>().FirstOrDefault(i => (i.Tag as string ?? "") == value);
-    private static readonly Dictionary<string, string> sortNames = new() { ["added"] = UiText.Get("最近添加"), ["recent"] = UiText.Get("最近游玩"), ["name"] = UiText.Get("名称"), ["rating"] = UiText.Get("我的评分"), ["playtime"] = UiText.Get("游玩时长") };
-    private RadioMenuFlyoutItem[]? primarySortItems;
-
-    private void OnSortMenuOpening(object sender, object args)
-    {
-        primarySortItems ??= SortMenu.Items.OfType<RadioMenuFlyoutItem>().ToArray();
-        var sort = ViewModel.Query.Sort;
-        var items = primarySortItems.OrderByDescending(item => (item.Tag as string) == sort).ToArray();
-        if (!SortMenu.Items.SequenceEqual(items))
-        {
-            SortMenu.Items.Clear();
-            foreach (var item in items) SortMenu.Items.Add(item);
-        }
-        foreach (var item in items) item.IsChecked = (item.Tag as string) == sort;
-    }
-
     private void Synchronize()
     {
         synchronizing = true;
@@ -128,9 +112,7 @@ public sealed partial class LibraryPage : Page, IImageHost
         if (TagFilter.Text != q.Tag) TagFilter.Text = q.Tag;
         FavoriteFilter.IsChecked = q.Favorites;
         Select(ViewChoice, q.View); Select(StatusChoice, q.Status); Select(MinimumChoice, q.MinRating);
-        foreach (var item in SortMenu.Items.OfType<RadioMenuFlyoutItem>()) item.IsChecked = (item.Tag as string) == q.Sort;
-        SortLabel.Text = sortNames.GetValueOrDefault(q.Sort, UiText.Get("最近添加"));
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SortButton, UiText.Get("作品排序：") + SortLabel.Text);
+        Select(SortButton, q.Sort);
         var grid = ViewModel.Layout == "grid";
         if (measuredLayout != ViewModel.Layout)
         { measuredLayout = ViewModel.Layout; firstDisplay = 0; maxRealized = 0; modeStarted = measuredLayout == "grid" && createdContainers == 0 ? 0 : display.Elapsed.TotalMilliseconds; }
@@ -184,9 +166,9 @@ public sealed partial class LibraryPage : Page, IImageHost
     private async void OnFilterText(object sender, TextChangedEventArgs e) => await ApplyQuery();
     private async void OnFilter(object sender, SelectionChangedEventArgs e) => await ApplyQuery();
     private async void OnFavoriteFilter(object sender, RoutedEventArgs e) => await ApplyQuery();
-    private async void OnSortItem(object sender, RoutedEventArgs e)
+    private async void OnSortChoice(object sender, SelectionChangedEventArgs e)
     {
-        if (sender is RadioMenuFlyoutItem { Tag: string sort } && sort != ViewModel.Query.Sort) await ViewModel.SetQueryAsync(ViewModel.Query with { Sort = sort });
+        if (!synchronizing && SortButton.SelectedOption is ComboBoxItem { Tag: string sort } && sort != ViewModel.Query.Sort) await ViewModel.SetQueryAsync(ViewModel.Query with { Sort = sort });
     }
     private async void OnHeaderSort(object sender, RoutedEventArgs e)
     {
@@ -251,7 +233,7 @@ public sealed partial class LibraryPage : Page, IImageHost
         Grid.SetColumnSpan(ContextActions, narrow ? 3 : 1);
         ContextActions.Margin = narrow ? new Thickness(0) : new Thickness(12, 0, 0, 0);
         SearchLabel.Visibility = FilterLabel.Visibility = SelectLabel.Visibility = ImportLabel.Visibility = Visible(!compact);
-        SortLabel.Visibility = Visible(!narrow);
+        SortButton.Width = narrow ? 112 : 134;
         SelectButton.Visibility = ImportButton.Visibility = Visible(!compact);
         MoreSelect.Visibility = MoreImport.Visibility = Visible(compact);
         SelectionHint.Visibility = Visible(!compact);
@@ -474,7 +456,8 @@ public sealed partial class LibraryPage : Page, IImageHost
     {
         activeCardMenu?.Hide();
         var menu = new MenuFlyout();
-        menu.MenuFlyoutPresenterStyle = new Style(typeof(MenuFlyoutPresenter));
+        menu.MenuFlyoutPresenterStyle = new Style(typeof(MenuFlyoutPresenter))
+        { BasedOn = (Style)Microsoft.UI.Xaml.Application.Current.Resources["OrderDropDownMenuStyle"] };
         menu.MenuFlyoutPresenterStyle.Setters.Add(new Setter(FrameworkElement.RequestedThemeProperty, ActualTheme));
         MenuFlyoutItem Entry(string text, string glyph, Func<Task> action, bool enabled = true, string? accelerator = null)
         {

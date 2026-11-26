@@ -119,7 +119,7 @@ public sealed partial class PlaygroundService
         try { result = await Provider(run.Conversation.Options.Provider).SearchAsync(new(run.Conversation.Id, run.Id,
             run.Conversation.Options.Provider, Endpoint(run.Conversation.Options.Provider, run.Conversation.Options.Endpoint),
             run.Conversation.Options.Model, run.SafePublicQuestion, 0, run.Settings.MaximumOutputTokens)
-            { ReasoningEffort = run.Conversation.Options.ReasoningEffort }, run.Cancel.Token).ConfigureAwait(false); chargedUsage = result.Usage; }
+            { ReasoningEffort = run.Conversation.Options.ReasoningEffort, ChatGptAccountId = run.Conversation.Options.ChatGptAccountId }, run.Cancel.Token).ConfigureAwait(false); chargedUsage = result.Usage; }
         finally { RecordCharge(run, run.Conversation.Options.Provider, run.Conversation.Options.Model, chargedUsage, chargedAt, PlaygroundChargeKind.PublicSearch); }
         EnsureCurrent(run);
         return AcceptPublicResult(run, result);

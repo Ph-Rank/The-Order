@@ -49,12 +49,14 @@ public sealed partial class PlaygroundService
         if (s.Permissions is null || s.Connections.IsDefault || s.Connections.Length > 30 || s.MaximumToolRounds < 0
             || s.MaximumSearches < 0 || s.DeepMaximumSearches < 0 || s.MaximumOutputTokens is < 128 or > 65536
             || s.MaximumContextCharacters is < 2000 or > 1000000 || s.TimeoutSeconds is < 10 or > 1800) throw new ArgumentException("Playground 设置超出允许范围。");
-        foreach (var c in s.Connections) { if (!Enum.IsDefined(c.Provider) || c.Model.Length > 180) throw new ArgumentException("服务商设置无效。"); Endpoint(c.Provider, c.Endpoint); }
+        foreach (var c in s.Connections) { if (!Enum.IsDefined(c.Provider) || c.Model.Length > 180
+            || c.ChatGptAccountId is not null && !ChatGptSignInPolicy.ValidClient(c.ChatGptAccountId)) throw new ArgumentException("服务商设置无效。"); Endpoint(c.Provider, c.Endpoint); }
         if (s.Connections.Select(c => (c.Provider, Endpoint(c.Provider, c.Endpoint))).Distinct().Count() != s.Connections.Length) throw new ArgumentException("服务商连接重复。");
     }
     private static void Validate(PlaygroundConversationOptions o)
     {
         if (!Enum.IsDefined(o.Provider) || !Enum.IsDefined(o.Search) || !Enum.IsDefined(o.Spoiler) || o.Model.Length > 180
+            || o.ChatGptAccountId is not null && !ChatGptSignInPolicy.ValidClient(o.ChatGptAccountId)
             || o.Model.Any(char.IsControl) || o.ReasoningEffort?.Length > 64 || o.SystemInstructions is null || o.SystemInstructions.Length > 8000
             || o.SystemInstructions.Any(c => char.IsControl(c) && c is not ('\r' or '\n' or '\t'))
             || o.GameOverlayKey?.Length > 300 || o.GameOverlayKey?.Any(char.IsControl) == true

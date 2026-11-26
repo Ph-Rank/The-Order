@@ -15,10 +15,22 @@ public sealed partial class PlaygroundView
     {
         if (modelPickerOpen) return;
         modelPickerOpen = true; var owner = CaptureOptionsOwner();
-        modelPickerOptions = OptionsFor(owner.ConversationId);
+        var initial = service.Snapshot.Settings;
+        var original = OptionsFor(owner.ConversationId);
+        var preferredOpenAi = OpenAiMethodFor(original, initial);
+        var openAiMethod = OpenAiMethodPicker(preferredOpenAi, "PlaygroundModelOpenAiMethod");
+        modelPickerOptions = ProviderGroup(original.Provider) == PlaygroundProviderKind.OpenAI ? OptionsForProvider(preferredOpenAi) : original;
         bool selectedModel = false, open = true; int credentialCheck = 0;
         PlaygroundConversationOptions? chosenOptions = null;
         var tabs = new TagFlowPanel { HorizontalSpacing = 6, VerticalSpacing = 6 };
+        var providers = new StackPanel { Spacing = 6, Children = { tabs, openAiMethod } };
+        PlaygroundConversationOptions OptionsForProvider(PlaygroundProviderKind provider)
+        {
+            var saved = OptionsFor(owner.ConversationId);
+            if (saved.Provider == provider) return saved;
+            var connection = service.Snapshot.Settings.Connections.FirstOrDefault(c => c.Provider == provider);
+            return WithConnection(saved, provider, connection);
+        }
         var filter = new TextBox { PlaceholderText = "搜索模型", MaxLength = 160 };
         PlaygroundAppearance.Apply(filter, "PGTextBox"); AutomationProperties.SetName(filter, "搜索可用模型");
         var rows = new StackPanel { Spacing = 6 };
@@ -40,7 +52,7 @@ public sealed partial class PlaygroundView
         var results = new Grid { RowSpacing = 4 }; results.RowDefinitions.Add(new() { Height = GridLength.Auto }); results.RowDefinitions.Add(new()); results.Children.Add(status);
         var listScroll = new ScrollViewer { Content = rows, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetRow(listScroll, 1); results.Children.Add(listScroll);
-        var sections = new FrameworkElement[] { filter, tabs, results, actions, manual, manualApply };
+        var sections = new FrameworkElement[] { filter, providers, results, actions, manual, manualApply };
         for (int i = 0; i < sections.Length; i++) { Grid.SetRow(sections[i], i); body.Children.Add(sections[i]); }
         var frameSizes = new List<object>();
         body.SizeChanged += (_, e) => { if (frameSizes.Count < 32 && e.NewSize.Width > 0 && e.NewSize.Height > 0) frameSizes.Add(new { width = e.NewSize.Width, height = e.NewSize.Height }); };
@@ -66,9 +78,11 @@ public sealed partial class PlaygroundView
         {
             if (!OwnsPicker()) return;
             var preview = modelPickerOptions!;
+            var group = ProviderGroup(preview.Provider);
+            openAiMethod.Visibility = group == PlaygroundProviderKind.OpenAI ? Visibility.Visible : Visibility.Collapsed;
             foreach (var tab in tabs.Children.OfType<Button>())
             {
-                bool current = tab.Tag is PlaygroundProviderKind kind && kind == preview.Provider;
+                bool current = tab.Tag is PlaygroundProviderKind kind && kind == group;
                 tab.Background = PlaygroundAppearance.Brush(this, current ? "PGSurfaceBrush" : "PGCanvasBrush");
                 tab.BorderBrush = PlaygroundAppearance.Brush(this, current ? "PGPrimaryBrush" : "PGBorderBrush");
             }
@@ -116,7 +130,7 @@ public sealed partial class PlaygroundView
             modelPickerCredentialAvailable = false; modelPickerCredentialBinding = binding; modelPickerCheckingCredential = true; Populate();
             try
             {
-                bool available = await service.HasCredentialAsync(preview.Provider, preview.Endpoint, lifetime.Token);
+                bool available = await HasConversationCredential(preview);
                 if (!OwnsPicker() || check != credentialCheck || binding != ModelBinding) return;
                 modelPickerCredentialAvailable = available; modelPickerCheckingCredential = false; Populate();
                 if (available && CanLoadModels && !modelCatalogues.ContainsKey(binding) && !modelLoadAttempts.Contains(binding)) _ = LoadModelsAsync();
@@ -124,21 +138,32 @@ public sealed partial class PlaygroundView
             catch (OperationCanceledException) { }
             catch { if (OwnsPicker() && check == credentialCheck) { modelPickerCheckingCredential = false; status.Text = "本机凭据暂不可读，可稍后重试。"; status.Opacity = 1; } }
         }
-        foreach (var kind in Enum.GetValues<PlaygroundProviderKind>())
+        async Task PreviewProviderAsync(PlaygroundProviderKind kind)
         {
-            var tab = new Button { Content = ProviderNames[(int)kind], Tag = kind, CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Padding = new Thickness(12, 7, 12, 7), FontSize = 13 };
-            PlaygroundAppearance.Apply(tab, "PGButton"); tab.Click += async (_, _) =>
-            {
-                if (!OwnsPicker() || kind == modelPickerOptions!.Provider) return;
-                CancelModelLoading(); var connection = service.Snapshot.Settings.Connections.FirstOrDefault(c => c.Provider == kind);
-                modelPickerOptions = modelPickerOptions! with { Provider = kind, Endpoint = connection?.Endpoint ?? Endpoint(kind), Model = connection?.Model ?? "" };
-                await CheckPickerCredentialAsync();
-            }; tabs.Children.Add(tab);
+            if (!OwnsPicker() || kind == modelPickerOptions!.Provider) return;
+            CancelModelLoading();
+            modelPickerOptions = OptionsForProvider(kind);
+            manual.Text = modelPickerOptions.Model;
+            await CheckPickerCredentialAsync();
         }
+        foreach (var kind in ProviderGroups)
+        {
+            var tab = new Button { Content = ProviderName(kind), Tag = kind, CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Padding = new Thickness(12, 7, 12, 7), FontSize = 13 };
+            AutomationProperties.SetAutomationId(tab, "PlaygroundModelsProvider" + kind);
+            PlaygroundAppearance.Apply(tab, "PGButton");
+            tab.Click += async (_, _) => await PreviewProviderAsync(kind == PlaygroundProviderKind.OpenAI ? SelectedOpenAiMethod(openAiMethod) : kind);
+            tabs.Children.Add(tab);
+        }
+        openAiMethod.SelectionChanged += async (_, _) =>
+        {
+            if (openAiMethod.SelectedIndex >= 0 && openAiMethod.Visibility == Visibility.Visible)
+                await PreviewProviderAsync(SelectedOpenAiMethod(openAiMethod));
+        };
         filter.TextChanged += (_, _) => Populate(); refresh.Click += async (_, _) => await LoadModelsAsync();
         manualToggle.Click += (_, _) => { if (!OwnsPicker()) return; manual.Text = modelPickerOptions!.Model; manual.Visibility = manualApply.Visibility = manual.Visibility == Visibility.Collapsed ? Visibility.Visible : Visibility.Collapsed; };
         manualApply.Click += (_, _) => Choose(manual.Text);
         readModelPickerEvidence = () => new { provider = modelPickerOptions?.Provider.ToString(), width = body.ActualWidth, height = body.ActualHeight,
+            providerLabels = tabs.Children.OfType<Button>().Select(tab => tab.Content?.ToString()).ToArray(),
             viewportWidth = listScroll.ActualWidth, viewportHeight = listScroll.ActualHeight, visibleRows = rows.Children.Count, createdRows, refreshes, frameSizes = frameSizes.ToArray(), status = status.Text };
         refreshModelPicker = Populate; dismissModelPicker = () => dialog.Hide(); StyleContent(body); Populate();
         try { _ = CheckPickerCredentialAsync(); await dialog.ShowInShellAsync(); }

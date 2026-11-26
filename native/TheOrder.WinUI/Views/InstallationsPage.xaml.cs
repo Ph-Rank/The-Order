@@ -12,7 +12,6 @@ public sealed partial class InstallationsPage : Page
     public WorkspaceViewModel Workspace { get; }
     public Func<Task<string?>>? ChooseFolder { get; set; }
     public Func<Task<string?>>? ChooseExecutable { get; set; }
-    public Func<Task<string?>>? ChooseHelper { get; set; }
     public WindowsLocalResources? LocalResources { get; set; }
     public Visibility ShowSteam(string? id) => id is null ? Visibility.Collapsed : Visibility.Visible;
     private InstallationDraft? displayedDraft;
@@ -138,8 +137,6 @@ public sealed partial class InstallationsPage : Page
     private async void OnWorking(object sender, RoutedEventArgs e) => await Pick(ChooseFolder, (draft, value) => draft.WorkingDirectory = value);
     private async void OnSaveFolder(object sender, RoutedEventArgs e) => await Pick(ChooseFolder, (draft, value) => draft.SaveFolder = value);
     private void OnResetLaunchOverrides(object sender, RoutedEventArgs e) => ViewModel.Draft?.ResetAuxiliaries();
-    private async void OnLocaleTool(object sender, RoutedEventArgs e) => await Pick(ChooseHelper, (draft, value) => draft.LocaleEmulator = value);
-    private async void OnScalingTool(object sender, RoutedEventArgs e) => await Pick(ChooseHelper, (draft, value) => draft.ScalingTool = value);
     private async void OnOpenGameFolder(object sender, RoutedEventArgs e)
     {
         if (Selected is not { } row || LocalResources is null) return;

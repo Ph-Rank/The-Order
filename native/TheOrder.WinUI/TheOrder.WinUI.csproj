@@ -47,6 +47,7 @@
     <Content Include="../licenses/UNICODE-LICENSE.txt" Link="LICENSE-Unicode.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../licenses/MARKDIG-LICENSE.txt" Link="LICENSE-Markdig.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../licenses/JINT-LICENSE.txt;../licenses/ACORNIMA-LICENSE.txt" Link="licenses/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../licenses/IDENTITYMODEL-MIT.txt" Link="licenses/IDENTITYMODEL-MIT.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../licenses/OPENMCDF-MPL-2.0.txt;../licenses/EXCELDATAREADER-MIT.txt" Link="licenses/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../licenses/LITEDB-LICENSE.txt;../licenses/LEVELDB-LICENSE.txt;../licenses/SNAPPY-LICENSE.txt;../licenses/REINAMANAGER-LICENSE.txt;../licenses/LUNABOX-LICENSE.txt" Link="licenses/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />

@@ -15,7 +15,7 @@ public sealed record StatisticsDashboard(DateOnly Start, DateOnly End, int Libra
     string IntervalLabel, ImmutableArray<StatisticsBucket> Trend, ImmutableArray<StatisticsGame> Games,
     ImmutableArray<StatisticsStatus> Statuses, ImmutableArray<StatisticsWeekday> Weekdays, ImmutableArray<DailyPlaytime> Days)
 {
-    public ImmutableArray<StatisticsSessionBucket> SessionTimeline { get; init; } = [];
+    public StatisticsSessionTimelineData SessionTimeline { get; init; } = StatisticsSessionTimelineData.Empty;
     public int CompletedGames => Statuses.First(x => x.Key == "completed").Count;
 }
 
@@ -37,11 +37,8 @@ public static class StatisticsDashboardBuilder
             StatisticsPeriod.ThisYear => new DateOnly(today.Year, 1, 1),
             _ => null
         };
-        var sessions = new StatisticsSessionTimeline(request.Zone);
-        var report = PlaytimeStatistics.Build(entries, request.Zone, cancellation, (entry, day, start, end) =>
-        {
-            if (day <= today && (requestedStart is null || day >= requestedStart.Value)) sessions.Add(entry, day, start, end);
-        });
+        var sessions = new StatisticsSessionTimeline(request.Entries, request.Zone, requestedStart, today);
+        var report = PlaytimeStatistics.Build(entries, request.Zone, cancellation, sessions.AddSession);
         var available = report.Days.Where(x => x.Date <= today).ToImmutableArray();
         var start = requestedStart ?? (available.IsEmpty ? today.AddDays(-29) : available.Min(x => x.Date));
         var days = available.Where(x => x.Date >= start).ToImmutableArray();

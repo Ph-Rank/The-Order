@@ -83,7 +83,7 @@ public sealed partial class BangumiRelationsProvider(HttpClient client, Func<Dat
                 var media = response.Content.Headers.ContentType?.MediaType;
                 if (media is null || !media.Equals("application/json", StringComparison.OrdinalIgnoreCase) && !media.EndsWith("+json", StringComparison.OrdinalIgnoreCase))
                     throw Invalid("Bangumi 未返回有效的 JSON 资料，请稍后重试。");
-                var bytes = await ReadAsync(response.Content, budget.Token).ConfigureAwait(false);
+                var bytes = await BangumiHttpResponse.ReadBodyAsync(response.Content, MaximumResponseBytes, TooLarge, budget.Token).ConfigureAwait(false);
                 budget.Token.ThrowIfCancellationRequested();
                 try
                 {
@@ -102,7 +102,7 @@ public sealed partial class BangumiRelationsProvider(HttpClient client, Func<Dat
                 throw new BangumiRelationsException(BangumiRelationsFailure.Unavailable, budget.Access.Authorized
                     ? "番组计划未返回该条目，请在原站核对编号或访问权限。"
                     : "暂时无法匿名读取。可在设置中授权番组计划后重试，或到原站核对条目。");
-            var retryAfter = ReadRetryAfter(response, Now);
+            var retryAfter = BangumiHttpResponse.ReadRetryAfter(response, Now);
             bool retryable = status == 429 || status is >= 500 and <= 599;
             var failure = status == 429 ? BangumiRelationsFailure.RateLimited : status >= 500 ? BangumiRelationsFailure.Server : BangumiRelationsFailure.InvalidResponse;
             var message = status == 429 ? "Bangumi 请求过于频繁，请稍后重试。"
@@ -117,28 +117,6 @@ public sealed partial class BangumiRelationsProvider(HttpClient client, Func<Dat
         }
     }
     private Task WaitAsync(TimeSpan duration, CancellationToken cancellation) => (delay ?? Task.Delay)(duration, cancellation);
-    private static TimeSpan? ReadRetryAfter(HttpResponseMessage response, DateTimeOffset now)
-    {
-        var value = response.Headers.RetryAfter?.Delta ?? (response.Headers.RetryAfter?.Date - now);
-        if (value is null && response.Headers.TryGetValues("Retry-After", out var values)
-            && double.TryParse(values.FirstOrDefault(), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var seconds)
-            && double.IsFinite(seconds) && seconds >= 0) value = TimeSpan.FromSeconds(Math.Min(seconds, 86400));
-        return value is null ? null : TimeSpan.FromSeconds(Math.Clamp(value.Value.TotalSeconds, 0, 86400));
-    }
-    private static async Task<byte[]> ReadAsync(HttpContent content, CancellationToken cancellation)
-    {
-        if (content.Headers.ContentLength > MaximumResponseBytes) throw TooLarge();
-        using var input = await content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
-        using var output = new MemoryStream(); var buffer = new byte[16384];
-        while (true)
-        {
-            int count = await input.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, MaximumResponseBytes + 1 - (int)output.Length)), cancellation).ConfigureAwait(false);
-            cancellation.ThrowIfCancellationRequested();
-            if (count == 0) return output.ToArray();
-            if (output.Length + count > MaximumResponseBytes) throw TooLarge();
-            output.Write(buffer, 0, count);
-        }
-    }
     public static void ValidateSource(string subjectId, JsonElement root, bool authorized = false)
     {
         if (root.ValueKind != JsonValueKind.Object || Id(root) != subjectId || Integer(root, "type") != 4)

@@ -21,7 +21,7 @@ public sealed partial class MainWindow
             var node = pending.Pop();
             if (++visited > 8192) throw new InvalidDataException("Accessibility fixture tree bound.");
             if (node is FrameworkElement element && element.Visibility == Visibility.Visible &&
-                element is ButtonBase or TextBox or ComboBox or ToggleSwitch or ListViewItem or NavigationViewItem or AutoSuggestBox)
+                element is ButtonBase or TextBox or ToggleSwitch or ListViewItem or NavigationViewItem or AutoSuggestBox)
             {
                 var peer = FrameworkElementAutomationPeer.CreatePeerForElement(element);
                 if (peer is not null)

@@ -22,6 +22,7 @@ public sealed partial class MainWindow
     private PlaygroundView? playgroundView;
     private WindowsPlaygroundAttachments? playgroundAttachments;
     private HttpClient? playgroundHttp;
+    private IChatGptAccounts? playgroundChatGptAccounts;
     private bool playgroundNavigationVisible = true;
     private Task playgroundOpening = Task.CompletedTask;
     private void RefreshPlaygroundPolicy()
@@ -76,7 +77,10 @@ public sealed partial class MainWindow
             AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli,
             PooledConnectionLifetime = TimeSpan.FromMinutes(5), ConnectTimeout = TimeSpan.FromSeconds(10), MaxConnectionsPerServer = 3
         }) { Timeout = Timeout.InfiniteTimeSpan };
-        var credentials = new WindowsPlaygroundCredentials(configuration);
+        var apiKeys = new WindowsPlaygroundCredentials(configuration);
+        var credentials = new ChatGptAccountsService(new WindowsChatGptAccountStore(configuration),
+            new WindowsChatGptSignIn(new WindowsChatGptSystemBrowser()), new ChatGptOAuthClient(playgroundHttp), apiKeys);
+        playgroundChatGptAccounts = CreateChatGptAccountsFixture(configuration) ?? credentials;
         var registry = new PlaygroundProviderRegistry(playgroundHttp, credentials);
         var store = new WindowsPlaygroundStore(configuration);
         playground = CreatePlaygroundFixture(configuration, library) ?? new PlaygroundService(store, credentials,
@@ -99,7 +103,7 @@ public sealed partial class MainWindow
         EnsurePlaygroundService();
         var configuration = playgroundConfiguration!; var library = playgroundLibrary!;
         var store = new WindowsPlaygroundStore(configuration);
-        playgroundView = new(playground!)
+        playgroundView = new(playground!, playgroundChatGptAccounts)
         {
             ReportNotice = (message, severity) => statusPage.Post(new("对话", message, severity)),
             BrowserDataDirectory = Path.Combine(configuration.Profile!.Root, "playground", "browser"),

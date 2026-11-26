@@ -197,7 +197,7 @@ function job(id = 'fixture-job', status: MetadataMatchingState['status'] = 'runn
 const compiledHarness = (async () => {
   const source = await fs.readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
   const script = source.split('<script setup lang="ts">')[1]!.split('</script>')[0]!
-  const expose = '\nglobalThis.audit = { snapshot, page, busy, libraryQuery, statusFilter, favoritesOnly, filteredGames, selectionMode, selectedIds, batchStatus, batchFavorite, batchCategory, batchTag, batchCategoryMode, batchTagMode, enterSelection, leaveSelection, selectVisible, toggleSelection, organizeSelected, navigate, resetFilters, scanOpen, candidates, chosen, autoMatchOnImport, scanQuery, scanView, importError, scanReloadNeeded, setScanSelection, alreadyInLibrary, newCandidates, visibleCandidates, scan, importSelected, startMatching, cancelMatching, matchingLabel, reidentifying, matchingUnavailable, localGameIds, selectedLocalIds, identifySelected, identifyCurrentGame, identifyScannedGames, scannedLibraryIds, showGame, detailOpen, selectedGameId, selectedWork, editor, detailCoverUrl, coverPickerOpen, coverOptionsWork, coverError, toggleCoverPicker, closeCoverPicker, loadCoverOptions, saveCover, pickLocalCover, globalCoverDisplay, detailCoverDisplay, settingsForm, saveSettings, reload };'
+  const expose = '\nglobalThis.audit = { snapshot, page, busy, libraryQuery, statusFilter, favoritesOnly, filteredGames, selectionMode, selectedIds, batchStatus, batchFavorite, batchCategory, batchTag, batchCategoryMode, batchTagMode, enterSelection, leaveSelection, selectVisible, toggleSelection, organizeSelected, navigate, resetFilters, scanOpen, candidates, chosen, autoMatchOnImport, scanQuery, scanView, importError, scanReloadNeeded, setScanSelection, scanRows, newCandidates, scan, importSelected, startMatching, cancelMatching, matchingLabel, reidentifying, matchingUnavailable, localGameIds, selectedLocalIds, identifySelected, identifyCurrentGame, identifyScannedGames, scannedLibraryIds, showGame, detailOpen, selectedGameId, selectedWork, editor, detailCoverUrl, coverPickerOpen, coverOptionsWork, coverError, toggleCoverPicker, closeCoverPicker, loadCoverOptions, saveCover, pickLocalCover, globalCoverDisplay, detailCoverDisplay, settingsForm, saveSettings, reload };'
   const compiled = await transform(script.replace(/^import .*$/gm, '') + expose, { loader: 'ts', format: 'cjs', target: 'es2022' })
   return { script, compiled }
 })()
@@ -341,7 +341,7 @@ test('a confirmed folder with no programs opens a real empty scan and clears the
   assert.equal(a.scanOpen.value, true)
   assert.deepEqual(plain(a.candidates.value), [])
   assert.deepEqual(plain(a.chosen.value), [])
-  assert.deepEqual(plain(a.visibleCandidates.value), [])
+  assert.deepEqual(plain(importWorkspace.filterScanRows(a.scanRows.value, a.scanQuery.value, a.scanView.value)), [])
   assert.equal(a.scanQuery.value, ''); assert.equal(a.scanView.value, 'all')
   assert.equal(a.importError.value, ''); assert.equal(a.scanReloadNeeded.value, false)
   assert.equal(messages.length, count, 'an empty scan is represented in the modal rather than described as cancellation')
@@ -482,7 +482,7 @@ test('scan preselects only new directories and filters a stale known candidate b
   await a.scan()
   assert.equal(a.scanOpen.value, true)
   assert.deepEqual(plain(a.chosen.value), ['fresh'])
-  assert.deepEqual([...a.alreadyInLibrary.value], ['known'])
+  assert.deepEqual(plain(a.scanRows.value.filter((row: importWorkspace.ScanRow) => row.status === 'known').map((row: importWorkspace.ScanRow) => row.candidate.id)), ['known'])
   assert.deepEqual(plain(a.newCandidates.value).map((item: ScanCandidate) => item.id), ['fresh'])
   a.chosen.value = ['known', 'fresh']
   await a.importSelected()

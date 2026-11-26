@@ -537,13 +537,6 @@ public sealed class MusicBrainzAlbumView : Grid, IDisposable
     }
     public void Deactivate() { InteractionMotion.StopPage(scroll); active = false; generation++; startPending = false; pendingAlbumOffset = null; albumRestoreVersion++; model?.Deactivate(); listening.Deactivate(); entityView?.Deactivate(); entityActive = false; cover.SourceKey = null; coverKey = null; requestedCover = null; ring.IsActive = false; }
     public void Dispose() { if (disposed) return; Deactivate(); disposed = true; if (model is not null) { model.PropertyChanged -= StateChanged; model.Dispose(); } listening.Dispose(); entityView?.Dispose(); cover.Pipeline = null; }
-    private const string TrackTemplate = """
-    <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:views="using:TheOrder.WinUI.Views">
-      <Border Padding="0,7" BorderBrush="{ThemeResource DividerBrush}" BorderThickness="0,0,0,1">
-        <views:MusicTrackRowView Row="{Binding}"/>
-      </Border>
-    </DataTemplate>
-    """;
 }
 [Microsoft.UI.Xaml.Data.Bindable]
 public sealed class MusicTrackRow(MusicBrainzTrack track, Func<MusicBrainzReference, Task>? navigate = null, int discPosition = 1)

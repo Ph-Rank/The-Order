@@ -20,7 +20,7 @@ public sealed partial class PlaygroundView
     {
         if (instructions.Length > 8000 || reasoning is not ("low" or "medium" or "high")) throw new InvalidDataException();
         searchMode.IsOn = search; spoilerMode.IsOn = restrictSpoilers;
-        effort.SelectedIndex = reasoning switch { "low" => 0, "medium" => 1, _ => 2 };
+        effort.OptionIndex = reasoning switch { "low" => 0, "medium" => 1, _ => 2 };
         Draft = Draft with { SystemInstructions = instructions };
         await ApplyOptionsAsync(); SyncOptions(); Refresh();
     }
@@ -58,11 +58,11 @@ public sealed partial class PlaygroundView
             if (selected != expected || conversations.SelectedItem is not PlaygroundConversationItem row || row.Id != expected
                 || draft.Provider != provider || saved.Provider != provider || draft.Model != model || saved.Model != model
                 || draft.ReasoningEffort != reasoning || saved.ReasoningEffort != reasoning
-                || currentModelProvider.Text != ProviderNames[(int)provider] || currentModelTitle.Text != displayed || effort.SelectedIndex != index)
+                || currentModelProvider.Text != ProviderName(provider) || currentModelTitle.Text != displayed || effort.OptionIndex != index)
                 throw new InvalidOperationException("Saved, draft, list selection and displayed model/effort must identify the same conversation.");
             steps.Add(new { conversation = expected, draftProvider = draft.Provider.ToString(), draft.Model, draft.ReasoningEffort,
                 savedProvider = saved.Provider.ToString(), savedModel = saved.Model, savedEffort = saved.ReasoningEffort,
-                displayedProvider = currentModelProvider.Text, displayedModel = currentModelTitle.Text, displayedReasoningIndex = effort.SelectedIndex });
+                displayedProvider = currentModelProvider.Text, displayedModel = currentModelTitle.Text, displayedReasoningIndex = effort.OptionIndex });
         }
     }
     private object? budgetBounds;
@@ -104,13 +104,14 @@ public sealed partial class PlaygroundView
     {
         renderedRows = Descendants(messages).OfType<PlaygroundMessageView>().Select(x => x.Evidence).ToArray(),
         advancedParameterVisible = effort.Visibility == Microsoft.UI.Xaml.Visibility.Visible,
-        controls = new { search = searchMode.IsOn, restrictSpoilers = spoilerMode.IsOn, reasoningIndex = effort.SelectedIndex, reasoningEnabled = effort.IsEnabled,
+        controls = new { search = searchMode.IsOn, restrictSpoilers = spoilerMode.IsOn, reasoningIndex = effort.OptionIndex, reasoningEnabled = effort.IsEnabled,
             instructionsLength = Draft.SystemInstructions.Length, savedInstructionsLength = Current?.Options.SystemInstructions.Length,
             savedSearch = Current?.Options.Search.ToString(), savedSpoiler = Current?.Options.Spoiler.ToString(), savedEffort = Current?.Options.ReasoningEffort,
             globalConsent = service.Snapshot.Settings.DiscussionConsent, rightConnectionButtons = Descendants(settings).OfType<Microsoft.UI.Xaml.Controls.Button>().Count(b => Microsoft.UI.Xaml.Automation.AutomationProperties.GetAutomationId(b) == "PlaygroundConfigure") },
         sessionOptions = new { selected, draftProvider = Draft.Provider.ToString(), draftModel = Draft.Model, draftEffort = Draft.ReasoningEffort,
             savedProvider = Current?.Options.Provider.ToString(), savedModel = Current?.Options.Model, savedEffort = Current?.Options.ReasoningEffort,
-            displayedProvider = currentModelProvider.Text, displayedModel = currentModelTitle.Text, displayedReasoningIndex = effort.SelectedIndex,
+            savedAccount = Current?.Options.ChatGptAccountId, billing = openAiUsage.Visibility == Microsoft.UI.Xaml.Visibility.Visible ? openAiUsage.Text : null,
+            displayedProvider = currentModelProvider.Text, displayedModel = currentModelTitle.Text, displayedReasoningIndex = effort.OptionIndex,
             pendingSave = !optionsSaveTail.IsCompleted }, sessionSwitchEvidence,
         rightSidebarScroll = new { visibility = settingsScroll.VerticalScrollBarVisibility.ToString(), mode = settingsScroll.VerticalScrollMode.ToString(),
             offset = settingsScroll.VerticalOffset, extent = settingsScroll.ScrollableHeight, viewport = settingsScroll.ViewportHeight },

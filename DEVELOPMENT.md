@@ -1,5 +1,9 @@
 # The Order 开发与维护
 
+## 1.3.1 正式版构建
+
+源码以发布标签为准。构建配置和校验文件见 [发布构建说明](docs/release/1.3.1/BUILD.md)。
+
 ## 1.3.1-beta.2 构建与分发
 
 本版本构建和安装包说明位于 [docs/release/1.3.1-beta.2/BUILD.md](docs/release/1.3.1-beta.2/BUILD.md)。发布验证使用独立 Test 资料目录。程序版本以 `native/Directory.Build.props` 和发布标签为准。

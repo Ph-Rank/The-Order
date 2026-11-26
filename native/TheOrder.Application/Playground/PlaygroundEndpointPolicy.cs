@@ -4,7 +4,7 @@ public static class PlaygroundEndpointPolicy
 {
     public static string Default(PlaygroundProviderKind provider) => provider switch
     {
-        PlaygroundProviderKind.OpenAI => "https://api.openai.com/v1",
+        PlaygroundProviderKind.OpenAI or PlaygroundProviderKind.ChatGPT => "https://api.openai.com/v1",
         PlaygroundProviderKind.Gemini => "https://generativelanguage.googleapis.com/v1beta",
         PlaygroundProviderKind.Claude => "https://api.anthropic.com/v1",
         PlaygroundProviderKind.Grok => "https://api.x.ai/v1",

@@ -66,7 +66,7 @@ public sealed class BangumiSubjectDetailsProvider(HttpClient client, Func<DateTi
                     var media = response.Content.Headers.ContentType?.MediaType;
                     if (media is null || !media.Equals("application/json", StringComparison.OrdinalIgnoreCase) && !media.EndsWith("+json", StringComparison.OrdinalIgnoreCase))
                         throw Invalid("Bangumi 未返回有效的 JSON 资料，请稍后重试。");
-                    var bytes = await ReadAsync(response.Content, token).ConfigureAwait(false);
+                    var bytes = await BangumiHttpResponse.ReadBodyAsync(response.Content, MaximumResponseBytes, TooLarge, token).ConfigureAwait(false);
                     token.ThrowIfCancellationRequested();
                     try
                     {
@@ -89,7 +89,7 @@ public sealed class BangumiSubjectDetailsProvider(HttpClient client, Func<DateTi
                     throw new BangumiRelationsException(BangumiRelationsFailure.Unavailable, lease.Authorized
                         ? "番组计划未返回该条目，请在原站核对编号或访问权限。"
                         : "暂时无法匿名读取。可在设置中授权番组计划后重试，或到原站核对条目。");
-                var retryAfter = ReadRetryAfter(response, Now);
+                var retryAfter = BangumiHttpResponse.ReadRetryAfter(response, Now);
                 var failure = status == 429 ? BangumiRelationsFailure.RateLimited : status >= 500 ? BangumiRelationsFailure.Server : BangumiRelationsFailure.InvalidResponse;
                 var message = status == 429 ? "Bangumi 请求过于频繁，请稍后重试。"
                     : status >= 500 ? "Bangumi 服务暂时不可用，请稍后重试。" : "Bangumi 返回了无法读取的响应，请稍后重试。";
@@ -107,28 +107,6 @@ public sealed class BangumiSubjectDetailsProvider(HttpClient client, Func<DateTi
         finally { if (entered) queue.Release(); }
     }
     private Task WaitAsync(TimeSpan duration, CancellationToken cancellation) => (delay ?? Task.Delay)(duration, cancellation);
-    private static TimeSpan? ReadRetryAfter(HttpResponseMessage response, DateTimeOffset now)
-    {
-        var value = response.Headers.RetryAfter?.Delta ?? (response.Headers.RetryAfter?.Date - now);
-        if (value is null && response.Headers.TryGetValues("Retry-After", out var values)
-            && double.TryParse(values.FirstOrDefault(), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var seconds)
-            && double.IsFinite(seconds) && seconds >= 0) value = TimeSpan.FromSeconds(Math.Min(seconds, 86400));
-        return value is null ? null : TimeSpan.FromSeconds(Math.Clamp(value.Value.TotalSeconds, 0, 86400));
-    }
-    private static async Task<byte[]> ReadAsync(HttpContent content, CancellationToken cancellation)
-    {
-        if (content.Headers.ContentLength > MaximumResponseBytes) throw TooLarge();
-        using var input = await content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
-        using var output = new MemoryStream(); var buffer = new byte[16384];
-        while (true)
-        {
-            var count = await input.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, MaximumResponseBytes + 1 - (int)output.Length)), cancellation).ConfigureAwait(false);
-            cancellation.ThrowIfCancellationRequested();
-            if (count == 0) return output.ToArray();
-            if (output.Length + count > MaximumResponseBytes) throw TooLarge();
-            output.Write(buffer, 0, count);
-        }
-    }
     public static BangumiSubjectDetails Map(string subjectId, BangumiRelationKind expectedKind, JsonElement root, DateTimeOffset fetchedAtUtc, bool authorized = false)
     {
         if (!BangumiRelationIdentityResolver.ValidSubjectId(subjectId) || !Enum.IsDefined(expectedKind)

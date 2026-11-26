@@ -63,15 +63,21 @@ internal static class PlaygroundSse
 internal sealed partial class NativePlaygroundProvider
 {
     private async Task<HttpResponseMessage> RequestAsync(string endpoint, string relative, HttpMethod method,
-        JsonNode? body, CancellationToken cancellation)
+        JsonNode? body, CancellationToken cancellation, string? accountId = null)
     {
         endpoint = PlaygroundProviderEndpoints.Normalize(Kind, endpoint);
         string? secret;
-        try { secret = await credentials.ReadAsync(Kind, endpoint, cancellation).ConfigureAwait(false); }
+        try { secret = Kind == PlaygroundProviderKind.ChatGPT
+            ? await credentials.ReadForAccountAsync(Kind, endpoint, accountId, cancellation).ConfigureAwait(false)
+            : await credentials.ReadAsync(Kind, endpoint, cancellation).ConfigureAwait(false); }
         catch (OperationCanceledException) { throw; }
-        catch (Exception) { throw new PlaygroundProviderException(new(PlaygroundFailureKind.Authentication, "无法读取所选连接的凭据，请重新保存 API Key。")); }
-        if (string.IsNullOrWhiteSpace(secret)) throw new PlaygroundProviderException(new(PlaygroundFailureKind.Authentication, "请先为此服务商保存 API Key。"));
-        if (secret.Length > 16384 || secret.Any(c => c is '\r' or '\n' || char.IsControl(c)))
+        catch (ChatGptAuthException e) { throw new PlaygroundProviderException(new(e.Kind == ChatGptAuthFailure.Network
+            ? PlaygroundFailureKind.Network : PlaygroundFailureKind.Authentication, e.Message, e.Kind == ChatGptAuthFailure.Network)); }
+        catch (Exception) { throw new PlaygroundProviderException(new(PlaygroundFailureKind.Authentication, Kind == PlaygroundProviderKind.ChatGPT
+            ? "无法安全读取 ChatGPT 连接，原资料已保留；请在连接设置中检查。" : "无法读取所选连接的凭据，请重新保存 API Key。")); }
+        if (string.IsNullOrWhiteSpace(secret)) throw new PlaygroundProviderException(new(PlaygroundFailureKind.Authentication,
+            Kind == PlaygroundProviderKind.ChatGPT ? "请先登录此 ChatGPT 账号并授权使用额度。" : "请先为此服务商保存 API Key。"));
+        if (secret.Length > (Kind == PlaygroundProviderKind.ChatGPT ? 65536 : 16384) || secret.Any(c => c is '\r' or '\n' || char.IsControl(c)))
             throw new PlaygroundProviderException(new(PlaygroundFailureKind.Authentication, "保存的凭据格式无效，请重新配置。"));
         var uri = new Uri(endpoint.TrimEnd('/') + "/" + relative);
         using var request = new HttpRequestMessage(method, uri);
@@ -93,10 +99,11 @@ internal sealed partial class NativePlaygroundProvider
         {
             int status = (int)response.StatusCode;
             int? retry = response.Headers.RetryAfter?.Delta is { } wait ? (int)Math.Clamp(wait.TotalSeconds, 0, 3600) : null;
-            PlaygroundFailureKind? detail;
-            try { detail = await ErrorKind(response, cancellation).ConfigureAwait(false); }
+            string code;
+            try { code = await ErrorCode(response, cancellation).ConfigureAwait(false); }
             finally { response.Dispose(); }
-            throw HttpFailure(status, retry, detail);
+            if (Kind == PlaygroundProviderKind.ChatGPT) throw new PlaygroundProviderException(ChatGptFailure(code, status, retry));
+            throw HttpFailure(status, retry, StructuredErrorKind(code));
         }
         // No automatic POST retry: the server may already have accepted/billed it.
         return response;
@@ -123,7 +130,7 @@ internal sealed partial class NativePlaygroundProvider
         };
         return new(new(kind, text, kind != PlaygroundFailureKind.Quota && (status is 408 or 429 or >= 500), status, retry));
     }
-    private static async Task<PlaygroundFailureKind?> ErrorKind(HttpResponseMessage response, CancellationToken cancellation)
+    private static async Task<string> ErrorCode(HttpResponseMessage response, CancellationToken cancellation)
     {
         // Inspect only allowlisted structured error codes. Server prose, URLs,
         // response bodies and credentials never enter the resulting exception.
@@ -133,16 +140,17 @@ internal sealed partial class NativePlaygroundProvider
             byte[] buffer = new byte[16385]; int length = 0;
             while (length < buffer.Length)
             { int count = await stream.ReadAsync(buffer.AsMemory(length), cancellation).ConfigureAwait(false); if (count == 0) break; length += count; }
-            if (length > 16384) return null;
+            if (length > 16384) return "";
             var error = JsonNode.Parse(buffer.AsSpan(0, length), documentOptions: new() { MaxDepth = 16 })?["error"];
-            return StructuredErrorKind(error);
+            return StructuredErrorCode(error);
         }
         catch (OperationCanceledException) { throw; }
-        catch (Exception error) when (error is JsonException or InvalidOperationException or IOException) { return null; }
+        catch (Exception error) when (error is JsonException or InvalidOperationException or IOException) { return ""; }
     }
-    private static PlaygroundFailureKind? StructuredErrorKind(JsonNode? error)
+    private static string StructuredErrorCode(JsonNode? error) => error is JsonObject ? String(error["code"], String(error["type"])) : "";
+    private static PlaygroundFailureKind? StructuredErrorKind(JsonNode? error) => StructuredErrorKind(StructuredErrorCode(error));
+    private static PlaygroundFailureKind? StructuredErrorKind(string code)
     {
-        string code = String(error?["code"], String(error?["type"]));
         return code switch
         {
             "insufficient_quota" or "quota_exceeded" or "credit_balance_too_low" => PlaygroundFailureKind.Quota,
@@ -153,6 +161,22 @@ internal sealed partial class NativePlaygroundProvider
             _ => null
         };
     }
+    private static PlaygroundFailure ChatGptFailure(string code, int? status = null, int? retry = null) => code switch
+    {
+        "subscription_sharing_usage_limit_exceeded" => new(PlaygroundFailureKind.Quota,
+            ChatGptSignInPolicy.UsageLimitMessage, false, status, retry),
+        "subscription_sharing_usage_unavailable" or "subscription_sharing_user_unavailable" => new(PlaygroundFailureKind.Network,
+            "ChatGPT 额度服务暂时不可用，请稍后重试；登录信息已保留。", true, status, retry),
+        "subscription_sharing_user_not_eligible" => new(PlaygroundFailureKind.AccessDenied,
+            "此 ChatGPT 账号当前不符合套餐额度使用条件，请在 ChatGPT 中检查账号资格。", false, status),
+        "chatpass_v2_scope_not_authorized" or "chatpass_v2_invalid_authorization_context" => new(PlaygroundFailureKind.Authentication,
+            "尚未授权此连接使用 ChatGPT 额度，请在「连接与授权」中重新授权。", false, status),
+        "subscription_sharing_invalid_user" => new(PlaygroundFailureKind.Authentication, "ChatGPT 账号授权已失效，请重新登录此连接。", false, status),
+        "subscription_sharing_unsupported_capability" or "subscription_sharing_route_not_supported" => new(PlaygroundFailureKind.Unsupported,
+            "ChatGPT 额度连接不支持本次模型或能力，请更换模型或调整设置。", false, status),
+        _ => status == 401 ? new(PlaygroundFailureKind.Authentication, "ChatGPT 登录已失效，请重新登录此账号。", false, status)
+            : HttpFailure(status ?? 503, retry, StructuredErrorKind(code)).Failure
+    };
     private static async Task<JsonNode> ReadJsonAsync(HttpResponseMessage response, CancellationToken cancellation)
     {
         await using var stream = await response.Content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);

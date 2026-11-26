@@ -3,4 +3,31 @@
 .node.emphasis-3 text{font-size:14px;font-weight:600}.node.emphasis-3 rect{stroke-width:1.8}.node.emphasis-1 text{font-size:12px}.node.emphasis-0 text{font-size:10.5px;fill:var(--muted)}.node.emphasis-0 rect{stroke-opacity:.42;stroke-width:.85}.collection-filter{display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap;cursor:pointer}.collection-filter input{accent-color:var(--accent);width:14px;height:14px;margin:0}
 
 .node.emphasis-0>rect:nth-child(2){opacity:0}
-.toolbar{overflow:visible;position:relative;z-index:3;padding-top:2px}.route-picker{position:relative;max-width:210px}#section[hidden],#routeOptions[hidden]{display:none}#routeButton{display:flex;align-items:center;justify-content:space-between;gap:14px;max-width:210px;text-align:left;min-width:100px;background:var(--surface)}#routeValue{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}button:focus-visible,[tabindex]:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--accent)}#routeOptions{position:absolute;left:0;top:calc(100% + 5px);min-width:100%;width:max-content;max-width:min(300px,80vw);max-height:min(340px,55vh);overflow:auto;padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);box-shadow:0 6px 20px #0003}#routeOptions button{display:block;width:100%;min-height:32px;border:0;text-align:left;background:transparent;color:var(--text);white-space:normal;overflow-wrap:anywhere}#routeOptions button:hover,#routeOptions button:focus{outline:none;background:var(--hover)}#routeOptions button[aria-selected=true]{background:var(--hover);color:var(--accent)}@media(max-width:780px){#routeButton{max-width:150px}}
+.toolbar { overflow: visible; position: relative; z-index: 3; padding-top: 2px; }
+.route-picker { position: relative; min-width: 0; }
+#section[hidden], #routeOptions[hidden] { display: none; }
+#routeButton {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-width: 100px; max-width: 210px; min-height: 34px; padding: 4px 11px;
+  border-radius: 8px; text-align: left;
+}
+#routeValue { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#routeOptions {
+  position: absolute; left: 0; top: calc(100% + 4px); width: 100%;
+  max-height: min(320px, var(--route-space, 55vh)); overflow: hidden auto; overscroll-behavior: contain;
+  padding: 4px; border: 1px solid #ffffff28; border-radius: 8px; background: #313131;
+  color: var(--text); box-shadow: 0 6px 20px #0003;
+}
+body[data-theme=light] #routeOptions { background: #fcfcfc; border-color: #00000024; }
+#routeOptions button {
+  display: block; width: 100%; min-height: 34px; padding: 4px 9px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left;
+  border: 0; border-radius: 4px; background: transparent; color: var(--text);
+}
+#routeOptions button:hover, #routeOptions button[aria-selected=true] { background: var(--hover); }
+#routeOptions button:focus-visible { outline-offset: -2px; }
+@media (max-width: 780px) { #routeButton { max-width: 150px; } }
+@media (forced-colors: active) {
+  #routeOptions, body[data-theme=light] #routeOptions { background: Canvas; color: CanvasText; border-color: CanvasText; }
+  #routeOptions button[aria-selected=true] { background: Highlight; color: HighlightText; }
+}

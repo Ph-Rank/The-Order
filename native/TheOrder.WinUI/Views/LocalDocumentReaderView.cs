@@ -3,6 +3,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using TheOrder.Application;
@@ -36,7 +37,9 @@ public sealed class LocalDocumentReaderView(Func<LocalReadingFile, CancellationT
         blocks = rendered?.Blocks.Select(b => new { b.Kind, b.Text, rows = b.Rows.IsDefault ? 0 : b.Rows.Length }).ToArray() };
     public void SetFileManagement(FrameworkElement management)
     {
-        fileActions.Flyout = new Flyout { Content = new ScrollViewer { Content = management, MaxHeight = 360, MaxWidth = 470, Padding = new(2), HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled } };
+        fileActions.Flyout = new Flyout { Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft, ShouldConstrainToRootBounds = true,
+            FlyoutPresenterStyle = (Style)Microsoft.UI.Xaml.Application.Current.Resources["OrderDropDownPanelStyle"],
+            Content = new ScrollViewer { Content = management, MaxHeight = 360, MaxWidth = 470, Padding = new(2), HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled } };
         AutomationProperties.SetName(fileActions, "添加或管理阅读文件");
     }
     internal async Task PageForTestAsync(int index) { if (document is null || index < 0 || index >= document.PageCount) throw new InvalidDataException(); page = index; await LoadAsync(); }
@@ -60,7 +63,9 @@ public sealed class LocalDocumentReaderView(Func<LocalReadingFile, CancellationT
         pageChooser.Click += (_, _) => {
             if (document is null) return;
             var number = new NumberBox { Header = "前往页码", Minimum = 1, Maximum = document.PageCount, Value = page + 1, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact, Width = 190 };
-            var flyout = new Flyout(); var go = Action("前往", async () => { if (double.IsFinite(number.Value)) { Remember(); page = Math.Clamp((int)number.Value - 1, 0, document.PageCount - 1); flyout.Hide(); await LoadAsync(); } });
+            var flyout = new Flyout { Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft,
+                ShouldConstrainToRootBounds = true, FlyoutPresenterStyle = (Style)Microsoft.UI.Xaml.Application.Current.Resources["OrderDropDownPanelStyle"] };
+            var go = Action("前往", async () => { if (double.IsFinite(number.Value)) { Remember(); page = Math.Clamp((int)number.Value - 1, 0, document.PageCount - 1); flyout.Hide(); await LoadAsync(); } });
             flyout.Content = new StackPanel { Spacing = 10, Children = { number, go } }; flyout.ShowAt(pageChooser);
         }; pageTools.Children.Add(pageChooser);
         var next = Action("›", () => TurnAsync(1)); AutomationProperties.SetName(next, "下一页"); ToolTipService.SetToolTip(next, "下一页"); pageTools.Children.Add(next);
@@ -81,7 +86,7 @@ public sealed class LocalDocumentReaderView(Func<LocalReadingFile, CancellationT
             if (edgeWheel >= 2) { edgeWheel = 0; await TurnAsync(delta < 0 ? 1 : -1, continuous: true); }
         }), true);
         KeyDown += async (_, e) => {
-            if (e.OriginalSource is TextBox or NumberBox or ComboBox) return;
+            if (e.OriginalSource is TextBox or NumberBox or SelectedFirstComboBox) return;
             if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)
                 || Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)) return;
             if (e.Key is Windows.System.VirtualKey.Left or Windows.System.VirtualKey.Right) { e.Handled = true; await TurnAsync(e.Key == Windows.System.VirtualKey.Right ? 1 : -1); }

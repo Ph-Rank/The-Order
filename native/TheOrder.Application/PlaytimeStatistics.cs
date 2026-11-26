@@ -17,7 +17,7 @@ public static class PlaytimeStatistics
         => Build(entries, zone, cancellation, null);
 
     internal static PlaytimeReport Build(IEnumerable<LibraryEntry> entries, TimeZoneInfo zone, CancellationToken cancellation,
-        Action<LibraryEntry, DateOnly, DateTimeOffset, DateTimeOffset>? addSessionWindow)
+        Action<LibraryEntry, DateTimeOffset, DateTimeOffset>? addSession)
     {
         var rows = new Dictionary<(string, DateOnly), DailyPlaytime>(); long unknown = 0, total = 0;
         foreach (var e in entries)
@@ -33,14 +33,14 @@ public static class PlaytimeStatistics
                 var last = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(end.AddTicks(-1), zone).DateTime);
                 if (first.Year is < 2 or > 9998 || last.Year > 9998) continue;
                 var duration = Math.Min(s.Seconds, Math.Max(0, e.TotalPlaySeconds - attributed));
+                if (duration > 0 && (s.Native is null or { Lifecycle: SessionLifecycle.Completed }))
+                    addSession?.Invoke(e, start, end);
                 long left = duration; var cursor = start;
                 for (var day = first; day <= last; day = day.AddDays(1))
                 {
                     var next = Midnight(day.AddDays(1), zone); var stop = next < end ? next : end;
                     if (stop <= cursor) continue;
                     var seconds = day == last ? left : Math.Min(left, (long)((decimal)duration * (stop - cursor).Ticks / (end - start).Ticks));
-                    if (duration > 0 && (s.Native is null or { Lifecycle: SessionLifecycle.Completed }))
-                        addSessionWindow?.Invoke(e, day, cursor, stop);
                     left -= seconds; cursor = stop; attributed += seconds;
                     Add(day, seconds, 0, first != last || duration != s.Seconds);
                 }
@@ -70,8 +70,17 @@ public static class PlaytimeStatistics
             && Parse(session.StartedAt, out start) && Parse(session.EndedAt, out end);
     }
 
+    internal static bool TryGetCompletedWindow(PlaySession session, out DateTimeOffset start, out DateTimeOffset end)
+    {
+        start = end = default;
+        return session.Seconds > 0
+            && (session.Native is null or { Lifecycle: SessionLifecycle.Completed })
+            && Parse(session.StartedAt, out start) && Parse(session.EndedAt, out end)
+            && end > start && (end - start).TotalDays <= 367 && session.Seconds <= (end - start).TotalSeconds + 1;
+    }
+
     private static bool Parse(string text, out DateTimeOffset value) => DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out value);
-    private static DateTimeOffset Midnight(DateOnly day, TimeZoneInfo zone)
+    internal static DateTimeOffset Midnight(DateOnly day, TimeZoneInfo zone)
     {
         var local = day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
         // Some zones move clocks at midnight; pick the first real instant of that calendar date.

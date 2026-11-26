@@ -3,7 +3,7 @@
   "electron": "44.5.1",
   "hashes": {
     "electron/library.ts": "651d3c627f755e547e6d4c45f0c1e4a53b8ddf84d46aa25c936b97310ff7f447",
-    "electron/title-matching.ts": "f6729bc9112c1976872fea250d87144e494182003cc09de9f9ad7286c347c485",
+    "electron/title-matching.ts": "fafdf16a62776462812f497d254da32e66305872bdf1cca21235b235c63dcceb",
     "electron/local-cover.ts": "b588d5f87535e00e8b9b4dc3bc528ff0cef1cee2f5dc1a26d5e6f7cd91cfff07",
     "native/scripts/generate-transaction-oracle.mjs": "dfb5cfb9ac57f2e9e061d3b1b80191ed7136529f9d56a708f47a29b4aa1aa404"
   },

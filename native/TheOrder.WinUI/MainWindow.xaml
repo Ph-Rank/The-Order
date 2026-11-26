@@ -29,7 +29,7 @@
      <views:RailNavigationItem x:Name="StatisticsNavigation" Tag="statistics" HorizontalContentAlignment="Stretch" Padding="0" Height="74" AutomationProperties.AutomationId="StatisticsNavigation" l:Localize.Name="统计"><StackPanel Spacing="6" HorizontalAlignment="Center"><FontIcon Glyph="&#xE9D9;" FontSize="23" HorizontalAlignment="Center" /><TextBlock FontSize="12" HorizontalAlignment="Center" l:Localize.Text="统计" /></StackPanel></views:RailNavigationItem>
      <views:RailNavigationItem x:Name="PlaygroundNavigation" Tag="playground" HorizontalContentAlignment="Stretch" Padding="0" Height="74" AutomationProperties.AutomationId="PlaygroundNavigation" AutomationProperties.Name="对话">
       <StackPanel Spacing="6" HorizontalAlignment="Center"><FontIcon Glyph="&#xE8F2;" FontSize="23" HorizontalAlignment="Center" /><TextBlock FontSize="11" HorizontalAlignment="Center" Text="对话" /></StackPanel>
-      <views:RailNavigationItem.ContextFlyout><MenuFlyout><MenuFlyoutItem Text="隐藏对话入口" Click="OnHidePlayground" /></MenuFlyout></views:RailNavigationItem.ContextFlyout>
+      <views:RailNavigationItem.ContextFlyout><MenuFlyout MenuFlyoutPresenterStyle="{StaticResource OrderDropDownMenuStyle}"><MenuFlyoutItem Text="隐藏对话入口" Click="OnHidePlayground" /></MenuFlyout></views:RailNavigationItem.ContextFlyout>
      </views:RailNavigationItem>
     </NavigationView.MenuItems>
     <NavigationView.FooterMenuItems>

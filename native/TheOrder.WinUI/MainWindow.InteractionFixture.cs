@@ -93,6 +93,11 @@ public sealed partial class MainWindow
             {
                 (operations, verified) = await CheckDiscoveryLoadingAsync();
             }
+            else if (action == "calendar-cover-recycling")
+            {
+                operations = await CheckCalendarCoverRecyclingAsync();
+                verified = new { calendarRecycles = operations, theme = Root.ActualTheme.ToString(), dpi = Root.XamlRoot.RasterizationScale };
+            }
             else if (action == "status-center")
             {
                 (operations, verified) = await CheckStatusCenterAsync();
@@ -208,7 +213,7 @@ public sealed partial class MainWindow
                         || panels[index].Visibility != Visibility.Visible || primary.ActualWidth <= 0)
                         throw new InvalidOperationException("Settings category did not open its own controls: " + entry.Name);
                     if (categories[index] == "Appearance" &&
-                        !P1Elements(panels[index]).Contains(Named<ComboBox>("CloseActionChoice")))
+                        !P1Elements(panels[index]).Contains(Named<SelectedFirstComboBox>("CloseActionChoice")))
                         throw new InvalidOperationException("Window closing preferences are missing from General.");
 
                     if (categories[index] == "Launch")
@@ -793,18 +798,6 @@ public sealed partial class MainWindow
                 throw new InvalidOperationException("Returning to search did not retain its query and completed results.");
         }
 
-        static T Named<T>(FrameworkElement scope, string name) where T : FrameworkElement =>
-            scope.FindName(name) as T ?? throw new InvalidOperationException("Missing discovery element: " + name);
-
-        static void Invoke(Button button)
-        {
-            if (FrameworkElementAutomationPeer.CreatePeerForElement(button)?.GetPattern(PatternInterface.Invoke) is not IInvokeProvider invoke)
-                throw new InvalidOperationException("Missing button action: " + button.Name);
-            try { invoke.Invoke(); }
-            catch (System.Runtime.InteropServices.COMException error)
-            { throw new InvalidOperationException("Could not invoke " + AutomationProperties.GetAutomationId(button), error); }
-        }
-
         static bool Ready(LoadingMark mark) => mark.IsActive && mark.ActualWidth > 0 &&
             Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementChildVisual(mark) is Microsoft.UI.Composition.SpriteVisual { IsVisible: true };
 
@@ -823,14 +816,69 @@ public sealed partial class MainWindow
                 left, top, centerX = center.X, centerY = center.Y };
         }
 
-        static async Task UntilAsync(Func<bool> done, string state)
+    }
+
+    private async Task<int> CheckCalendarCoverRecyclingAsync()
+    {
+        if (onlineFixture is null) throw new InvalidOperationException("Synthetic catalog required.");
+        await Navigate(WorkspacePage.Online);
+        var tabs = Named<SelectorBar>(onlinePage, "DiscoveryTabs");
+        var calendar = tabs.Items.Single(item => AutomationProperties.GetAutomationId(item) == "DiscoveryCalendarTab");
+        tabs.SelectedItem = calendar;
+        var host = Named<ContentControl>(onlinePage, "DiscoveryFeedHost");
+        await UntilAsync(() => host.Content is DiscoveryFeedView { IsLoaded: true }, "release calendar");
+        var feed = (DiscoveryFeedView)host.Content;
+        var list = Named<ListView>(feed, "FeedList");
+        var reload = Named<Button>(feed, "ReloadButton");
+        var period = Named<TextBlock>(feed, "CalendarPeriod");
+        var previous = Named<Button>(feed, "PreviousButton");
+        var next = Named<Button>(feed, "NextButton");
+        var allDays = Named<Button>(feed, "CalendarAllButton");
+        bool CoversReady() => reload.IsEnabled && P1Elements(list).OfType<CoverPresenter>().Any(cover => cover.IsLoaded && cover.HasImage);
+        DateOnly[] ShownDays() => list.Items.OfType<DiscoveryFeedView.DiscoveryCalendarBand>()
+            .SelectMany(band => band.Works).Select(work => work.ReleaseDay).OfType<DateOnly>().Distinct().ToArray();
+
+        await UntilAsync(() => ShownDays().Length == 2 && CoversReady(), "calendar covers");
+        var startingMonth = period.Text;
+        for (int round = 0; round < 2; round++)
         {
-            for (var attempt = 0; attempt < 160; attempt++)
-            {
-                if (done()) return;
-                await Task.Delay(25);
-            }
-            throw new InvalidOperationException("Discovery timed out: " + state);
+            var day = ShownDays().Max();
+            feed.ToggleDay(day);
+            await UntilAsync(() => ShownDays().SequenceEqual([day]) && CoversReady(), "filtered calendar covers");
+            Invoke(allDays);
+            await UntilAsync(() => ShownDays().Length == 2 && CoversReady(), "all calendar covers");
+            Invoke(previous);
+            await UntilAsync(() => period.Text != startingMonth && CoversReady(), "previous month covers");
+            Invoke(next);
+            await UntilAsync(() => period.Text == startingMonth && CoversReady(), "current month covers");
         }
+        await Navigate(WorkspacePage.Library);
+        await UntilAsync(() => !feed.IsLoaded, "calendar departure");
+        await Navigate(WorkspacePage.Online);
+        tabs.SelectedItem = calendar;
+        await UntilAsync(CoversReady, "calendar revisit");
+        return 10;
+    }
+
+    private static T Named<T>(FrameworkElement scope, string name) where T : FrameworkElement =>
+        scope.FindName(name) as T ?? throw new InvalidOperationException("Missing discovery element: " + name);
+
+    private static void Invoke(Button button)
+    {
+        if (FrameworkElementAutomationPeer.CreatePeerForElement(button)?.GetPattern(PatternInterface.Invoke) is not IInvokeProvider invoke)
+            throw new InvalidOperationException("Missing button action: " + button.Name);
+        try { invoke.Invoke(); }
+        catch (System.Runtime.InteropServices.COMException error)
+        { throw new InvalidOperationException("Could not invoke " + AutomationProperties.GetAutomationId(button), error); }
+    }
+
+    private static async Task UntilAsync(Func<bool> done, string state)
+    {
+        for (var attempt = 0; attempt < 160; attempt++)
+        {
+            if (done()) return;
+            await Task.Delay(25);
+        }
+        throw new InvalidOperationException("Discovery timed out: " + state);
     }
 }

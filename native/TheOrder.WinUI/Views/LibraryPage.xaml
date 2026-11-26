@@ -36,23 +36,21 @@
     <TextBlock x:Name="CountText" Text="{x:Bind ViewModel.CountText, Mode=OneWay}" Style="{StaticResource MetadataTextStyle}" VerticalAlignment="Bottom" Margin="0,0,0,6" AutomationProperties.AutomationId="LibraryStatus" />
    </StackPanel>
    <StackPanel x:Name="HeaderCommands" Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-     <Button x:Name="SearchButton" AutomationProperties.AutomationId="OpenLibrarySearch" l:Localize.Name="搜索书架" l:Localize.ToolTip="搜索书架（Ctrl+F）">
+     <Button x:Name="SearchButton" CornerRadius="8" AutomationProperties.AutomationId="OpenLibrarySearch" l:Localize.Name="搜索书架" l:Localize.ToolTip="搜索书架（Ctrl+F）">
       <StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="" FontSize="14" /><TextBlock x:Name="SearchLabel" l:Localize.Text="搜索" /></StackPanel>
-      <Button.Flyout><Flyout x:Name="SearchFlyout" Placement="BottomEdgeAlignedRight" Opened="OnSearchOpened"><AutoSuggestBox x:Name="LibrarySearch" Width="300" QueryIcon="Find" TextChanged="OnSearchChanged" QuerySubmitted="OnSearchSubmitted" AutomationProperties.AutomationId="LibrarySearch" l:Localize.PlaceholderText="搜索书架" l:Localize.Name="搜索书架，支持名称、原名、标签、开发商及安装目录" /></Flyout></Button.Flyout>
+      <Button.Flyout><Flyout x:Name="SearchFlyout" FlyoutPresenterStyle="{StaticResource OrderDropDownPanelStyle}" ShouldConstrainToRootBounds="True" Placement="BottomEdgeAlignedRight" Opened="OnSearchOpened"><AutoSuggestBox x:Name="LibrarySearch" Width="300" QueryIcon="Find" TextChanged="OnSearchChanged" QuerySubmitted="OnSearchSubmitted" AutomationProperties.AutomationId="LibrarySearch" l:Localize.PlaceholderText="搜索书架" l:Localize.Name="搜索书架，支持名称、原名、标签、开发商及安装目录" /></Flyout></Button.Flyout>
      </Button>
-    <DropDownButton x:Name="SortButton" AutomationProperties.AutomationId="LibrarySort" l:Localize.Name="作品排序">
-     <StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="" FontSize="14" /><TextBlock x:Name="SortLabel" l:Localize.Text="最近添加" /></StackPanel>
-     <DropDownButton.Flyout>
-      <MenuFlyout x:Name="SortMenu" Opening="OnSortMenuOpening" Placement="BottomEdgeAlignedRight">
-       <RadioMenuFlyoutItem Tag="added" GroupName="Sort" Click="OnSortItem" l:Localize.Text="最近添加" /><RadioMenuFlyoutItem Tag="recent" GroupName="Sort" Click="OnSortItem" l:Localize.Text="最近游玩" />
-       <RadioMenuFlyoutItem Tag="name" GroupName="Sort" Click="OnSortItem" l:Localize.Text="名称" /><RadioMenuFlyoutItem Tag="rating" GroupName="Sort" Click="OnSortItem" l:Localize.Text="我的评分" />
-       <RadioMenuFlyoutItem Tag="playtime" GroupName="Sort" Click="OnSortItem" l:Localize.Text="游玩时长" />
-      </MenuFlyout>
-     </DropDownButton.Flyout>
-    </DropDownButton>
-    <Button x:Name="FilterButton" AutomationProperties.AutomationId="LibraryFilters" l:Localize.Name="展开作品筛选">
+    <views:SelectedFirstComboBox x:Name="SortButton" Width="134" AutomationProperties.AutomationId="LibrarySort"
+                                OptionChanged="OnSortChoice" l:Localize.Name="作品排序" l:Localize.PlaceholderText="最近添加">
+     <ComboBoxItem Tag="added" l:Localize.Content="最近添加" />
+     <ComboBoxItem Tag="recent" l:Localize.Content="最近游玩" />
+     <ComboBoxItem Tag="name" l:Localize.Content="名称" />
+     <ComboBoxItem Tag="rating" l:Localize.Content="我的评分" />
+     <ComboBoxItem Tag="playtime" l:Localize.Content="游玩时长" />
+    </views:SelectedFirstComboBox>
+    <Button x:Name="FilterButton" CornerRadius="8" AutomationProperties.AutomationId="LibraryFilters" l:Localize.Name="展开作品筛选">
      <StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="" FontSize="14" /><TextBlock x:Name="FilterLabel" l:Localize.Text="筛选" /><InfoBadge x:Name="FilterBadge" Visibility="Collapsed" Value="0" Style="{ThemeResource AttentionValueInfoBadgeStyle}" /></StackPanel>
-     <Button.Flyout><Flyout x:Name="FilterFlyout" Placement="BottomEdgeAlignedRight" Opening="OnFilterOpening">
+     <Button.Flyout><Flyout x:Name="FilterFlyout" FlyoutPresenterStyle="{StaticResource OrderDropDownPanelStyle}" ShouldConstrainToRootBounds="True" Placement="BottomEdgeAlignedRight" Opening="OnFilterOpening">
       <Grid x:Name="FilterPanel" Width="300" Height="520" MaxHeight="520" RowSpacing="12"><Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
        <ScrollViewer x:Name="FilterBody" AutomationProperties.AutomationId="FilterBody" VerticalScrollBarVisibility="Auto"><StackPanel Spacing="12" Padding="0,0,12,0">
         <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" l:Localize.Text="筛选作品" />
@@ -80,8 +78,8 @@
      <StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="" FontSize="14" /><TextBlock x:Name="ImportLabel" l:Localize.Text="导入游戏" /></StackPanel>
     </Button>
     <Button x:Name="PendingReviewButton" Visibility="Collapsed" Click="OnPendingReview" AutomationProperties.AutomationId="OpenPendingReview" l:Localize.Content="待核对" />
-    <Button x:Name="LibraryMore" Width="40" Style="{StaticResource SubtleButtonStyle}" AutomationProperties.AutomationId="LibraryMore" l:Localize.Name="更多书架操作"><FontIcon Glyph="" FontSize="14" />
-     <Button.Flyout><MenuFlyout Placement="BottomEdgeAlignedRight"><MenuFlyoutItem x:Name="MoreSelect" Click="OnMoreSelect" Visibility="Collapsed" l:Localize.Text="选择作品"><MenuFlyoutItem.Icon><FontIcon Glyph="" /></MenuFlyoutItem.Icon></MenuFlyoutItem><MenuFlyoutItem x:Name="MoreImport" Click="OnImport" Visibility="Collapsed" IsEnabled="{x:Bind ViewModel.CanEdit, Mode=OneWay}" l:Localize.Text="导入游戏"><MenuFlyoutItem.Icon><FontIcon Glyph="" /></MenuFlyoutItem.Icon></MenuFlyoutItem><MenuFlyoutItem Click="OnReload" IsEnabled="{x:Bind ViewModel.CanReload, Mode=OneWay}" AutomationProperties.AutomationId="ReloadLibrary" l:Localize.Text="重新读取书架"><MenuFlyoutItem.Icon><FontIcon Glyph="" /></MenuFlyoutItem.Icon></MenuFlyoutItem></MenuFlyout></Button.Flyout>
+    <Button x:Name="LibraryMore" CornerRadius="8" Width="40" Style="{StaticResource SubtleButtonStyle}" AutomationProperties.AutomationId="LibraryMore" l:Localize.Name="更多书架操作"><FontIcon Glyph="" FontSize="14" />
+     <Button.Flyout><MenuFlyout Placement="BottomEdgeAlignedRight" ShouldConstrainToRootBounds="True" MenuFlyoutPresenterStyle="{StaticResource OrderDropDownMenuStyle}"><MenuFlyoutItem x:Name="MoreSelect" Click="OnMoreSelect" Visibility="Collapsed" l:Localize.Text="选择作品"><MenuFlyoutItem.Icon><FontIcon Glyph="" /></MenuFlyoutItem.Icon></MenuFlyoutItem><MenuFlyoutItem x:Name="MoreImport" Click="OnImport" Visibility="Collapsed" IsEnabled="{x:Bind ViewModel.CanEdit, Mode=OneWay}" l:Localize.Text="导入游戏"><MenuFlyoutItem.Icon><FontIcon Glyph="" /></MenuFlyoutItem.Icon></MenuFlyoutItem><MenuFlyoutItem Click="OnReload" IsEnabled="{x:Bind ViewModel.CanReload, Mode=OneWay}" AutomationProperties.AutomationId="ReloadLibrary" l:Localize.Text="重新读取书架"><MenuFlyoutItem.Icon><FontIcon Glyph="" /></MenuFlyoutItem.Icon></MenuFlyoutItem></MenuFlyout></Button.Flyout>
     </Button>
    </StackPanel>
   </Grid>

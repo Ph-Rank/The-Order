@@ -45,7 +45,11 @@ public sealed partial class DiscoveryFeedView
         var options = new StackPanel { MinWidth = 276, Spacing = 12, Children = { heading, grid, error, actions } };
         var scroller = new ScrollViewer { Content = options, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             HorizontalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        var flyout = new Flyout { Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft, Content = scroller };
+        var flyout = new Flyout
+        {
+            Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft, ShouldConstrainToRootBounds = true, Content = scroller,
+            FlyoutPresenterStyle = (Style)Microsoft.UI.Xaml.Application.Current.Resources["OrderDropDownPanelStyle"]
+        };
         RankingFilterButton.Flyout = flyout;
         flyout.Opening += (_, _) =>
         {

@@ -64,7 +64,7 @@ public sealed partial class PlaygroundView
                 + " · 输出 " + (usage?.OutputTokens?.ToString("N0") ?? "未知")
                 + (usage?.Searches is { } searches ? " · 搜索 " + searches : "")
                 + (usage?.Fetches is { } fetches ? " · 读取网页 " + fetches : "")
-                + "\n" + PlaygroundPricing.Format(cost);
+                + "\n" + (reply.Provider == PlaygroundProviderKind.ChatGPT ? "使用 ChatGPT 额度" : PlaygroundPricing.Format(cost));
             ToolTipService.SetToolTip(generationUsage, cost.Notice);
             AutomationProperties.SetName(generationUsage, generationUsage.Text);
         }

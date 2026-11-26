@@ -12,6 +12,32 @@ namespace TheOrder.WinUI;
 
 public sealed partial class MainWindow
 {
+    private static IChatGptAccounts? CreateChatGptAccountsFixture(NativeConfiguration config) =>
+        config.Diagnostics && config.Profile is NativeProfileStore profile && profile.Manifest.ProfileKind == NativeProfileKind.Test
+        && Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_PLAYGROUND_FIXTURE") == "1"
+        && Environment.GetEnvironmentVariable("THE_ORDER_NATIVE_CHATGPT_FIXTURE") == "1" ? new ChatGptFixtureAccounts() : null;
+    // UI rendering fixture only. Protocol, JWT validation and protected storage are
+    // covered independently; this implementation cannot open a browser or contact OpenAI.
+    private sealed class ChatGptFixtureAccounts : IChatGptAccounts
+    {
+        private ChatGptAccountSnapshot state = new(null, []);
+        public Task<ChatGptAccountSnapshot> ReadAccountsAsync(CancellationToken cancellation = default) => Task.FromResult(state);
+        public async Task<ChatGptAccountInfo> SignInAsync(string? clientId, bool requestConsent, CancellationToken cancellation = default)
+        {
+            await Task.Delay(250, cancellation);
+            var prior = state.Accounts.FirstOrDefault(a => a.ClientId == clientId);
+            var account = prior is null ? new ChatGptAccountInfo("oaiapp_fixture_" + (state.Accounts.Length + 1),
+                "[示例] ChatGPT 账号 ·连接 " + (state.Accounts.Length + 1), "demo@example.invalid", true, true, false)
+                : prior with { Connected = true, PlanEnabled = true };
+            state = new(account.ClientId, [.. state.Accounts.Where(a => a.ClientId != account.ClientId), account]); return account;
+        }
+        public Task SelectAsync(string clientId, CancellationToken cancellation = default)
+        { if (!state.Accounts.Any(a => a.ClientId == clientId)) throw new InvalidOperationException(); state = state with { SelectedClientId = clientId }; return Task.CompletedTask; }
+        public Task<bool> SignOutAsync(string clientId, CancellationToken cancellation = default)
+        { state = state with { Accounts = [.. state.Accounts.Select(a => a.ClientId == clientId ? a with { Connected = false, PlanEnabled = false } : a)] }; return Task.FromResult(true); }
+        public Task MarkWelcomedAsync(string clientId, CancellationToken cancellation = default)
+        { state = state with { Accounts = [.. state.Accounts.Select(a => a.ClientId == clientId ? a with { Welcomed = true } : a)] }; return Task.CompletedTask; }
+    }
     private bool playgroundFixtureActive;
     private Task playgroundFixturePending = Task.CompletedTask;
     private static readonly Guid PlaygroundFixtureConversation = Guid.Parse("120ea6df-27f1-4a60-8041-555000000001");
@@ -201,6 +227,7 @@ public sealed partial class MainWindow
             string[] ids = kind switch
             {
                 PlaygroundProviderKind.OpenAI => ["gpt-6.1-sol", "gpt-6-sol", "gpt-6.1-sol-20261001", "gpt-6.1-terra", "gpt-6-luna", "gpt-6-astra", "gpt-audio-1.5"],
+                PlaygroundProviderKind.ChatGPT => ["gpt-6.2-sol", "gpt-6.1-sol", "gpt-6.1-terra"],
                 PlaygroundProviderKind.Gemini => ["gemini-4-argon", "gemini-3.8-flash", "gemini-3.8-flash-lite", "gemini-3.5-pro", "gemini-2.5-flash", "gemini-embedding-001"],
                 PlaygroundProviderKind.Claude => ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8", "claude-fable-5", "claude-sonnet-4-5"],
                 PlaygroundProviderKind.Grok => ["grok-4", "grok-4-fast", "grok-3-mini", "grok-2-image"],

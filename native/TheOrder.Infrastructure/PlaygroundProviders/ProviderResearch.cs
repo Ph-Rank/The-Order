@@ -29,15 +29,24 @@ internal sealed partial class NativePlaygroundProvider
             var input = new PlaygroundProviderRequest(request.ConversationId, request.TurnId, Kind, endpoint, request.Model,
                 "Research only this public question. Search original and official sources where available, including Japanese sources for Japanese works. Cite sources actually returned. Do not invent verification or links. Do not access personal data. Respond in the user's language.",
                 [new("user", request.Query)])
-            { Phase = PlaygroundPhase.PublicResearch, ReasoningEffort = request.ReasoningEffort,
+            { Phase = PlaygroundPhase.PublicResearch, ReasoningEffort = request.ReasoningEffort, ChatGptAccountId = request.ChatGptAccountId,
                 MaximumOutputTokens = Math.Clamp(request.MaximumOutputTokens, 64, 65536), MaximumToolCalls = request.MaximumSearches };
             var items = InitialItems(input); var body = BuildRequest(input, items, false, research: true);
             // Submit this public query without an optional hosted-tool call cap.
             // Server-side search totals are only known when the provider reports
             // them. No cross-provider fallback or automatic paid POST retry.
-            using var response = await RequestAsync(endpoint, GenerationPath, HttpMethod.Post, body, cancellation).ConfigureAwait(false);
-            var json = await ReadJsonAsync(response, cancellation).ConfigureAwait(false); var round = new ProviderRound(this, input);
-            foreach (var ignored in round.Final(json)) { }
+            using var response = await RequestAsync(endpoint, GenerationPath, HttpMethod.Post, body, cancellation, request.ChatGptAccountId).ConfigureAwait(false);
+            var round = new ProviderRound(this, input);
+            if (Kind == PlaygroundProviderKind.ChatGPT)
+            {
+                if (response.Content.Headers.ContentType?.MediaType?.Equals("text/event-stream", StringComparison.OrdinalIgnoreCase) != true)
+                    throw Invalid("ChatGPT 检索没有返回所需的事件流。");
+                await using var stream = await response.Content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
+                await foreach (var packet in PlaygroundSse.ReadAsync(stream, cancellation).ConfigureAwait(false))
+                { if (packet.Data == "[DONE]") continue; foreach (var ignored in round.Apply(JsonNode.Parse(packet.Data) ?? throw Invalid())) { }
+                    if (round.Terminal) break; }
+            }
+            else { var json = await ReadJsonAsync(response, cancellation).ConfigureAwait(false); foreach (var ignored in round.Final(json)) { } }
             if (round.Failure is { } failure) throw new PlaygroundProviderException(failure);
             if (!round.Terminal || round.StopReason is "max_tokens" or "pause_turn") throw Invalid("公开检索回复未完整结束；没有将其标记为已核实。");
             if (!round.HostedSearch) throw new PlaygroundProviderException(new(PlaygroundFailureKind.Unsupported, "服务商没有执行实际搜索；未将模型自身回答冒充联网结果。"));

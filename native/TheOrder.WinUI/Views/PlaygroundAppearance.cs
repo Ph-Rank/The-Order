@@ -27,7 +27,7 @@ internal static class PlaygroundAppearance
     public static void Apply(Control control, string key = "PGGhostButton") => control.Style = Style(key);
     public static Brush Brush(FrameworkElement element, string key)
     {
-        string theme = highContrast ? "HighContrast" : ThemeFor(element) == ElementTheme.Light ? "Light" : "Dark";
+        string theme = highContrast ? "HighContrast" : ThemeFor(element) == ElementTheme.Light ? "Light" : "Default";
         try { return (Brush)((ResourceDictionary)Dictionary.ThemeDictionaries[theme])[key]; }
         catch
         {
@@ -48,8 +48,8 @@ internal static class PlaygroundAppearance
     internal static string ColorOf(Brush? brush) => brush is SolidColorBrush solid
         ? $"#{solid.Color.A:X2}{solid.Color.R:X2}{solid.Color.G:X2}{solid.Color.B:X2}" : brush?.GetType().Name ?? "none";
     internal static object PaletteEvidence => new { highContrast,
-        darkCanvas = PaletteColor("Dark", "PGCanvasBrush"), lightCanvas = PaletteColor("Light", "PGCanvasBrush"),
-        darkText = PaletteColor("Dark", "PGTextBrush"), lightText = PaletteColor("Light", "PGTextBrush") };
+        darkCanvas = PaletteColor("Default", "PGCanvasBrush"), lightCanvas = PaletteColor("Light", "PGCanvasBrush"),
+        darkText = PaletteColor("Default", "PGTextBrush"), lightText = PaletteColor("Light", "PGTextBrush") };
     private static string PaletteColor(string theme, string key)
     { try { return ColorOf((Brush)((ResourceDictionary)Dictionary.ThemeDictionaries[theme])[key]); } catch { return "unavailable"; } }
     public static FontIcon Icon(string glyph, double size = 16) => new() { Glyph = glyph, FontFamily = new FontFamily("Segoe Fluent Icons"), FontSize = size, IsTextScaleFactorEnabled = false };

@@ -140,7 +140,13 @@ public sealed class CoverPresenter : Grid
         requestedKey = null; requestedEdge = displayedEdge = 0; request.Clear(); image.Source = null; displayedPixels = null; croppedPixels = null;
         ApplyImageClip(); placeholder.Visibility = Visibility.Visible;
         SourceStatus = SourceKey is null ? "no-source" : "not-started";
-        ToolTipService.SetToolTip(this, SourceKey is null ? "来源尚未提供封面" : "正在准备封面"); SourceStateChanged?.Invoke();
+        SetSourceToolTip(SourceKey is null ? "来源尚未提供封面" : "正在准备封面");
+        SourceStateChanged?.Invoke();
+    }
+    private void SetSourceToolTip(string? text)
+    {
+        // WinUI disconnects the tooltip owner during Unloaded. Register the next hint on load.
+        if (loaded && IsLoaded && XamlRoot is not null) ToolTipService.SetToolTip(this, text);
     }
     private void Start()
     {
@@ -160,7 +166,7 @@ public sealed class CoverPresenter : Grid
         {
             ShowPixels(pipeline, pixels, edge);
             SourceStatus = "memory";
-            ToolTipService.SetToolTip(this, null);
+            SetSourceToolTip(null);
             SourceStateChanged?.Invoke();
             return;
         }
@@ -197,7 +203,7 @@ public sealed class CoverPresenter : Grid
         {
             if (request.IsCurrent(key, version))
             {
-                ToolTipService.SetToolTip(this, HasImage ? null : "封面暂时未能加载，可重试；其他资料保留。");
+                SetSourceToolTip(HasImage ? null : "封面暂时未能加载，可重试；其他资料保留。");
                 SourceStateChanged?.Invoke();
             }
         }

@@ -12,6 +12,7 @@
    <!-- Owned by MaterialPolicy (AlwaysUseFallback); Fluent in-app Acrylic values. -->
    <AcrylicBrush x:Key="NavigationSurfaceBrush" TintColor="#FCFCFC" TintOpacity="0" TintLuminosityOpacity="0.85" FallbackColor="#F9F9F9"/>
    <AcrylicBrush x:Key="ToolbarBrush" TintColor="#FCFCFC" TintOpacity="0" TintLuminosityOpacity="0.85" FallbackColor="#F9F9F9"/>
+   <SolidColorBrush x:Key="OrderDropDownBackground" Color="#FFFCFCFC"/><SolidColorBrush x:Key="OrderDropDownBorder" Color="#24000000"/>
    <SolidColorBrush x:Key="BrandBadgeBrush" Color="#E5EBE7"/>
    <SolidColorBrush x:Key="CalendarDayStroke" Color="#9A9A9A"/>
    <SolidColorBrush x:Key="CalendarReleaseBadgeFill" Color="#DADADA"/>
@@ -23,7 +24,7 @@
    <StaticResource x:Key="HyperlinkForeground" ResourceKey="TextPrimaryBrush"/>
    <StaticResource x:Key="HyperlinkForegroundPointerOver" ResourceKey="TextSecondaryBrush"/>
    <StaticResource x:Key="HyperlinkForegroundPressed" ResourceKey="TextSecondaryBrush"/>
-   <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="ToolbarBrush"/><StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="ToolbarBrush"/>
+   <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="ToolbarBrush"/><StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="OrderDropDownBackground"/><StaticResource x:Key="MenuFlyoutPresenterBorderBrush" ResourceKey="OrderDropDownBorder"/>
   </ResourceDictionary>
   <ResourceDictionary x:Key="Dark">
    <SolidColorBrush x:Key="CanvasBrush" Color="{StaticResource SolidBackgroundFillColorBase}"/><SolidColorBrush x:Key="LayerBrush" Color="Transparent"/>
@@ -35,6 +36,7 @@
    <SolidColorBrush x:Key="NeutralStatusBrush" Color="{StaticResource SystemFillColorNeutral}"/><SolidColorBrush x:Key="RecoveryTextBrush" Color="{StaticResource SystemFillColorNeutral}"/>
    <AcrylicBrush x:Key="NavigationSurfaceBrush" TintColor="#2C2C2C" TintOpacity="0.15" TintLuminosityOpacity="0.96" FallbackColor="#2C2C2C"/>
    <AcrylicBrush x:Key="ToolbarBrush" TintColor="#2C2C2C" TintOpacity="0.15" TintLuminosityOpacity="0.96" FallbackColor="#2C2C2C"/>
+   <SolidColorBrush x:Key="OrderDropDownBackground" Color="#FF313131"/><SolidColorBrush x:Key="OrderDropDownBorder" Color="#36FFFFFF"/>
    <SolidColorBrush x:Key="BrandBadgeBrush" Color="#E5EBE7"/>
    <SolidColorBrush x:Key="CalendarDayStroke" Color="#6D6D6D"/>
    <SolidColorBrush x:Key="CalendarReleaseBadgeFill" Color="#575757"/>
@@ -46,9 +48,10 @@
    <StaticResource x:Key="HyperlinkForeground" ResourceKey="TextPrimaryBrush"/>
    <StaticResource x:Key="HyperlinkForegroundPointerOver" ResourceKey="TextSecondaryBrush"/>
    <StaticResource x:Key="HyperlinkForegroundPressed" ResourceKey="TextSecondaryBrush"/>
-   <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="ToolbarBrush"/><StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="ToolbarBrush"/>
+   <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="ToolbarBrush"/><StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="OrderDropDownBackground"/><StaticResource x:Key="MenuFlyoutPresenterBorderBrush" ResourceKey="OrderDropDownBorder"/>
   </ResourceDictionary>
   <ResourceDictionary x:Key="HighContrast">
+   <SolidColorBrush x:Key="OrderDropDownBackground" Color="{ThemeResource SystemColorWindowColor}"/><SolidColorBrush x:Key="OrderDropDownBorder" Color="{ThemeResource SystemColorWindowTextColor}"/>
    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="{ThemeResource SystemColorHighlightColor}"/><SolidColorBrush x:Key="TextOnAccentFillColorPrimaryBrush" Color="{ThemeResource SystemColorHighlightTextColor}"/>
    <SolidColorBrush x:Key="CanvasBrush" Color="{ThemeResource SystemColorWindowColor}"/><SolidColorBrush x:Key="LayerBrush" Color="{ThemeResource SystemColorWindowColor}"/>
    <SolidColorBrush x:Key="ContentBrush" Color="{ThemeResource SystemColorWindowColor}"/><SolidColorBrush x:Key="ContentHoverBrush" Color="{ThemeResource SystemColorWindowColor}"/>
@@ -130,4 +133,42 @@
   </Setter>
  </Style>
  <Style TargetType="ContentDialog" BasedOn="{StaticResource DefaultContentDialogStyle}"><Setter Property="TitleTemplate"><Setter.Value><DataTemplate><TextBlock Text="{Binding}" Style="{StaticResource SubtitleTextBlockStyle}"/></DataTemplate></Setter.Value></Setter></Style>
+ <Style x:Key="OrderDropDownTriggerStyle" TargetType="DropDownButton">
+  <Setter Property="MinHeight" Value="34"/>
+  <Setter Property="CornerRadius" Value="8"/>
+  <Setter Property="BorderThickness" Value="1"/>
+  <Setter Property="Padding" Value="11,4"/>
+  <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+ </Style>
+ <Style x:Key="OrderDropDownPanelStyle" TargetType="FlyoutPresenter" BasedOn="{StaticResource DefaultFlyoutPresenterStyle}">
+  <Setter Property="Background" Value="{ThemeResource OrderDropDownBackground}"/>
+  <Setter Property="BorderBrush" Value="{ThemeResource OrderDropDownBorder}"/>
+  <Setter Property="BorderThickness" Value="1"/>
+  <Setter Property="CornerRadius" Value="8"/>
+ </Style>
+ <Style x:Key="OrderDropDownListStyle" TargetType="FlyoutPresenter" BasedOn="{StaticResource OrderDropDownPanelStyle}">
+  <Setter Property="Padding" Value="4"/>
+  <Setter Property="MinWidth" Value="0"/>
+  <Setter Property="MinHeight" Value="0"/>
+  <Setter Property="ScrollViewer.HorizontalScrollMode" Value="Disabled"/>
+  <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+  <Setter Property="ScrollViewer.VerticalScrollMode" Value="Disabled"/>
+  <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled"/>
+ </Style>
+ <Style x:Key="OrderDropDownItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+  <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+  <Setter Property="MinHeight" Value="34"/>
+  <Setter Property="Padding" Value="9,0,7,0"/>
+ </Style>
+ <DataTemplate x:Key="OrderDropDownItemTemplate">
+  <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding Tooltip}"/>
+ </DataTemplate>
+ <Style x:Key="OrderDropDownMenuStyle" TargetType="MenuFlyoutPresenter">
+  <Setter Property="Background" Value="{ThemeResource OrderDropDownBackground}"/>
+  <Setter Property="BorderBrush" Value="{ThemeResource OrderDropDownBorder}"/>
+  <Setter Property="BorderThickness" Value="1"/>
+  <Setter Property="CornerRadius" Value="8"/>
+  <Setter Property="Padding" Value="4"/>
+  <Setter Property="MaxHeight" Value="320"/>
+ </Style>
 </ResourceDictionary>

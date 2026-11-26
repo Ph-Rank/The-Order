@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { KunButton, KunChip, KunSwitch, KunModal, KunMessageProvider, KunAlertProvider, useKunMessage, useKunAlert } from '@kungal/ui-vue'
-import { Library, Compass, LayoutGrid, BarChart3, Settings, Search, Plus, FolderPlus, ArrowUpRight, ChevronRight, Heart, Star, SlidersHorizontal, X, Play, Clock3, BookOpen, Download, Upload, FolderOpen, Link2, RefreshCw, Check, CheckCircle2, ShieldCheck, Monitor, Tags, Sparkles, Square, CircleHelp, HardDrive, ArrowLeft, LoaderCircle } from 'lucide-vue-next'
+import { KunButton, KunModal, KunMessageProvider, KunAlertProvider, useKunMessage, useKunAlert } from '@kungal/ui-vue'
+import { Library, Compass, LayoutGrid, BarChart3, Settings, Search, Plus, FolderPlus, ArrowUpRight, ChevronRight, Heart, Star, SlidersHorizontal, X, Play, Clock3, BookOpen, FolderOpen, Link2, RefreshCw, Check, CheckCircle2, ShieldCheck, Monitor, Tags, Sparkles, Square, CircleHelp, HardDrive, LoaderCircle } from 'lucide-vue-next'
 import { api, isPreview } from './bridge'
 import type { AppSnapshot, BulkGamePatch, LibraryGame, PlayStatus, WorkMetadata, ScanCandidate, Theme, AppearanceStyle, MatchReview, InstallationAttachmentScan, NonPortraitCoverDisplay, PublicSettings, ConnectionResult } from './shared/types'
 import GameCard from './components/GameCard.vue'
@@ -21,11 +21,11 @@ import ImportCandidates from './components/ImportCandidates.vue'
 import MatchReviewWorkspace from './components/MatchReviewWorkspace.vue'
 import LibraryMaintenance from './components/LibraryMaintenance.vue'
 import PlayStatistics from './components/PlayStatistics.vue'
-import { filterLibraryGames, folderKey, libraryViewCounts, readLibraryPreferences, saveLibraryPreferences, splitLabels } from './library-workspace'
+import { filterLibraryGames, folderKey, readLibraryPreferences, saveLibraryPreferences, splitLabels } from './library-workspace'
 import type { LibraryFilters, LibraryLayout, LibrarySort, LibraryView } from './library-workspace'
 import { createSavedView, readSavedViews, writeSavedViews, type SavedLibraryView, type SavedViewEditor } from './saved-library-views'
 import { getLaunchInstallation } from './library-insights'
-import { buildScanRows, filterScanRows, validScanSelection } from './import-workspace'
+import { buildScanRows, validScanSelection } from './import-workspace'
 import type { ScanView } from './import-workspace'
 
 type Page = 'library' | 'discover' | 'categories' | 'stats' | 'settings'
@@ -99,7 +99,6 @@ const reviewError = ref(''), reviewReloadNeeded = ref(false)
 let reviewGeneration = 0
 const reviewModalOpen = computed({ get: () => reviewOpen.value, set: value => { if (!busy.has('matching-resolve')) reviewOpen.value = value } })
 const currentReview = computed(() => matchReviews.value.find(review => review.gameId === reviewGameId.value) ?? matchReviews.value[0] ?? null)
-const reviewGame = computed(() => games.value.find(game => game.id === currentReview.value?.gameId) ?? null)
 const maintenanceOpen = ref(false)
 const missingGames = computed(() => games.value.filter(game => game.installations.length && (!game.metadata || !game.metadata.coverUrl)))
 const unconfiguredGames = computed(() => games.value.filter(game => game.installations.length && !getLaunchInstallation(game)?.executablePath))
@@ -114,7 +113,6 @@ const allCategories = computed(() => [...new Set(games.value.flatMap(g => g.cate
 const allTags = computed(() => [...new Set(games.value.flatMap(g => [...g.customTags, ...(g.metadata?.tags ?? [])]))].sort())
 const libraryFilters = computed<LibraryFilters>(() => ({ query: libraryQuery.value, view: libraryView.value, status: statusFilter.value, favorites: favoritesOnly.value, category: categoryFilter.value, tag: tagFilter.value, minRating: minRating.value }))
 const filteredGames = computed(() => filterLibraryGames(games.value, libraryFilters.value, sort.value))
-const viewCounts = computed(() => libraryViewCounts(games.value))
 const smartViews: { value: LibraryView; label: string }[] = [{ value: 'all', label: '全部' }, { value: 'local', label: '本地游戏' }, { value: 'wishlist', label: '愿望单' }]
 const activeFilterCount = computed(() => Number(statusFilter.value !== 'all') + Number(favoritesOnly.value) + Number(!!categoryFilter.value) + Number(!!tagFilter.value) + Number(minRating.value !== ''))
 watch(() => filteredGames.value.map(game => game.id).join('|'), () => { const visible = new Set(filteredGames.value.map(game => game.id)); selectedIds.value = selectedIds.value.filter(id => visible.has(id)) }, { flush: 'sync' })
@@ -136,9 +134,6 @@ async function organizeSelected() {
   if (!Object.keys(patch).length) { useKunMessage('请选择要修改的状态、收藏，或填写分类和标签。', 'info'); return }
   await task('bulk', async () => { await api.updateGames(ids, patch); await reload(); if (generation === selectionGeneration) leaveSelection(); useKunMessage(`已整理 ${ids.length} 部作品。`, 'success') })
 }
-const totalSeconds = computed(() => games.value.reduce((n, g) => n + g.totalPlaySeconds, 0))
-const completed = computed(() => games.value.filter(g => g.status === 'completed').length)
-const countStatus = (status: PlayStatus) => games.value.filter(g => g.status === status).length
 const hours = (seconds: number) => seconds < 3600 ? `${Math.floor(seconds / 60)} 分钟` : `${(seconds / 3600).toFixed(1)} 小时`
 const sourceName = (source: string) => ({ bangumi: 'Bangumi', vndb: 'VNDB', erogamescape: '批评空间', dlsite: 'DLsite', howlongtobeat: 'HowLongToBeat', steam: 'Steam', nextmoe: 'NextMoe' }[source] ?? source)
 const releaseDate = (work?: WorkMetadata | null) => !work?.releaseDate ? '发售日期未收录' : work.releaseDatePrecision === 'year' ? work.releaseDate.slice(0, 4) : work.releaseDatePrecision === 'month' ? work.releaseDate.slice(0, 7) : work.releaseDate
@@ -754,19 +749,16 @@ const scanView = ref<ScanView>('all')
 const importError = ref('')
 const scanReloadNeeded = ref(false)
 const scanRows = computed(() => buildScanRows(candidates.value, games.value))
-const alreadyInLibrary = computed(() => new Set(scanRows.value.filter(row => row.status === 'known').map(row => row.candidate.id)))
 function candidateOwner(candidate: ScanCandidate): LibraryGame | undefined {
   const root = folderKey(candidate.folderPath)
   return games.value.find(game => game.installations.some(installation => { const owned = folderKey(installation.folderPath); return root === owned || root.startsWith(owned + '/') || owned.startsWith(root + '/') }))
 }
-const conflictingCandidates = computed(() => new Set(scanRows.value.filter(row => row.status === 'conflict').map(row => row.candidate.id)))
 const scannedLibraryIds = computed(() => {
   const folders = new Set(candidates.value.map(candidate => folderKey(candidate.folderPath)))
   return games.value.filter(game => game.installations.some(installation => folders.has(folderKey(installation.folderPath)))).map(game => game.id)
 })
 const newCandidates = computed(() => scanRows.value.filter(row => row.status === 'new').map(row => row.candidate))
 const selectedScanIds = computed(() => validScanSelection(chosen.value, scanRows.value))
-const visibleCandidates = computed(() => filterScanRows(scanRows.value, scanQuery.value, scanView.value).map(row => row.candidate))
 watch(() => scanRows.value.map(row => `${row.candidate.id}:${row.status}`).join('|'), () => { chosen.value = [...selectedScanIds.value] }, { flush: 'sync' })
 function setScanSelection(ids: string[]) { if (!busy.has('import')) chosen.value = validScanSelection(ids, scanRows.value) }
 let scanGeneration = 0

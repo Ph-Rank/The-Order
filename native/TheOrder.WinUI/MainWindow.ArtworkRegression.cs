@@ -77,6 +77,7 @@ public sealed partial class MainWindow
             secondY = roundFlow.Children[1].TransformToVisual(roundFlow).TransformPoint(new Point()).Y };
         bool roundingFits = rounding.secondY < .5;
         content.Children.Remove(roundedSlot);
+        bool coverRecycled = await AuditCoverRecyclingAsync(content);
         var frame = new Grid { Width = 880, HorizontalAlignment = HorizontalAlignment.Left };
         frame.RowDefinitions.Add(new() { Height = GridLength.Auto }); frame.RowDefinitions.Add(new() { Height = GridLength.Auto });
         var pipeline = new ArtworkRegressionImages();
@@ -124,11 +125,60 @@ public sealed partial class MainWindow
         var upgrade = JsonSerializer.SerializeToElement(stage.Evidence);
         bool upgradeRetained = VisibleImage() && !upgrade.GetProperty("imageFailed").GetBoolean() && stage.Visibility == Visibility.Visible;
         stage.Images = pipeline; stage.DecodeEdge = 512; stage.SetPolicy(true, false, MaterialMode.Standard);
-        var report = new { passed = overlaps == 0 && roundingFits && normal.artworkVisible && effectsOff.artworkVisible && opaque.artworkVisible && !highContrast.artworkVisible && missing.collapsed && recovery.artworkVisible && lateIgnored && upgradeRetained,
-            overlaps, samples, rounding, roundingFits, normal, effectsOff, opaque, highContrast, missing, recovery, lateIgnored, upgradeRetained, afterLate, upgrade,
+        var report = new { passed = coverRecycled && overlaps == 0 && roundingFits && normal.artworkVisible && effectsOff.artworkVisible && opaque.artworkVisible && !highContrast.artworkVisible && missing.collapsed && recovery.artworkVisible && lateIgnored && upgradeRetained,
+            overlaps, samples, rounding, roundingFits, coverRecycled, normal, effectsOff, opaque, highContrast, missing, recovery, lateIgnored, upgradeRetained, afterLate, upgrade,
             synthetic = true, productionRead = false, networkUsed = false, previousPage = previous?.GetType().Name };
         await File.WriteAllTextAsync(Path.Combine(fixtureDirectory, "artwork-regression.json"), JsonSerializer.Serialize(report));
         // Retain this owned synthetic scene for optional window screenshots. Navigation replaces it.
+    }
+
+    private static async Task<bool> AuditCoverRecyclingAsync(Panel content)
+    {
+        var images = new ArtworkRegressionImages();
+        var delayed = new ArtworkDelayedImages(images);
+        var cover = new CoverPresenter { Width = 120, Height = 160, Pipeline = delayed, SourceKey = "synthetic-scene" };
+        TaskCompletionSource? loaded = null, unloaded = null;
+        cover.Loaded += (_, _) => loaded?.TrySetResult();
+        cover.Unloaded += (_, _) => unloaded?.TrySetResult();
+        var timeout = TimeSpan.FromSeconds(3);
+        async Task Mount()
+        {
+            loaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            content.Children.Add(cover);
+            await loaded.Task.WaitAsync(timeout);
+            content.UpdateLayout();
+        }
+        async Task Unmount()
+        {
+            unloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            content.Children.Remove(cover);
+            await unloaded.Task.WaitAsync(timeout);
+        }
+
+        await Mount();
+        await cover.PendingImage.WaitAsync(timeout);
+        bool firstImage = cover.HasImage && ToolTipService.GetToolTip(cover) is null;
+        await Unmount();
+        bool detached = !cover.HasImage && ToolTipService.GetToolTip(cover) is null;
+        cover.SourceKey = "synthetic-delayed";
+        detached &= ToolTipService.GetToolTip(cover) is null;
+        await Mount();
+        var pending = cover.PendingImage;
+        var loadingTip = ToolTipService.GetToolTip(cover);
+        bool loading = cover.SourceStatus == "loading" && loadingTip is not null && !pending.IsCompleted;
+        await Unmount();
+        delayed.Complete();
+        await pending.WaitAsync(timeout);
+        bool ignored = !cover.HasImage && Equals(loadingTip, ToolTipService.GetToolTip(cover));
+        cover.SourceKey = "synthetic-poster-retry";
+        await Mount();
+        await cover.PendingImage.WaitAsync(timeout);
+        bool failed = !cover.HasImage && ToolTipService.GetToolTip(cover) is not null;
+        cover.RetryFailed();
+        await cover.PendingImage.WaitAsync(timeout);
+        bool recovered = cover.HasImage && ToolTipService.GetToolTip(cover) is null;
+        await Unmount();
+        return firstImage && detached && loading && ignored && failed && recovered;
     }
 
     private static IEnumerable<TextBlock> ArtworkFactLeaves(DependencyObject root)

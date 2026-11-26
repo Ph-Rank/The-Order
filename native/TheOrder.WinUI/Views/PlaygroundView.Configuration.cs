@@ -24,10 +24,10 @@ public sealed partial class PlaygroundView
     private readonly Button systemPrompt = new() { HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(14, 12, 14, 12), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12) };
     private readonly TextBlock systemPromptPreview = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, MaxLines = 3, TextTrimming = TextTrimming.CharacterEllipsis };
     private bool modelsLoading, contextConfirmation;
-    private static readonly string[] ProviderNames = ["OpenAI", "Google", "Anthropic", "xAI", "DeepSeek"];
     private static string Endpoint(PlaygroundProviderKind kind) => PlaygroundEndpointPolicy.Default(kind);
     private static readonly Dictionary<string, PlaygroundProviderKind> EndpointProviders = Enum.GetValues<PlaygroundProviderKind>()
-        .ToDictionary(kind => new Uri(PlaygroundEndpointPolicy.Default(kind)).IdnHost, StringComparer.OrdinalIgnoreCase);
+        .GroupBy(kind => new Uri(PlaygroundEndpointPolicy.Default(kind)).IdnHost, StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
     private void BuildSettings()
     {
@@ -39,12 +39,13 @@ public sealed partial class PlaygroundView
         Grid.SetColumn(chevron, 1); modelRow.Children.Add(chevron); currentModel.Content = modelRow; modelSurface.Child = currentModel;
         currentModel.Click += async (_, _) => await RunAsync(ShowModelPickerAsync);
         AutomationProperties.SetAutomationId(currentModel, "PlaygroundChooseModel"); settings.Children.Add(modelSurface);
+        BuildChatGptUsage();
 
         systemPrompt.Content = new StackPanel { Spacing = 7, Children = { Label("对话预设", 14), systemPromptPreview } };
         systemPrompt.Click += async (_, _) => await RunAsync(ShowSystemPromptAsync);
         AutomationProperties.SetAutomationId(systemPrompt, "PlaygroundSystemInstructions"); AutomationProperties.SetName(systemPrompt, "编辑对话预设"); settings.Children.Add(systemPrompt);
 
-        settings.Children.Add(Label("思考等级", 13)); PlaygroundAppearance.Apply(effort, "PGComboBox");
+        settings.Children.Add(Label("思考等级", 13));
         effort.OptionsSource = new[] { "低", "中", "高" };
         effort.OptionChanged += async (_, _) => { if (!synchronizing && effort.OptionIndex >= 0) { Draft = Draft with { ReasoningEffort = new[] { "low", "medium", "high" }[effort.OptionIndex] }; await RunAsync(ApplyOptionsAsync); } };
         AutomationProperties.SetAutomationId(effort, "PlaygroundReasoningEffort"); settings.Children.Add(effort);
@@ -152,10 +153,11 @@ public sealed partial class PlaygroundView
         if (disposed || !initialized) return;
         var owner = CaptureOptionsOwner(); var options = OptionsFor(owner.ConversationId);
         int request = ++credentialGeneration; string binding = OptionsBinding(options);
+        chatGptLabel = null;
         credentialAvailable = false; credentialBinding = binding; UpdateConnectionStatus(); UpdateActions();
         try
         {
-            bool available = await service.HasCredentialAsync(options.Provider, options.Endpoint, lifetime.Token);
+            bool available = await HasConversationCredential(options);
             if (!IsCurrentOptionsOwner(owner) || request != credentialGeneration || credentialBinding != binding || OptionsBinding(Draft) != binding) return;
             credentialAvailable = available; UpdateConnectionStatus(); UpdateActions(); SyncModelCatalogue();
             if (modelPickerOptions is null && available && CanLoadModels && !modelCatalogues.ContainsKey(binding) && !modelLoadAttempts.Contains(binding)) _ = LoadModelsAsync();
@@ -165,42 +167,21 @@ public sealed partial class PlaygroundView
     }
     private void UpdateConnectionStatus()
     {
-        connectionStatus.Text = !credentialAvailable ? "此连接尚未保存 API Key。"
+        bool chatGpt = Draft.Provider == PlaygroundProviderKind.ChatGPT;
+        chatGptBadge.Visibility = chatGpt ? Visibility.Visible : Visibility.Collapsed;
+        openAiUsage.Text = chatGpt ? "使用 ChatGPT 额度" : "按 OpenAI API 计费";
+        bool showUsage = ProviderGroup(Draft.Provider) == PlaygroundProviderKind.OpenAI
+            && credentialAvailable && credentialBinding == OptionsBinding(Draft)
+            && PlaygroundAuthorizationPolicy.CanSend(service.Snapshot.Settings);
+        openAiUsage.Visibility = showUsage ? Visibility.Visible : Visibility.Collapsed;
+        chatGptAccountLabel.Text = chatGptLabel ?? ""; chatGptAccountLabel.Visibility = chatGptLabel is null ? Visibility.Collapsed : Visibility.Visible;
+        ToolTipService.SetToolTip(chatGptAccountLabel, chatGptLabel);
+        generationOutput.Visibility = chatGpt ? Visibility.Collapsed : Visibility.Visible;
+        connectionStatus.Text = !credentialAvailable ? chatGpt ? "请选择 ChatGPT 账号，登录并授权使用额度。" : "此连接尚未保存 API Key。"
             : !PlaygroundAuthorizationPolicy.CanSend(service.Snapshot.Settings) ? "尚未授予全局发送授权。" : "已配置 · " + Host(Draft.Endpoint);
         savedContext.IsEnabled = service.Snapshot.Settings.Permissions.Library || service.Snapshot.Settings.Permissions.History || service.Snapshot.Settings.Permissions.Memory;
         refreshModelPicker?.Invoke();
     }
-
-    private async Task ShowProgressAsync()
-    {
-        if (Current is null) return;
-        var selectedWorks = Draft.WorkProgress.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
-        IReadOnlyList<(string Key, string Title)> available = service.Snapshot.Settings.Permissions.Library ? ProgressWorks?.Invoke() ?? [] : [];
-        var panel = new StackPanel { Spacing = 10, MinWidth = 280, MaxWidth = 600 };
-        panel.Children.Add(Label("只记录你明确给出的进度，不根据游玩时长或“通关”状态推算线路。边界仅影响后续回复；无法确认安全的旧正文和偏好仍会省略。", 13));
-        var rows = new StackPanel { Spacing = 10 };
-        var editors = new Dictionary<string, TextBox>(StringComparer.Ordinal);
-        void Add(string workKey, string text)
-        {
-            if (editors.ContainsKey(workKey)) return;
-            var name = available.FirstOrDefault(x => x.Key == workKey).Title ?? "已保存的作品边界";
-            var editor = new TextBox { Header = name, Text = text, MaxLength = 400, PlaceholderText = "例如：共通线第3章；其他线路未知", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap };
-            editors[workKey] = editor; rows.Children.Add(editor);
-        }
-        foreach (var pair in selectedWorks) Add(pair.Key, pair.Value);
-        if (available.Count > 0)
-        {
-            var choose = new SelectedFirstComboBox { Header = "选择需要讨论的作品", HorizontalAlignment = HorizontalAlignment.Stretch, DisplayMemberPath = "Title", OptionsSource = available.Select(x => new ProgressWork(x.Key, x.Title)).ToArray() };
-            choose.OptionChanged += (_, _) => { if (choose.SelectedOption is ProgressWork work) Add(work.Key, ""); }; panel.Children.Add(choose);
-        }
-        else panel.Children.Add(Label("尚未授权本地记录，或当前没有可供选择的库内作品；不会枚举整库。", 12));
-        panel.Children.Add(rows); panel.Children.Add(Label("清空一项进度可移除该作品的明确边界，之后按未知处理。", 12));
-        var scroll = new ScrollViewer { Content = panel, MaxHeight = Math.Max(180, Math.Min(540, (XamlRoot?.Size.Height ?? 760) - 220)), HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-        if (await DialogAsync("按作品设置进度", scroll, "保存边界") != ContentDialogResult.Primary) return;
-        Draft = Draft with { WorkProgress = editors.Where(x => !string.IsNullOrWhiteSpace(x.Value.Text)).ToImmutableDictionary(x => x.Key, x => x.Value.Text.Trim(), StringComparer.Ordinal) };
-        await ApplyOptionsAsync(); UpdateProgressStatus();
-    }
-    private sealed record ProgressWork(string Key, string Title);
     private async Task ShowMemoriesAsync()
     {
         var query = new TextBox { PlaceholderText = "搜索记忆", MaxLength = 200 };

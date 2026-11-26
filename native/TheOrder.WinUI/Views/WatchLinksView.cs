@@ -75,7 +75,7 @@ internal sealed class WatchLinksView : StackPanel
         catch { if (!disposed) { warning.Text = "暂时无法打开平台，请稍后重试。"; warning.Visibility = Visibility.Visible; } }
     }
     internal object Evidence => new { identity, sort, links = identity is null ? [] : WatchLinks.Merge(identity, values, sort), expanded = section.IsExpanded, visibleCards = section.IsExpanded ? cards.Children.Count : 0, totalCards = cards.Children.Count,
-        sortControls = body.Children.OfType<ComboBox>().Count(), subtitles = cards.Children.OfType<Button>().Select(x => (x.Content as StackPanel)?.Children.OfType<TextBlock>().LastOrDefault()?.Text).ToArray(),
+        sortControls = body.Children.OfType<SelectedFirstComboBox>().Count(), subtitles = cards.Children.OfType<Button>().Select(x => (x.Content as StackPanel)?.Children.OfType<TextBlock>().LastOrDefault()?.Text).ToArray(),
         sourceDetailsExpanded = sources.IsExpanded, hitTargets = cards.Children.OfType<Button>().Select(InteractiveCardEvidence.Hit).ToArray(), mapping };
     public void Expand() { section.IsExpanded = true; section.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = InteractionMotion.Enabled, VerticalAlignmentRatio = .05 }); }
     internal void ShowForFixture() => Expand();

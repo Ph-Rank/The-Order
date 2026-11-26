@@ -123,6 +123,7 @@ public sealed class SyntheticOnline : HttpMessageHandler, ICredentialProvider, I
                     display_name = $"合成发售作品 {id}",
                     medium = "galgame",
                     content_limit = "sfw",
+                    cover = new { url = "https://images.example/calendar.png" },
                     release_date = month + (id == 100 ? "-21" : "-20"),
                     release_date_precision = "day"
                 }),

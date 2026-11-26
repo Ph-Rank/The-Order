@@ -1,7 +1,4 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using TheOrder.Application;
 
 namespace TheOrder.Platform.Windows;
@@ -11,111 +8,45 @@ namespace TheOrder.Platform.Windows;
 public sealed class IsolatedAniListCache(NativeConfiguration configuration,
     Func<PersistenceStage, Task>? persistenceProbe = null) : IAniListCache, IMediaIdentityDecisionOwner
 {
-    public IMediaIdentityDecisions IdentityDecisions { get; } = new IsolatedMediaIdentityDecisions(configuration, persistenceProbe);
+    private readonly IsolatedMediaIdentityDecisions decisions = new(configuration, persistenceProbe);
+    public IMediaIdentityDecisions IdentityDecisions => decisions;
     public const string DirectoryName = "native-anilist-v1";
-    private const int MaximumFiles = 128, MaximumPayload = 4 * 1024 * 1024, MaximumEnvelope = 6 * 1024 * 1024;
+    private const int MaximumFiles = 128;
     private const long MaximumBytes = 64L * 1024 * 1024;
-    private readonly SemaphoreSlim serial = new(1);
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, RespectRequiredConstructorParameters = true };
-    private sealed record Envelope(int Version, Guid ProfileId, Guid StoreId, string Key, string Hash, byte[] Payload);
-    private static string FileKey(string key) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
+    private readonly ProfileMetadataCache storage = new(configuration, DirectoryName, MaximumFiles, MaximumBytes, persistenceProbe);
     public async Task<AniListCacheValue?> ReadAsync(string key, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        if (key is null || key.Length > 100) return null;
-        try { return await Run((root, profile) => Task.FromResult(ReadVerified(Path.Combine(root, FileKey(key) + ".json"), profile, key)), false, cancellation).ConfigureAwait(false); }
-        catch (Exception e) when (Failure(e)) { return null; }
+        if (key is null || key.Length > MediaCacheEnvelope.MaximumKeyLength) return null;
+        try { return await storage.InDirectoryAsync((root, profile) => Task.FromResult(ReadVerified(Path.Combine(root, MediaCacheEnvelope.FileName(key)), profile, key)), false, cancellation).ConfigureAwait(false); }
+        catch (Exception e) when (ProfileMetadataCache.IsReadFailure(e)) { return null; }
     }
     public async Task WriteAsync(AniListCacheValue value, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         if (!AniListValidation.Cache(value)) throw new InvalidDataException("AniList缓存格式无效。");
         var archivedForEviction = value.Binding is null || value.Binding.AutomaticPolicyVersion > 0;
-        if (archivedForEviction && IdentityDecisions is IsolatedMediaIdentityDecisions userData)
-            await userData.ArchiveLegacyAsync(MediaIdentityPurpose.AniListMedia, cancellation).ConfigureAwait(false);
-        var payload = JsonSerializer.SerializeToUtf8Bytes(value, JsonOptions);
-        if (payload.Length > MaximumPayload) throw new IOException("AniList缓存超过大小限制。");
+        if (archivedForEviction)
+            await decisions.ArchiveLegacyAsync(MediaIdentityPurpose.AniListMedia, cancellation).ConfigureAwait(false);
+        var payload = JsonSerializer.SerializeToUtf8Bytes(value, ProfileMetadataCache.JsonOptions);
+        if (payload.Length > MediaCacheEnvelope.MaximumPayload) throw new IOException("AniList缓存超过大小限制。");
         try
         {
-            var stored = await Run(async (root, profile) =>
+            var stored = await storage.InDirectoryAsync(async (root, profile) =>
             {
-                var bytes = JsonSerializer.SerializeToUtf8Bytes(new Envelope(1, profile.Manifest.ProfileId, profile.Manifest.StoreId,
-                    value.Key, Convert.ToHexString(SHA256.HashData(payload)), payload), JsonOptions);
-                if (bytes.Length > MaximumEnvelope) return false;
-                var target = Path.Combine(root, FileKey(value.Key) + ".json");
-                var files = new DirectoryInfo(root).EnumerateFiles().Take(MaximumFiles + 1).ToArray();
-                if (files.Length > MaximumFiles) return false;
-                var prior = files.SingleOrDefault(f => f.FullName.Equals(target, StringComparison.OrdinalIgnoreCase));
-                if (prior is not null && ReadVerified(target, profile, value.Key) is null) return false;
-                long total = files.Sum(f => f.Length) - (prior?.Length ?? 0) + bytes.Length;
-                int count = files.Length + (prior is null ? 1 : 0); var remove = new List<string>();
-                foreach (var file in files.OrderBy(f => f.LastWriteTimeUtc))
-                {
-                    if (total <= MaximumBytes && count <= MaximumFiles) break;
-                    // Manual legacy choices and exact envelopes have already
-                    // been archived in user data. Unknown files are preserved.
-                    if (file.FullName.Equals(target, StringComparison.OrdinalIgnoreCase) || ReadVerified(file.FullName, profile) is not { } verified
-                        || !archivedForEviction && verified.Binding is not null) continue;
-                    remove.Add(file.FullName); total -= file.Length; count--;
-                }
-                if (total > MaximumBytes || count > MaximumFiles) return false;
-                cancellation.ThrowIfCancellationRequested();
-                await WindowsAtomicFile.WriteAsync(target, bytes, async stage =>
-                {
-                    if (persistenceProbe is not null) await persistenceProbe(stage).ConfigureAwait(false);
-                    if (stage is PersistenceStage.BeforeTempWrite or PersistenceStage.BeforeReplace) cancellation.ThrowIfCancellationRequested();
-                    if (stage != PersistenceStage.BeforeReplace) return;
-                    if (File.Exists(target) && ReadVerified(target, profile, value.Key) is null) throw new IOException("AniList缓存身份已改变，保留原文件。");
-                    foreach (var path in remove)
-                    { if (ReadVerified(path, profile) is not { } verified || !archivedForEviction && verified.Binding is not null) throw new IOException("AniList缓存维护条件已改变。"); File.Delete(path); }
-                }).ConfigureAwait(false);
-                return true;
+                var bytes = MediaCacheEnvelope.Encode(profile, value.Key, payload);
+                if (bytes.Length > MediaCacheEnvelope.MaximumBytes) return false;
+                var target = Path.Combine(root, MediaCacheEnvelope.FileName(value.Key));
+                return await storage.ReplaceAsync(target, bytes,
+                    () => ReadVerified(target, profile, value.Key) is not null,
+                    path => ReadVerified(path, profile) is { } verified && (archivedForEviction || verified.Binding is null),
+                    cancellation.ThrowIfCancellationRequested, "AniList缓存身份已改变，保留原文件。", "AniList缓存维护条件已改变。").ConfigureAwait(false);
             }, true, cancellation).ConfigureAwait(false);
             if (!stored) throw new IOException("AniList缓存不可写，未保存此作品关联。");
         }
         catch (Exception e) when (e is NativeProfileException or DataIsolationException)
         { throw new IOException("AniList缓存资料路径不可用。", e); }
     }
-    internal static AniListCacheValue? ReadVerified(string path, NativeProfileStore profile, string? expected = null)
-    {
-        try
-        {
-            using var file = IsolatedLibrarySource.OpenChecked(path);
-            if (file.Length is < 1 or > MaximumEnvelope) return null;
-            var envelope = JsonSerializer.Deserialize<Envelope>(file, JsonOptions);
-            if (envelope is null || envelope.Version != 1 || envelope.ProfileId != profile.Manifest.ProfileId || envelope.StoreId != profile.Manifest.StoreId
-                || envelope.Key is null || envelope.Key.Length > 100 || expected is not null && envelope.Key != expected
-                || Path.GetFileName(path) != FileKey(envelope.Key) + ".json" || envelope.Payload is null || envelope.Payload.Length is < 1 or > MaximumPayload
-                || envelope.Hash != Convert.ToHexString(SHA256.HashData(envelope.Payload))) return null;
-            var value = JsonSerializer.Deserialize<AniListCacheValue>(envelope.Payload, JsonOptions);
-            return value?.Key == envelope.Key && AniListValidation.Cache(value) ? value : null;
-        }
-        catch (Exception e) when (Failure(e)) { return null; }
-    }
-    private async Task<T?> Run<T>(Func<string, NativeProfileStore, Task<T>> action, bool create, CancellationToken cancellation)
-    {
-        if (configuration.Profile is not NativeProfileStore profile) return default;
-        await serial.WaitAsync(cancellation).ConfigureAwait(false);
-        try
-        {
-            return await Task.Run(async () =>
-            {
-                var parent = NativeProfileAccess.Validate(configuration); var held = IsolatedLibraryPersistence.PinDirectoryChain(parent);
-                try
-                {
-                    NativeProfileAccess.Validate(configuration); var root = Path.Combine(parent, DirectoryName); NativeProfilePaths.CheckChain(root);
-                    if (!create && !Directory.Exists(root)) return default;
-                    if (create) Directory.CreateDirectory(root);
-                    var pinned = IsolatedLibraryPersistence.PinDirectoryChain(root);
-                    try { NativeProfilePaths.CheckChain(root); cancellation.ThrowIfCancellationRequested(); return await action(root, profile).ConfigureAwait(false); }
-                    finally { foreach (var handle in pinned) handle.Dispose(); }
-                }
-                finally { foreach (var handle in held) handle.Dispose(); }
-            }, cancellation).ConfigureAwait(false);
-        }
-        finally { serial.Release(); }
-    }
-    private static bool Failure(Exception e) => e is IOException or UnauthorizedAccessException or JsonException
-        or InvalidDataException or NativeProfileException or DataIsolationException or ArgumentException;
+    internal static AniListCacheValue? ReadVerified(string path, NativeProfileStore profile, string? expected = null) =>
+        MediaCacheEnvelope.ReadVerified<AniListCacheValue>(path, profile, expected, static value => value.Key, AniListValidation.Cache);
 }

@@ -43,6 +43,8 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
     private readonly TextBlock usage = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap };
     private readonly Button copy = new() { Content = "复制", FontSize = 12, Padding = new Thickness(8, 4, 8, 4) };
     private readonly Button retry = new() { Content = "重试", FontSize = 12, Padding = new Thickness(8, 4, 8, 4), Visibility = Visibility.Collapsed };
+    private readonly HyperlinkButton manageChatGptUsage = new() { Content = "管理 ChatGPT 用量", NavigateUri = new Uri(ChatGptSignInPolicy.Usage),
+        FontSize = 12, Padding = new Thickness(8, 4, 8, 4), Visibility = Visibility.Collapsed };
     private readonly StackPanel sources = new() { HorizontalAlignment = HorizontalAlignment.Stretch, Spacing = 10, Margin = new Thickness(0, 2, 0, 6) };
     private readonly DisclosureBody sourceSection = new();
     private readonly Button sourceToggle = new() { FontSize = 12, Padding = new Thickness(7, 3, 7, 3), Visibility = Visibility.Collapsed };
@@ -76,6 +78,7 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
         PlaygroundAppearance.Apply(copy, "PGIconButton"); PlaygroundAppearance.Apply(retry); PlaygroundAppearance.Apply(sourceToggle);
         sourceSection.Children.Add(sources);
         actions.Children.Add(copy); actions.Children.Add(retry); actions.Children.Add(sourceToggle); root.Children.Add(actions); root.Children.Add(usage); root.Children.Add(sourceSection);
+        actions.Children.Add(manageChatGptUsage);
         sourceToggle.Click += (_, _) => { sourceSection.IsExpanded = sourcesOpen = !sourcesOpen; UpdateSourceToggle(); };
         AutomationProperties.SetName(copy, "复制这条消息"); AutomationProperties.SetName(retry, "手动重试这轮回复");
         copy.Click += (_, _) => { if (item is not null) PlaygroundMarkdownView.Copy(item.Message.Text); };
@@ -137,6 +140,10 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
         phase.Visibility = string.IsNullOrWhiteSpace(phase.Text) ? Visibility.Collapsed : Visibility.Visible;
         retry.Visibility = message.Role != "user" && message.Status is PlaygroundMessageStatus.Failed or PlaygroundMessageStatus.Cancelled or PlaygroundMessageStatus.Interrupted
             ? Visibility.Visible : Visibility.Collapsed;
+        bool chatGptLimit = !user && message.Provider == PlaygroundProviderKind.ChatGPT
+            && message.Error?.Contains(ChatGptSignInPolicy.UsageLimitMessage, StringComparison.Ordinal) == true;
+        manageChatGptUsage.Visibility = chatGptLimit ? Visibility.Visible : Visibility.Collapsed;
+        if (chatGptLimit) retry.Visibility = Visibility.Collapsed;
         copy.IsEnabled = message.Text.Length > 0 && !(generating && item.Strict);
         if (generating && item.Strict)
         {
@@ -173,7 +180,7 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
         {
             var cost = PlaygroundPricing.ForMessage(message);
             string tokens = Usage(message.Usage);
-            usage.Text = (tokens.Length == 0 ? "" : tokens + " · ") + PlaygroundPricing.Format(cost);
+            usage.Text = (tokens.Length == 0 ? "" : tokens + " · ") + (message.Provider == PlaygroundProviderKind.ChatGPT ? "ChatGPT 额度" : PlaygroundPricing.Format(cost));
             usage.Visibility = Visibility.Visible; ToolTipService.SetToolTip(usage, cost.Notice);
             AutomationProperties.SetName(usage, usage.Text);
         }

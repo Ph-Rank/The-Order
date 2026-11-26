@@ -48,15 +48,19 @@ public sealed partial class MainWindow
         allowed |= launchSettings || gameSettings;
         if (!allowed || id.Length > 200 || mode is not ("inspect" or "focus" or "invoke" or "expand" or "collapse" or "toggle" or "select0" or "select1" or "select2")) throw new InvalidDataException("Unsupported bounded control.");
         if ((mode == "toggle" || mode.StartsWith("select", StringComparison.Ordinal)) && !(launchSettings || gameSettings)) throw new InvalidDataException("Only launch settings accept Test value changes.");
+        bool selecting = mode.StartsWith("select", StringComparison.Ordinal);
         var pending = new Stack<DependencyObject>(); pending.Push(Root); var matches = new List<FrameworkElement>(); int count = 0;
         while (pending.TryPop(out var node))
         {
             if (++count > 8192) throw new InvalidOperationException("Bounded Test tree exceeded.");
             if (node is FrameworkElement element && (element.Visibility != Visibility.Visible || !element.IsLoaded)) continue;
-            if (node is FrameworkElement found && AutomationProperties.GetAutomationId(found) == id) matches.Add(found);
+            if (node is FrameworkElement found && AutomationProperties.GetAutomationId(found) == id &&
+                (found is SelectedFirstComboBox) == selecting) matches.Add(found);
             for (int n = VisualTreeHelper.GetChildrenCount(node) - 1; n >= 0; n--) pending.Push(VisualTreeHelper.GetChild(node, n));
         }
-        var target = matches.Count == 1 ? matches[0] : throw new InvalidOperationException($"Expected one active control, found {matches.Count}.");
+        var match = matches.Count == 1 ? matches[0] : throw new InvalidOperationException($"Expected one active control, found {matches.Count}.");
+        var choice = match as SelectedFirstComboBox;
+        FrameworkElement target = (FrameworkElement?)choice?.Trigger ?? match;
         target.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false, VerticalAlignmentRatio = .2 });
         await Task.Delay(100); target.UpdateLayout();
         var peer = FrameworkElementAutomationPeer.CreatePeerForElement(target) ?? (target is Button button ? new ButtonAutomationPeer(button) : null)
@@ -94,9 +98,9 @@ public sealed partial class MainWindow
             if (peer.GetPattern(PatternInterface.Toggle) is not IToggleProvider toggle) throw new InvalidOperationException("Native Toggle pattern required.");
             toggle.Toggle();
         }
-        else if (mode.StartsWith("select", StringComparison.Ordinal))
+        else if (selecting)
         {
-            if (target is not SelectedFirstComboBox choice || choice.Options.Count != 3) throw new InvalidOperationException("Three-state native launch choice required.");
+            if (choice is null || choice.Options.Count != 3) throw new InvalidOperationException("Three-state native launch choice required.");
             // A bounded control selection, distinguished from physical keyboard input.
             choice.OptionIndex = mode[^1] - '0';
         }

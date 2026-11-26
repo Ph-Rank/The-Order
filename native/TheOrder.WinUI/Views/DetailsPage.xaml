@@ -19,7 +19,7 @@
           <Button Height="36" Padding="12,0" CornerRadius="6" Click="OnLaunchSettings" Content="启动设置" ToolTipService.ToolTip="Locale Emulator、Magpie 与启动兼容设置" Visibility="{x:Bind HasInstallations(Launch.Installations.Length), Mode=OneWay}" IsEnabled="{x:Bind ViewModel.CanEdit, Mode=OneWay}" AutomationProperties.AutomationId="OpenLaunchSettings" />
           <Button Height="36" Padding="12,0" CornerRadius="6" Click="OnShowRelatedWorks" Content="关联作品" ToolTipService.ToolTip="浏览关联动画、音乐和书籍" AutomationProperties.AutomationId="GameRelatedJump" />
           <Button x:Name="HeroMore" Width="40" Height="36" Padding="8,0" CornerRadius="6" AutomationProperties.AutomationId="DetailsMore" l:Localize.Name="更多作品操作"><FontIcon Glyph="" FontSize="14" />
-          <Button.Flyout><MenuFlyout Placement="BottomEdgeAlignedLeft" Opening="OnLaunchMenuOpening">
+          <Button.Flyout><MenuFlyout Placement="BottomEdgeAlignedLeft" ShouldConstrainToRootBounds="True" MenuFlyoutPresenterStyle="{StaticResource OrderDropDownMenuStyle}" Opening="OnLaunchMenuOpening">
            <MenuFlyoutItem Click="OnInstallations" l:Localize.Text="游戏文件与启动"><MenuFlyoutItem.Icon><FontIcon Glyph="" /></MenuFlyoutItem.Icon></MenuFlyoutItem>
            <MenuFlyoutItem Text="同步状态与评分" Click="OnSyncCollection" AutomationProperties.AutomationId="SyncWorkStatusAndRating" />
            <MenuFlyoutItem Text="游玩记录、攻略与补充资料" Click="OnGameTools" AutomationProperties.AutomationId="GameTools" />

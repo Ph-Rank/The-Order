@@ -23,7 +23,7 @@ internal sealed class WindowsGameChat : IDisposable
     private PlaygroundService? service;
     private Guid conversation;
     private PlaygroundConversation? draft;
-    private sealed record ModelChoice(PlaygroundProviderKind Provider, string Endpoint, string Id, string Label);
+    private sealed record ModelChoice(PlaygroundProviderKind Provider, string Endpoint, string Id, string Label, string? ChatGptAccountId);
     private readonly List<ModelChoice> models = [];
     private Task pending = Task.CompletedTask;
     private Task discovery = Task.CompletedTask;
@@ -96,7 +96,7 @@ internal sealed class WindowsGameChat : IDisposable
                     {
                         options = new();
                         if (snapshot.Settings.Connections.FirstOrDefault() is { } connection)
-                            options = options with { Provider = connection.Provider, Endpoint = connection.Endpoint, Model = connection.Model };
+                            options = options with { Provider = connection.Provider, Endpoint = connection.Endpoint, Model = connection.Model, ChatGptAccountId = connection.ChatGptAccountId };
                     }
                     string caption = "游戏中 · " + string.Concat(title.Where(c => !char.IsControl(c)));
                     var now = DateTimeOffset.UtcNow;
@@ -123,30 +123,30 @@ internal sealed class WindowsGameChat : IDisposable
                 {
                     using var budget = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); budget.CancelAfter(TimeSpan.FromSeconds(25));
                     var latest = PlaygroundModelSelection.SelectLatest(connection.Provider,
-                        await chat.ListModelsAsync(connection.Provider, connection.Endpoint, budget.Token).ConfigureAwait(false));
+                        await chat.ListModelsAsync(connection.Provider, connection.Endpoint, budget.Token, connection.ChatGptAccountId).ConfigureAwait(false));
                     lock (gate)
                     {
                         foreach (var model in latest)
-                            AddModel(connection.Provider, connection.Endpoint, model.Id, model.Name, generation);
+                            AddModel(connection.Provider, connection.Endpoint, model.Id, model.Name, generation, connection.ChatGptAccountId);
                     }
                 }
                 catch (Exception e) when (e is not OutOfMemoryException && !lifetime.IsCancellationRequested)
                 {
                     if (!string.IsNullOrWhiteSpace(connection.Model))
-                        AddModel(connection.Provider, connection.Endpoint, connection.Model, connection.Model, generation);
+                        AddModel(connection.Provider, connection.Endpoint, connection.Model, connection.Model, generation, connection.ChatGptAccountId);
                 }
             }
         }
         catch (OperationCanceledException) { }
     }
-    private void AddModel(PlaygroundProviderKind provider, string endpoint, string id, string label, int? generation = null)
+    private void AddModel(PlaygroundProviderKind provider, string endpoint, string id, string label, int? generation = null, string? chatGptAccountId = null)
     {
         lock (gate)
         {
             if (disposed || generation is { } expected && expected != catalogGeneration) return;
-            int index = models.FindIndex(m => m.Provider == provider && m.Endpoint == endpoint && m.Id == id);
+            int index = models.FindIndex(m => m.Provider == provider && m.Endpoint == endpoint && m.Id == id && m.ChatGptAccountId == chatGptAccountId);
             if (index >= 0) models[index] = models[index] with { Label = label };
-            else if (models.Count < GameChatWire.MaxModels) models.Add(new(provider, endpoint, id, label));
+            else if (models.Count < GameChatWire.MaxModels) models.Add(new(provider, endpoint, id, label, chatGptAccountId));
             dirty = true;
         }
     }
@@ -203,7 +203,7 @@ internal sealed class WindowsGameChat : IDisposable
                 var efforts = service.Capabilities(model.Provider, model.Endpoint, model.Id).ReasoningEfforts;
                 var effort = options.ReasoningEffort is { } previous && efforts.Contains(previous)
                     ? previous : efforts.Contains("high") ? "high" : efforts.FirstOrDefault();
-                options = options with { Provider = model.Provider, Endpoint = model.Endpoint, Model = model.Id, ReasoningEffort = effort };
+                options = options with { Provider = model.Provider, Endpoint = model.Endpoint, Model = model.Id, ReasoningEffort = effort, ChatGptAccountId = model.ChatGptAccountId };
             }
             else if (command == 4) options = options with { ReasoningEffort = argument switch { 0 => "low", 1 => "medium", _ => "high" } };
             else if (command == 5) options = options with { Search = argument == 0 ? PlaygroundSearchMode.Off : PlaygroundSearchMode.Smart };

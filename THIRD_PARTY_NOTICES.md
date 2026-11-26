@@ -1,5 +1,9 @@
 # Attribution
 
+## ChatGPT account sign-in
+
+The optional ChatGPT OAuth connection validates ID tokens with unmodified Microsoft.IdentityModel.JsonWebTokens, Tokens, Logging and Abstractions 8.23.0 (MIT, Microsoft Corporation). Its upstream source revision is `8b16f418b3d587416d293e9ba34c5d310781cdb3` in [IdentityModel Extensions for .NET](https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet). The MIT license is included as `licenses/IDENTITYMODEL-MIT.txt`. The locked dependency graph also records the supporting Microsoft.Bcl.Cryptography and Microsoft.Extensions abstractions packages under Microsoft's MIT terms. OpenAI and ChatGPT are third-party services and trademarks; no OpenAI client secret or Codex credentials are distributed with The Order.
+
 ## Local read-only documents
 
 The internal reader uses unmodified ExcelDataReader 3.8.0 (MIT, copyright ExcelDataReader contributors) for XLS/XLSX saved cell values, and unmodified OpenMcdf 3.3.0 (MPL-2.0, copyright Federico Blaseotto and Jeremy Powell) for legacy Word compound streams. License texts are included as `licenses/EXCELDATAREADER-MIT.txt` and `licenses/OPENMCDF-MPL-2.0.txt`; corresponding OpenMcdf source is available at https://github.com/openmcdf/openmcdf/tree/v3.3.0 and ExcelDataReader at https://github.com/ExcelDataReader/ExcelDataReader/tree/v3.8.0. Those libraries are unmodified. Package identities and hashes are recorded in the locked dependency graph and packaged dependency metadata.

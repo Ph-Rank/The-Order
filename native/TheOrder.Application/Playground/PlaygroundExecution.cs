@@ -97,11 +97,16 @@ public sealed partial class PlaygroundService
         long epoch;
         lock (gate) { ThrowClosed(); if (configurationUncertain) throw new InvalidOperationException("授权设置尚未安全保存，请先重新保存设置。"); epoch = generation; }
         RequireConnection(captured.Settings, conversation.Options);
-        if (!await credentials.HasAsync(conversation.Options.Provider, Endpoint(conversation.Options.Provider, conversation.Options.Endpoint), cancellation).ConfigureAwait(false))
-            throw new PlaygroundProviderException(new(PlaygroundFailureKind.Authentication, "尚未配置此连接的 API Key，请在 Playground 设置中填写。"));
+        if (conversation.Options.Provider == PlaygroundProviderKind.ChatGPT && !ChatGptSignInPolicy.ValidClient(conversation.Options.ChatGptAccountId))
+            throw new PlaygroundProviderException(new(PlaygroundFailureKind.Authentication, "请在「连接与授权」中选择 ChatGPT 账号。"));
+        if (!await credentials.HasForAccountAsync(conversation.Options.Provider, Endpoint(conversation.Options.Provider, conversation.Options.Endpoint),
+            conversation.Options.ChatGptAccountId, cancellation).ConfigureAwait(false))
+            throw new PlaygroundProviderException(new(PlaygroundFailureKind.Authentication, conversation.Options.Provider == PlaygroundProviderKind.ChatGPT
+                ? "请在「连接与授权」中登录此 ChatGPT 账号并授权使用额度。" : "尚未配置此连接的 API Key，请在 Playground 设置中填写。"));
         var run = new Run(conversation, captured.Settings, epoch, retry ?? Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), text, attachments, cancellation);
         run.Binding = string.Join(':', captured.Identity.ProfileId, captured.Identity.StoreId, epoch, conversation.Id, run.Id,
-            conversation.Options.Provider, Endpoint(conversation.Options.Provider, conversation.Options.Endpoint), conversation.Options.Model);
+            conversation.Options.Provider, Endpoint(conversation.Options.Provider, conversation.Options.Endpoint), conversation.Options.Model,
+            conversation.Options.ChatGptAccountId);
         using var timeout = run.Deadline.Token.Register(() => run.Cancel.Cancel());
         lock (gate)
         {
@@ -192,6 +197,7 @@ public sealed partial class PlaygroundService
             var request = new PlaygroundProviderRequest(run.Conversation.Id, run.Id, options.Provider, Endpoint(options.Provider, options.Endpoint), options.Model,
                 Instructions(run), messages) { Phase = PlaygroundPhase.Discussion, Tools = tools, ToolResults = results,
                 Binding = run.Binding, Continuation = run.Continuation, ConversationBinding = run.ConversationBinding, ConversationTape = run.ConversationTape,
+                ChatGptAccountId = options.ChatGptAccountId,
                 ReasoningEffort = capability.Verified && options.ReasoningEffort is { } effort && capability.ReasoningEfforts.Contains(effort) ? effort : null,
                 MaximumOutputTokens = run.Settings.MaximumOutputTokens, MaximumToolCalls = 0 };
             EnsureConversationScope(run); CheckRequestBudget(run, request);

@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Shapes;
@@ -96,12 +97,14 @@ public sealed partial class StatisticsTrendChart : Grid
     public static readonly DependencyProperty LabelBrushProperty = BrushProperty(nameof(LabelBrush));
     public static readonly DependencyProperty InkProperty = BrushProperty(nameof(Ink));
     public static readonly DependencyProperty ReadoutBackgroundProperty = BrushProperty(nameof(ReadoutBackground));
+    public static readonly DependencyProperty ReadoutBorderProperty = BrushProperty(nameof(ReadoutBorder));
 
     public Brush? Accent { get => (Brush?)GetValue(AccentProperty); set => SetValue(AccentProperty, value); }
     public Brush? Gridline { get => (Brush?)GetValue(GridlineProperty); set => SetValue(GridlineProperty, value); }
     public Brush? LabelBrush { get => (Brush?)GetValue(LabelBrushProperty); set => SetValue(LabelBrushProperty, value); }
     public Brush? Ink { get => (Brush?)GetValue(InkProperty); set => SetValue(InkProperty, value); }
     public Brush? ReadoutBackground { get => (Brush?)GetValue(ReadoutBackgroundProperty); set => SetValue(ReadoutBackgroundProperty, value); }
+    public Brush? ReadoutBorder { get => (Brush?)GetValue(ReadoutBorderProperty); set => SetValue(ReadoutBorderProperty, value); }
     public Style? TargetStyle { get; set; }
     public bool Bars { get; set; }
     public bool SessionPeriods { get; set; }
@@ -125,6 +128,12 @@ public sealed partial class StatisticsTrendChart : Grid
             ObserveAccent(null);
             ShowSessionMark(null);
         };
+        canvas.PointerMoved += (_, args) =>
+        {
+            if (args.Pointer.PointerDeviceType != Microsoft.UI.Input.PointerDeviceType.Touch)
+                onSessionPointerMoved?.Invoke(args.GetCurrentPoint(canvas).Position);
+        };
+        canvas.PointerExited += (_, _) => onSessionPointerExited?.Invoke();
     }
 
     internal void SetHighContrast(bool value)
@@ -160,7 +169,7 @@ public sealed partial class StatisticsTrendChart : Grid
     {
         if (Accent is not SolidColorBrush accent || areaStops.Length == 0) return;
         var color = accent.Color;
-        areaStops[0].Color = Color.FromArgb(56, color.R, color.G, color.B);
+        areaStops[0].Color = Color.FromArgb(66, color.R, color.G, color.B);
         areaStops[1].Color = Color.FromArgb(0, color.R, color.G, color.B);
         areaStops[2].Color = areaStops[0].Color;
     }
@@ -169,7 +178,11 @@ public sealed partial class StatisticsTrendChart : Grid
     {
         motion.Prepared(null);
         showSessionMark = null;
+        hitTestSessionPoint = null;
+        onSessionPointerMoved = null;
+        onSessionPointerExited = null;
         canvas.Children.Clear();
+        canvas.Background = SessionPeriods ? new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)) : null;
         areaStops = [];
         double width = ActualWidth, height = ActualHeight;
         if (!double.IsFinite(width) || width < 100 || height < 90) return;
@@ -241,9 +254,9 @@ public sealed partial class StatisticsTrendChart : Grid
             series.Clip = plotClip;
             canvas.Children.Add(series);
             if (points.Length > 1) DrawLine(series, points, zero, highContrast);
-            var peak = new Grid { Width = 14, Height = 14 };
-            if (!highContrast) peak.Children.Add(new Ellipse { Fill = Accent, Opacity = .17 });
-            peak.Children.Add(new Ellipse { Width = 6, Height = 6, Fill = Accent });
+            var peak = new Grid { Width = 16, Height = 16 };
+            if (!highContrast) peak.Children.Add(new Ellipse { Fill = Accent, Opacity = .18 });
+            peak.Children.Add(new Ellipse { Width = 9, Height = 9, Fill = Accent, Stroke = ReadoutBackground, StrokeThickness = 1.5 });
             Canvas.SetLeft(peak, points[peakIndex].X - peak.Width / 2);
             Canvas.SetTop(peak, points[peakIndex].Y - peak.Height / 2);
             series.Children.Add(peak);
@@ -258,7 +271,7 @@ public sealed partial class StatisticsTrendChart : Grid
         }
         else
         {
-            DrawBars(points, zero, Math.Min(32, slot * .55), Math.Abs((double)data[peakIndex].Seconds));
+            DrawBars(points, zero, Math.Min(42, slot * .48), Math.Abs((double)data[peakIndex].Seconds));
         }
 
         int last = data.Length - 1;
@@ -551,8 +564,8 @@ public sealed partial class StatisticsTrendChart : Grid
 
     private Border CreateReadout(TextBlock caption, TextBlock value) => new()
     {
-        Background = ReadoutBackground, BorderBrush = Gridline, BorderThickness = new(1),
-        CornerRadius = new(7), Padding = new(9, 6, 9, 7), MaxWidth = Math.Min(248, ActualWidth - 4),
+        Background = ReadoutBackground, BorderBrush = highContrast ? Ink : (ReadoutBorder ?? Gridline), BorderThickness = new(1),
+        CornerRadius = new(8), Padding = new(11, 7, 11, 8), MaxWidth = Math.Min(248, ActualWidth - 4),
         Child = new StackPanel { Spacing = 2, Children = { caption, value } }, IsHitTestVisible = false
     };
 
@@ -591,11 +604,14 @@ public sealed partial class StatisticsTrendChart : Grid
 
 public sealed class StatisticsStatusChart : Grid
 {
-    private readonly Canvas canvas = new();
+    private const double StartAngle = -Math.PI / 2;
+    private readonly Canvas canvas = new() { IsHitTestVisible = false };
     private readonly Canvas joins = new() { IsHitTestVisible = false };
     private readonly Canvas surface = new() { IsHitTestVisible = false };
     private readonly Canvas highlights = new() { IsHitTestVisible = false };
     private readonly Dictionary<string, Canvas> highlightArcs = new(StringComparer.Ordinal);
+    private readonly List<(string Key, double Start, double End)> hitArcs = [];
+    private double ringCenter, ringRadius, ringHalfThickness;
     private ImmutableArray<StatisticsStatus> data = [];
     private string? active;
     private bool highContrast;
@@ -607,13 +623,48 @@ public sealed class StatisticsStatusChart : Grid
     public Brush? Track { get => (Brush?)GetValue(TrackProperty); set => SetValue(TrackProperty, value); }
     public Brush? LabelBrush { get => (Brush?)GetValue(LabelBrushProperty); set => SetValue(LabelBrushProperty, value); }
     internal event EventHandler? PaletteChanged;
-    internal event Action<string?>? HoverChanged;
+    internal event Action<string>? HoverChanged;
+    internal event Action<string>? StatusInvoked;
 
     public StatisticsStatusChart()
     {
+        // The whole ring shares one pointer surface; its paths only draw the slices.
+        Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         Children.Add(canvas);
         SizeChanged += (_, _) => Draw();
         ActualThemeChanged += (_, _) => UpdatePalette();
+        PointerEntered += OnStatusPointer;
+        PointerMoved += OnStatusPointer;
+        Tapped += (_, args) =>
+        {
+            if (StatusAt(args.GetPosition(this)) is not { } key) return;
+            args.Handled = true;
+            StatusInvoked?.Invoke(key);
+        };
+    }
+
+    private void OnStatusPointer(object sender, PointerRoutedEventArgs args)
+    {
+        if (args.Pointer.PointerDeviceType != Microsoft.UI.Input.PointerDeviceType.Touch)
+            PreviewAt(args.GetCurrentPoint(this).Position);
+    }
+
+    internal void PreviewAt(Point point)
+    {
+        if (StatusAt(point) is { } key) HoverChanged?.Invoke(key);
+    }
+
+    internal string? StatusAt(Point point)
+    {
+        double x = point.X - ringCenter, y = point.Y - ringCenter;
+        double distance = Math.Sqrt(x * x + y * y);
+        if (Math.Abs(distance - ringRadius) > ringHalfThickness) return null;
+
+        double angle = Math.Atan2(y, x);
+        if (angle < StartAngle) angle += Math.Tau;
+        foreach (var arc in hitArcs)
+            if (angle >= arc.Start && angle < arc.End) return arc.Key;
+        return null;
     }
 
     internal void SetHighContrast(bool value)
@@ -671,6 +722,7 @@ public sealed class StatisticsStatusChart : Grid
     private void Draw()
     {
         highlightArcs.Clear();
+        hitArcs.Clear();
         canvas.Children.Clear();
         joins.Children.Clear();
         surface.Children.Clear();
@@ -679,27 +731,27 @@ public sealed class StatisticsStatusChart : Grid
         if (!double.IsFinite(size) || size < 30) return;
 
         double thickness = highContrast ? 11 : 14;
-        double center = size / 2;
-        double radius = center - thickness / 2 - 3;
+        double center = ringCenter = size / 2;
+        double radius = ringRadius = center - thickness / 2 - 3;
+        ringHalfThickness = thickness / 2;
         var slices = data.Where(row => row.Count > 0).ToArray();
         int total = slices.Sum(row => row.Count);
-        double angle = -Math.PI / 2;
+        double angle = StartAngle;
         if (total == 0)
             canvas.Children.Add(new Path { Data = Arc(center, radius, angle, Math.Tau), Stroke = Track, StrokeThickness = thickness });
 
         for (int i = 0; i < slices.Length; i++)
         {
             var row = slices[i];
-            double sweep = (double)row.Count / total * Math.Tau;
+            double end = i == slices.Length - 1 ? StartAngle + Math.Tau : angle + (double)row.Count / total * Math.Tau;
+            double sweep = end - angle;
             double gap = highContrast && slices.Length > 1 ? Math.Min(1.65 / radius, sweep * .12) : 0;
-            var path = new Path
+            hitArcs.Add((row.Key, angle + gap, end - gap));
+            canvas.Children.Add(new Path
             {
                 Data = Arc(center, radius, angle + gap, sweep - 2 * gap),
                 Stroke = ColorFor(row.Key), StrokeThickness = thickness
-            };
-            path.PointerEntered += (_, _) => HoverChanged?.Invoke(row.Key);
-            path.PointerExited += (_, _) => HoverChanged?.Invoke(null);
-            canvas.Children.Add(path);
+            });
             if (!highContrast)
             {
                 DrawHighlight(row.Key, center, radius + thickness / 2 - 2.1, angle, sweep);
@@ -714,7 +766,7 @@ public sealed class StatisticsStatusChart : Grid
                             StatusColor(previous.Key), StatusColor(row.Key)));
                 }
             }
-            angle += sweep;
+            angle = end;
         }
 
         if (total > 0 && !highContrast)

@@ -290,8 +290,6 @@ public sealed partial class DetailsPage : Page, IImageHost
         BannerFrameLayout.Apply(HeroFrame, HeroStage, HeroLayout, HeroPlate, heroArtwork);
     }
     public string StatusLabel(string status) => UiText.Get("当前状态 · ") + StatusNames.Display(status);
-    private static string CharacterRole(string role) => role.Trim().ToLowerInvariant() switch
-    { "main" => UiText.Get("主角"), "secondary" => UiText.Get("配角"), "appears" or "cameo" => UiText.Get("客串"), _ => role };
     public string AlternateTitle(string primary, string other) => string.Equals(primary?.Trim(), other?.Trim(), StringComparison.Ordinal) ? "" : other ?? "";
     public Visibility AlternateTitleVisible(string primary, string other) => string.IsNullOrWhiteSpace(AlternateTitle(primary, other)) ? Visibility.Collapsed : Visibility.Visible;
     public Visibility HasInstallations(int count) => count > 0 ? Visibility.Visible : Visibility.Collapsed;

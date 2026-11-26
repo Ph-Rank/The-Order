@@ -8,12 +8,11 @@ public sealed partial class MusicBrainzService(IMusicBrainzProvider provider, IM
     private readonly IMediaIdentityDecisions decisions = identityDecisions ?? (disk as IMediaIdentityDecisionOwner)?.IdentityDecisions ?? new SessionMediaIdentityDecisions();
     public static readonly TimeSpan SearchFreshFor = TimeSpan.FromHours(1), AlbumFreshFor = TimeSpan.FromDays(1), MaximumStaleAge = TimeSpan.FromDays(7);
     public const string EditionCachePrefix = "group-v2:"; // Browse includes media; legacy group pages omitted formats.
-    private readonly object gate = new();
     private readonly SemaphoreSlim commits = new(1);
-    private readonly Dictionary<string, MusicBrainzCacheValue> memory = [];
+    private readonly MediaMetadataMemory<MusicBrainzCacheValue> memory = new(static value => value.Key, Snapshot);
+    private object Gate => memory.Gate;
     private readonly Dictionary<string, long> latest = [];
     private long sequence;
-    private long cacheMutation;
     private DateTimeOffset Now => (clock ?? (() => DateTimeOffset.UtcNow))();
     public async Task<MusicBrainzMatchResult> MatchAsync(MusicAlbumSource source, bool refresh, CancellationToken cancellation)
     {
@@ -99,7 +98,7 @@ public sealed partial class MusicBrainzService(IMusicBrainzProvider provider, IM
         cancellation.ThrowIfCancellationRequested();
         var prior = await ReadAsync(key, cancellation).ConfigureAwait(false);
         if (!refresh && prior is not null && Now - prior.CachedAtUtc < fresh) return (prior, true, false, null);
-        long version; lock (gate) latest[key] = version = ++sequence;
+        long version; lock (Gate) latest[key] = version = ++sequence;
         try
         {
             var value = await fetch(cancellation).ConfigureAwait(false); cancellation.ThrowIfCancellationRequested();
@@ -109,7 +108,7 @@ public sealed partial class MusicBrainzService(IMusicBrainzProvider provider, IM
             await commits.WaitAsync(cancellation).ConfigureAwait(false);
             try
             {
-                bool owns; lock (gate) owns = latest.GetValueOrDefault(key) == version;
+                bool owns; lock (Gate) owns = latest.GetValueOrDefault(key) == version;
                 if (owns)
                 {
                     var persisted = false;
@@ -117,9 +116,9 @@ public sealed partial class MusicBrainzService(IMusicBrainzProvider provider, IM
                         try { await disk.WriteAsync(Snapshot(value), cancellation).ConfigureAwait(false); persisted = true; }
                         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
                     if (!persisted) cancellation.ThrowIfCancellationRequested();
-                    lock (gate)
+                    lock (Gate)
                     {
-                        if (persisted || latest.GetValueOrDefault(key) == version) { Remember(value); cacheMutation++; }
+                        if (persisted || latest.GetValueOrDefault(key) == version) memory.Commit(value);
                     }
                 }
             }
@@ -138,52 +137,25 @@ public sealed partial class MusicBrainzService(IMusicBrainzProvider provider, IM
             await commits.WaitAsync(cancellation).ConfigureAwait(false);
             try
             {
-                bool owns; lock (gate) owns = latest.GetValueOrDefault(key) == version;
+                bool owns; lock (Gate) owns = latest.GetValueOrDefault(key) == version;
                 if (owns)
                 {
                     var rejected = new MusicBrainzCacheValue(key, Now, Rejected: true);
                     if (disk is not null)
                         try { await disk.WriteAsync(rejected, cancellation).ConfigureAwait(false); }
                         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
-                    lock (gate) { Remember(rejected); cacheMutation++; }
+                    lock (Gate) memory.Commit(rejected);
                 }
             }
             finally { commits.Release(); }
             throw;
         }
-        finally { lock (gate) { if (latest.GetValueOrDefault(key) == version) latest.Remove(key); } }
+        finally { lock (Gate) { if (latest.GetValueOrDefault(key) == version) latest.Remove(key); } }
     }
-    private async Task<MusicBrainzCacheValue?> ReadAsync(string key, CancellationToken cancellation)
-    {
-        bool Valid(MusicBrainzCacheValue? value) => value is not null && value.Key == key && MusicBrainzValidation.Cache(value) && !value.Rejected
-            && value.CachedAtUtc <= Now.AddMinutes(5) && (value.Binding is not null || Now - value.CachedAtUtc <= MaximumStaleAge);
-        while (true)
-        {
-            cancellation.ThrowIfCancellationRequested(); long observedMutation;
-            lock (gate)
-            {
-                if (memory.TryGetValue(key, out var current))
-                { if (!Valid(current)) return null; Remember(current); return Snapshot(current); }
-                observedMutation = cacheMutation;
-            }
-            if (disk is null) return null;
-            MusicBrainzCacheValue? value = null;
-            try { value = await disk.ReadAsync(key, cancellation).ConfigureAwait(false); }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
-            cancellation.ThrowIfCancellationRequested();
-            lock (gate)
-            {
-                if (cacheMutation != observedMutation) continue;
-                if (!Valid(value)) return null;
-                var owned = Snapshot(value!); Remember(owned); return Snapshot(owned);
-            }
-        }
-    }
-    private void Remember(MusicBrainzCacheValue value)
-    {
-        memory.Remove(value.Key); memory[value.Key] = value;
-        while (memory.Count > 64) memory.Remove(memory.Keys.First());
-    }
+    private Task<MusicBrainzCacheValue?> ReadAsync(string key, CancellationToken cancellation) =>
+        memory.ReadAsync(key, value => value is not null && value.Key == key && MusicBrainzValidation.Cache(value) && !value.Rejected
+            && value.CachedAtUtc <= Now.AddMinutes(5) && (value.Binding is not null || Now - value.CachedAtUtc <= MaximumStaleAge),
+            disk is null ? null : disk.ReadAsync, cancellation);
     // Arrays remain serialization-compatible, but neither a provider, disk
     // adapter nor a UI consumer may retain the cache's mutable ownership.
     private static MusicBrainzCacheValue Snapshot(MusicBrainzCacheValue value)

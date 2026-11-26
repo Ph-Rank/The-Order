@@ -31,7 +31,7 @@ function review(id: string): MatchReview {
 const compiledHarness = (async () => {
   const source = await fs.readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
   const script = source.split('<script setup lang="ts">')[1]!.split('</script>')[0]!
-  const expose = '\nglobalThis.audit = { snapshot, busy, currentReview, reviewGame, reviewOpen, reviewGameId, reviewChoice, reviewError, reviewReloadNeeded, openMatchReviews, selectReview, laterReview, resolveReview, searchReviewAgain, reviewDetailOpen, reviewDetailWork, reviewDetailError, showReviewDetail, bindOpen, bindTargetId, bindReviewContext, bindQuery, detailOpen, selectedGameId, selectedWork, editor, showGame };'
+  const expose = '\nglobalThis.audit = { snapshot, busy, currentReview, reviewOpen, reviewGameId, reviewChoice, reviewError, reviewReloadNeeded, openMatchReviews, selectReview, laterReview, resolveReview, searchReviewAgain, reviewDetailOpen, reviewDetailWork, reviewDetailError, showReviewDetail, bindOpen, bindTargetId, bindReviewContext, bindQuery, detailOpen, selectedGameId, selectedWork, editor, showGame };'
   const compiled = await transform(script.replace(/^import .*$/gm, '') + expose, { loader: 'ts', format: 'cjs', target: 'es2022' })
   return { script, compiled }
 })()
@@ -49,6 +49,12 @@ async function harness(t: { after(callback: () => void): void }) {
   a.snapshot.value = state(); sandbox.api.getState = async () => state()
   a.openMatchReviews(); await vue.nextTick()
   return { a, api: sandbox.api, games, reviews, state, messages }
+}
+
+function gameUnderReview(state: { snapshot: vue.Ref<AppSnapshot>; reviewGameId: vue.Ref<string | null> }) {
+  const game = state.snapshot.value.games.find(item => item.id === state.reviewGameId.value)
+  assert.ok(game, 'the selected review still has a game in the current snapshot')
+  return game
 }
 
 test('review confirmation captures its exact identity and choice once, blocks duplicate decisions and queue switches while pending', async t => {
@@ -106,7 +112,7 @@ test('a rejection after committing the association refreshes the actual current 
   await a.resolveReview()
   assert.equal(decisions, 1, 'a rejected response must not cause an automatic second association write')
   assert.equal(reads, 1, 'the actual association is refreshed before another decision is offered')
-  assert.equal(a.reviewGame.value.metadata.id, 'candidate-A')
+  assert.equal(gameUnderReview(a).metadata.id, 'candidate-A')
   assert.equal(a.currentReview.value.reviewId, 'review-A')
   assert.equal(a.currentReview.value.sourceStatus, 'stale')
   assert.equal(a.currentReview.value.decisionFingerprint, 'fingerprint-after-library-commit')
@@ -115,8 +121,8 @@ test('a rejection after committing the association refreshes the actual current 
   assert.match(a.reviewError.value, /操作未完整结束.*核对当前关联/)
   assert.match(a.reviewError.value, /Synthetic remaining queue persistence failure/)
   assert.equal(a.busy.has('matching-resolve'), false)
-  assert.equal(a.reviewGame.value.notes, games[0]!.notes)
-  assert.equal(a.reviewGame.value.personalRating, games[0]!.personalRating)
+  assert.equal(gameUnderReview(a).notes, games[0]!.notes)
+  assert.equal(gameUnderReview(a).personalRating, games[0]!.personalRating)
   assert.ok(!messages.some(message => message.kind === 'success'))
 })
 
@@ -144,7 +150,7 @@ test('a rejected decision whose actual snapshot cannot be read enters read-only 
   assert.equal(reads, 3)
   assert.equal(a.reviewReloadNeeded.value, false)
   assert.equal(a.reviewError.value, '')
-  assert.equal(a.reviewGame.value.metadata.id, 'old-A')
+  assert.equal(gameUnderReview(a).metadata.id, 'old-A')
   assert.equal(a.currentReview.value.reviewId, 'review-A')
   assert.equal(a.busy.has('matching-resolve'), false)
 })
@@ -172,7 +178,7 @@ test('a temporarily removed suggestion restored after queue-save rejection still
   assert.equal(reads, 1)
   assert.equal(a.currentReview.value.gameId, 'A')
   assert.equal(a.currentReview.value.reviewId, 'review-A')
-  assert.equal(a.reviewGame.value.metadata.id, 'candidate-A')
+  assert.equal(gameUnderReview(a).metadata.id, 'candidate-A')
   assert.equal(a.reviewChoice.value, '')
   assert.match(a.reviewError.value, /Local A.*操作未完整结束.*核对当前关联/)
   assert.match(a.reviewError.value, /Synthetic optimistic queue-save rejection/)

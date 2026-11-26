@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.0" />
     <PackageReference Include="LiteDB" Version="4.1.4" />
     <PackageReference Include="ExcelDataReader" Version="3.8.0" />
     <PackageReference Include="OpenMcdf" Version="3.3.0" />

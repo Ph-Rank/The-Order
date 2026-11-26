@@ -8,15 +8,20 @@
   const post = value => window.chrome?.webview?.postMessage(value);
   function routePicker(open = false, focus = false) {
     const select = $('section'), list = $('routeOptions');
-    $('routeValue').textContent = select.selectedOptions[0]?.textContent || '全部路线';
-    $('routeButton').setAttribute('aria-expanded', String(open)); list.hidden = !open;
+    const trigger = $('routeButton');
+    const label = select.selectedOptions[0]?.textContent || '全部路线';
+    $('routeValue').textContent = label;
+    trigger.title = label;
+    trigger.setAttribute('aria-expanded', String(open));
+    if (open) list.style.setProperty('--route-space', Math.max(34, innerHeight - trigger.getBoundingClientRect().bottom - 12) + 'px');
+    list.hidden = !open;
     list.replaceChildren();
     const primary = Array.from(select.options);
     const current = select.selectedIndex;
     const options = current > 0 ? [primary[current], ...primary.filter((_, index) => index !== current)] : primary;
     for (const option of options) {
       const item = document.createElement('button'); item.type = 'button'; item.role = 'option';
-      item.textContent = option.textContent; item.dataset.value = option.value;
+      item.textContent = item.title = option.textContent; item.dataset.value = option.value;
       item.setAttribute('aria-selected', String(option.value === select.value)); item.tabIndex = option.value === select.value ? 0 : -1;
       item.addEventListener('click', () => { select.value = option.value; render(); routePicker(false); $('routeButton').focus(); }); list.append(item);
     }
