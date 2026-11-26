@@ -91,22 +91,25 @@ public sealed class AppSessionHost(Func<Task<SessionEngine?>> create, Func<Libra
     public Task PauseAsync() { lock (gate) return CanMutate ? engine!.PauseAsync() : Task.CompletedTask; }
     public Task ResumeAsync() { lock (gate) return CanMutate ? engine!.ResumeAsync() : Task.CompletedTask; }
     public Task CheckpointAsync() => engine?.CheckpointAsync() ?? Task.CompletedTask;
-    public Task<bool> PrepareExitAsync(SessionReason reason = SessionReason.ManagerExit)
+    public Task<bool> PrepareManualExitAsync() => PrepareExitAsync(SessionReason.ManagerExit, stopTiming: true);
+    public Task<bool> PrepareExitAsync(SessionReason reason = SessionReason.ManagerExit) => PrepareExitAsync(reason, stopTiming: false);
+
+    private Task<bool> PrepareExitAsync(SessionReason reason, bool stopTiming)
     {
         lock (gate)
         {
             if (disposing) return Task.FromResult(false);
             if (exit is { IsCompleted: false } || closing && exit is { IsCompletedSuccessfully: true, Result: true }) return exit;
             closing = true; error = null;
-            return exit = ExitCoreAsync(reason);
+            return exit = ExitCoreAsync(reason, stopTiming);
         }
     }
-    private async Task<bool> ExitCoreAsync(SessionReason reason)
+    private async Task<bool> ExitCoreAsync(SessionReason reason, bool stopTiming)
     {
         try
         {
             await InitializeAsync().ConfigureAwait(false);
-            if (engine is null || await engine.CheckpointForExitAsync(reason).ConfigureAwait(false)) return true;
+            if (engine is null || await engine.CheckpointForExitAsync(reason, stopTiming).ConfigureAwait(false)) return true;
             error = UiText.Get("游玩记录保存失败，退出已取消；游戏继续运行，请重试退出。");
         }
         catch (Exception) { if (engine is null) return true; error = UiText.Get("必要的记录尚未保存，退出已取消，请重试。"); }

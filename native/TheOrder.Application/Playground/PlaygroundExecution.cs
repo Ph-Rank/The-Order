@@ -37,10 +37,10 @@ public sealed partial class PlaygroundService
         public PlaygroundCostEstimate? Cost { get; set; }
         public LibrarySnapshot? LibrarySnapshot { get; set; }
         public bool LibraryCaptured { get; set; }
-        public string? SpoilerLibraryStamp { get; set; }
         public string? PlaytimeRankingStamp { get; set; }
         public PlaygroundRetention Retention { get; set; }
         public string? Suggestions { get; set; }
+        public string? GameTitle { get; set; }
         public string? SafePublicQuestion { get; set; }
         public bool PublicSearchAttempted { get; set; }
         public string? PublicSearchPayload { get; set; }
@@ -186,6 +186,7 @@ public sealed partial class PlaygroundService
         var options = run.Conversation.Options; var provider = Provider(options.Provider); var capability = provider.Capabilities(options.Model, options.Endpoint);
         if (run.Attachments.Any(IsImageAttachment) && !capability.ImageInput)
             throw new PlaygroundProviderException(new(PlaygroundFailureKind.Unsupported, "此模型的图片输入尚未核实或不受支持，未发送图片或模型请求。请改用支持图片的模型。"));
+        run.GameTitle = ResolveGameTitle(run);
         PreparePublicQuestion(run);
         await PrepareContext(run).ConfigureAwait(false);
         var messages = DiscussionMessages(run, capability.ImageInput); var tools = capability.Tools ? Definitions(run) : [];
@@ -214,17 +215,14 @@ public sealed partial class PlaygroundService
                 switch (item.Kind)
                 {
                     case PlaygroundProviderEventKind.Text:
-                        if (item.Text is { } delta)
+                        if (item.Text is { Length: > 0 } delta)
                         {
                             if (run.Text.Length + delta.Length > Math.Min(1048576L, (long)run.Settings.MaximumOutputTokens * 16))
                                 throw new PlaygroundProviderException(new(PlaygroundFailureKind.Unsupported, "回复超出本轮输出上限，已停止，未自动重试。"));
                             run.Text.Append(delta);
-                            if (options.Spoiler == PlaygroundSpoilerMode.Full)
-                            {
-                                long now = Stopwatch.GetTimestamp();
-                                if (run.LastTextPreview == 0 || Stopwatch.GetElapsedTime(run.LastTextPreview, now).TotalMilliseconds >= 80)
-                                { run.LastTextPreview = now; Preview(run); }
-                            }
+                            long now = Stopwatch.GetTimestamp();
+                            if (run.LastTextPreview == 0 || Stopwatch.GetElapsedTime(run.LastTextPreview, now).TotalMilliseconds >= 80)
+                            { run.LastTextPreview = now; Preview(run); }
                         }
                         break;
                     case PlaygroundProviderEventKind.ToolCall:
@@ -312,14 +310,11 @@ public sealed partial class PlaygroundService
         bool valid; lock (gate) valid = active == run && generation == run.Generation && !run.Cancel.IsCancellationRequested && !closing && !disposed;
         if (status == PlaygroundMessageStatus.Complete && !valid) { status = PlaygroundMessageStatus.Cancelled; error = "本轮授权或状态已变化，迟到回复未被接纳。"; }
         if (status == PlaygroundMessageStatus.Complete && (run.Conversation.Options.Provider == PlaygroundProviderKind.Gemini
-            || run.Conversation.Options.Spoiler == PlaygroundSpoilerMode.LibraryStatus || run.PlaytimeRankingStamp is not null) && !LibraryCurrent(run))
+            || run.PlaytimeRankingStamp is not null) && !LibraryCurrent(run))
         { status = PlaygroundMessageStatus.Interrupted; error = "书架资料已变化，本轮未作为完整证据接纳；可手动重新提问。"; run.PendingTape = null; }
-        string text = status == PlaygroundMessageStatus.Complete || run.Conversation.Options.Spoiler == PlaygroundSpoilerMode.Full
-            ? run.Text.ToString() : "";
+        string text = run.Text.ToString();
         if (status == PlaygroundMessageStatus.Complete && string.IsNullOrWhiteSpace(text)) { status = PlaygroundMessageStatus.Failed; error = "服务商没有返回可显示的正文。"; }
         string originalText = text;
-        text = SpoilerSafeText(run, text, true, out bool spoilerFiltered);
-        if (spoilerFiltered) { run.PendingTape = null; run.Proposed.Clear(); error = "部分未玩或无法可靠关联到已玩作品的剧情内容已省略。"; }
         text = CitationMarker.Replace(text, match => run.Sources.ContainsKey(match.Groups[1].Value) ? match.Value : "[未核验引用]");
         if (text != originalText) foreach (var source in run.Sources.Values.ToArray()) run.Sources[source.Id] = source with { HasExactRange = false };
         var sources = FinalSources(run, text);

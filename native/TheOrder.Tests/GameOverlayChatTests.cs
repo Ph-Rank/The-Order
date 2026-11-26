@@ -11,20 +11,154 @@ namespace TheOrder.Tests;
 public sealed partial class PlaygroundCoreTests
 {
     [Fact]
-    public async Task GameFrameIsVisibleForCurrentSceneWithoutOpeningUnplayedStoryAndNeverPersistsPixels()
+    public async Task GameFrameIsVisibleWithGentleSpoilerPreferenceAndNeverPersistsPixels()
     {
         await using var r = new Rig(new Provider { ImageInputSupported = true });
         var id = await r.Ready(new(false, false, false, false), spoiler: PlaygroundSpoilerMode.LibraryStatus);
         var frame = Pixel("当前游戏画面.png") with { IsGameFrame = true };
         await r.Service.SendAsync(id, "这里这句话是什么意思？", [frame]);
         Assert.Contains(r.Provider.Requests.Single().Messages.SelectMany(m => m.Attachments), a => a.ImageBase64 == frame.ImageBase64);
-        Assert.Contains("不代表已通关", r.Provider.Requests.Single().Messages.First(m => m.Attachments.Length != 0).Text);
+        Assert.Contains("游玩进度以用户明确说明为准", r.Provider.Requests.Single().Messages.First(m => m.Attachments.Length != 0).Text);
         Assert.Equal(0, r.LibraryReads);
         Assert.All(r.Store.Writes, s => Assert.DoesNotContain(frame.ImageBase64!, JsonSerializer.Serialize(s)));
         Assert.All(r.Service.Snapshot.Messages.SelectMany(m => m.Attachments), a => Assert.Null(a.ImageBase64));
         Assert.All(WindowsPlaygroundStore.PersistentProjection(r.Service.Snapshot).Messages.SelectMany(m => m.Attachments), a => Assert.Null(a.ImageBase64));
         await r.Service.SendAsync(id, "继续说说这句话。");
         Assert.Empty(r.Provider.Requests.Last().Messages.SelectMany(m => m.Attachments));
+    }
+
+    [Fact]
+    public async Task TurningSpoilerProtectionOffAppliesToCurrentAndPreviouslyAttachedGameFrames()
+    {
+        await using var rig = new Rig(new Provider { ImageInputSupported = true });
+        var id = await rig.Ready(new(Library: true), spoiler: PlaygroundSpoilerMode.LibraryStatus);
+        var options = rig.Service.Snapshot.Conversations.Single().Options;
+        var frame = Pixel("当前游戏画面.png") with { IsGameFrame = true };
+        await rig.Service.SendAsync(id, "解释这一幕。", [frame]);
+        Assert.Contains("剧情偏好：避免主动揭示用户没有问到的关键反转和结局", rig.Provider.Requests[0].Instructions);
+        Assert.Contains("用户问到的剧情照常展开讨论", rig.Provider.Requests[0].Instructions);
+
+        await rig.Service.UpdateConversationAsync(id, options with { Spoiler = PlaygroundSpoilerMode.Full });
+        rig.Provider.Reply = _ => Answer("这个结局需要先读完前置路线。");
+        await rig.Service.SendAsync(id, "说明这些路线的剧情承接。", [frame]);
+        var request = rig.Provider.Requests.Last();
+        Assert.DoesNotContain("防剧透", request.Instructions);
+        Assert.DoesNotContain("剧情偏好：", request.Instructions);
+        Assert.Contains(request.Messages, message => message.Attachments.Length == 1 && message.Attachments[0].ImageBase64 == frame.ImageBase64);
+        Assert.Contains(request.Messages, message => message.Text.Contains("当轮游戏画面已释放", StringComparison.Ordinal));
+        Assert.DoesNotContain(request.Messages, message => message.Text.Contains("不要扩展未见情节", StringComparison.Ordinal));
+        Assert.Equal("这个结局需要先读完前置路线。", Last(rig).Text);
+    }
+
+    [Fact]
+    public async Task UnrestrictedGameAdviceUsesCurrentQuestionInsteadOfSpoilerLabelsFromHistoryAndResearch()
+    {
+        await using var rig = new Rig(new Provider { ImageInputSupported = true });
+        var id = await rig.Ready(new(Library: true));
+        await SetGameRouteOptions(rig, id, PlaygroundSearchMode.Smart);
+        var frame = Pixel() with { IsGameFrame = true };
+        rig.Provider.Reply = _ => Answer("这是给初玩玩家的无剧透顺序。");
+        await rig.Service.SendAsync(id, "看看当前游戏的路线。", [frame]);
+
+        rig.Provider.Research = new("无剧透攻略建议先走第一条路线。", rig.Provider.Research.Sources);
+        rig.Provider.Reply = request => ToolAnswer(request, "public_search", new { }, "先玩第一条路线，再接第二条。");
+        const string question = "给出一个推荐的游玩顺序，并简要的解释原因。";
+        await rig.Service.SendAsync(id, question, [frame]);
+
+        var rounds = rig.Provider.Requests.Skip(1).ToArray();
+        Assert.Equal(2, rounds.Length);
+        Assert.All(rounds, request =>
+        {
+            Assert.DoesNotContain("无剧透", request.Instructions);
+            Assert.DoesNotContain("简答要求", request.Instructions);
+            Assert.Contains("用户本轮要求决定讨论范围", request.Instructions);
+            Assert.Contains("旧助手答复和攻略文字只作为资料", request.Instructions);
+            Assert.Contains("游玩进度以用户明确说明为准", request.Instructions);
+            Assert.DoesNotContain("游玩进度未知时给出通用建议", request.Instructions);
+            Assert.Contains("默认展开影响结论的依据和取舍", request.Instructions);
+            Assert.Contains("本轮明确的篇幅要求优先", request.Instructions);
+            Assert.Contains(request.Messages, message => message.Role == "assistant" && message.Text.Contains("无剧透顺序", StringComparison.Ordinal));
+            Assert.Equal(question, request.Messages.Last().Text);
+        });
+        Assert.Contains("无剧透攻略", Assert.Single(rounds[1].ToolResults).Text);
+        Assert.Single(rig.Provider.Searches);
+    }
+
+    [Fact]
+    public async Task UnrestrictedDiscussionStillAllowsAUserToRequestASpoilerFreeAnswer()
+    {
+        await using var rig = new Rig();
+        var id = await rig.Ready(new());
+        const string query = "这次请无剧透地推荐一条路线。";
+        rig.Provider.Reply = _ => Answer("无剧透推荐：我建议先读第一条路线。");
+        await rig.Service.SendAsync(id, query);
+        var request = Assert.Single(rig.Provider.Requests);
+        Assert.DoesNotContain("无剧透", request.Instructions);
+        Assert.Contains("用户本轮要求决定讨论范围", request.Instructions);
+        Assert.Equal(query, request.Messages.Last().Text);
+        Assert.Equal("无剧透推荐：我建议先读第一条路线。", Last(rig).Text);
+    }
+
+    [Theory]
+    [InlineData("你推荐的游玩顺序是什么？")]
+    [InlineData("给出一个推荐的游玩顺序，并简要的解释原因。")]
+    [InlineData("这款游戏的路线怎么解锁？")]
+    public async Task RouteQuestionResolvesTheGameAndSearchesItsPublicGuideOnly(string question)
+    {
+        await using var rig = new Rig(new Provider { ImageInputSupported = true });
+        var id = await rig.Ready(new(Library: true));
+        await SetGameRouteOptions(rig, id, PlaygroundSearchMode.Smart);
+        rig.Provider.Reply = request => ToolAnswer(request, "public_search", new { }, "按公开攻略解释路线 [[web_1]]");
+        await rig.Service.SendAsync(id, question, [Pixel("private-frame.png") with { IsGameFrame = true }]);
+
+        var request = rig.Provider.Requests.First();
+        Assert.Equal("high", request.ReasoningEffort);
+        Assert.Contains("サノバウィッチ", request.Instructions);
+        Assert.Contains(request.Tools, tool => tool.Name == "public_search" && !tool.ParametersJson.Contains("\"query\"", StringComparison.Ordinal));
+        var search = Assert.Single(rig.Provider.Searches);
+        Assert.Contains("《サノバウィッチ》", search.Query);
+        Assert.Contains("解锁条件", search.Query);
+        Assert.DoesNotContain("PRIVATE-TITLE", search.Query);
+        Assert.DoesNotContain("private-frame.png", search.Query);
+        Assert.DoesNotContain("当前个人评价", search.Query);
+        Assert.DoesNotContain(@"D:\", search.Query);
+        Assert.Contains(Last(rig).Sources, source => source.Id == "web_1");
+    }
+
+    [Theory]
+    [InlineData("search-off", "你推荐的游玩顺序是什么？")]
+    [InlineData("library-off", "你推荐的游玩顺序是什么？")]
+    [InlineData("saved-context-off", "你推荐的游玩顺序是什么？")]
+    [InlineData("relinked", "你推荐的游玩顺序是什么？")]
+    [InlineData("private", "根据我的笔记推荐游玩顺序。")]
+    [InlineData("other-game", "另一部游戏的游玩顺序是什么？")]
+    public async Task RouteContextDoesNotEnableUnverifiedOrUnauthorizedSearch(string scenario, string question)
+    {
+        await using var rig = new Rig();
+        var id = await rig.Ready(new(Library: scenario != "library-off"));
+        await SetGameRouteOptions(rig, id, scenario == "search-off" ? PlaygroundSearchMode.Off : PlaygroundSearchMode.Smart,
+            useSavedContext: scenario != "saved-context-off", relinked: scenario == "relinked");
+        await rig.Service.SendAsync(id, question);
+        Assert.DoesNotContain(Assert.Single(rig.Provider.Requests).Tools, tool => tool.Name == "public_search");
+        Assert.Empty(rig.Provider.Searches);
+        if (scenario is "library-off" or "saved-context-off") Assert.Equal(0, rig.LibraryReads);
+    }
+
+    private static async Task SetGameRouteOptions(Rig rig, Guid id, PlaygroundSearchMode search, bool useSavedContext = true, bool relinked = false)
+    {
+        var entry = Entry() with { Name = "PRIVATE-TITLE" };
+        string oldWorkKey = PlaygroundService.WorkKeyFor(entry);
+        string digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(oldWorkKey)));
+        if (relinked) entry = entry with { Metadata = entry.Metadata! with { Id = "different-id" } };
+        rig.Library = new([entry], rig.Library!.Recovery);
+        var options = rig.Service.Snapshot.Conversations.Single().Options;
+        await rig.Service.UpdateConversationAsync(id, options with
+        {
+            GameOverlayKey = $"game:{entry.Id}:{digest}",
+            Search = search,
+            ReasoningEffort = "high",
+            UseSavedContext = useSavedContext
+        });
     }
 
     [Theory]

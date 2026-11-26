@@ -61,9 +61,8 @@ public sealed partial class PlaygroundView
         var info = new Button { Content = PlaygroundAppearance.Icon("\uE946", 14), Width = 26, Height = 26, MinWidth = 26, MinHeight = 26, Padding = new Thickness(0), Opacity = .7 };
         PlaygroundAppearance.Apply(info, "PGIconButton"); AutomationProperties.SetName(info, "了解剧透限制的工作机制"); AutomationProperties.SetAutomationId(info, "PlaygroundSpoilerInfo");
         var infoBody = new StackPanel { Spacing = 10, MaxWidth = 300, Children = {
-            Label("按书架状态限制剧透", 15),
-            Label("开启后，依据已授权的书架记录，仅“玩过”的作品可讨论具体剧情；其他作品只作不揭露情节的一般讨论。", 13),
-            Label("无法读取或确认记录时，按未玩处理。关闭后不限制剧透。", 13) } };
+            Label("防剧透偏好", 15),
+            Label("开启后，模型会尽量避开你没问到的关键反转和结局。你问到的剧情会照常讨论。", 13) } };
         var flyout = new Flyout { Content = infoBody, Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.LeftEdgeAlignedTop };
         var presenter = new Style(typeof(FlyoutPresenter)) { BasedOn = PlaygroundAppearance.Style("PGFlyoutPresenter") }; presenter.Setters.Add(new Setter(FrameworkElement.MaxWidthProperty, 350d));
         flyout.FlyoutPresenterStyle = presenter; info.Flyout = flyout; StyleContent(infoBody);

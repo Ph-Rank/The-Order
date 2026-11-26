@@ -111,11 +111,11 @@ public sealed partial class PlaygroundCoreTests
     }
 
     [Theory]
-    [InlineData("completed", true)]
-    [InlineData("playing", false)]
-    [InlineData("planned", false)]
-    [InlineData("paused", false)]
-    public async Task ControlsLibraryStatusKeepsPlayedPlotAndOmitsUnplayedPlotWithoutDroppingGeneralProse(string status, bool detail)
+    [InlineData("completed")]
+    [InlineData("playing")]
+    [InlineData("planned")]
+    [InlineData("paused")]
+    public async Task GentleSpoilerModeKeepsRequestedPlotRegardlessOfLibraryStatus(string status)
     {
         await using var r = new Rig(); r.Library = new([Entry() with { Status = status }], LibraryRecovery.Main);
         var id = await r.Ready(new(Library: true), spoiler: PlaygroundSpoilerMode.LibraryStatus);
@@ -123,15 +123,16 @@ public sealed partial class PlaygroundCoreTests
         await r.Service.SendAsync(id, "说说《魔女的夜宴》的叙事与音乐。");
         Assert.Equal(PlaygroundMessageStatus.Complete, Last(r).Status);
         Assert.Contains("细致的音乐演出", Last(r).Text); Assert.Contains("制作与配乐", Last(r).Text);
-        Assert.Equal(detail, Last(r).Text.Contains("主人公死亡", StringComparison.Ordinal));
-        Assert.Equal(detail, r.Provider.Requests[0].Instructions.Contains("\"current_question_detail_allowed\":true", StringComparison.Ordinal));
+        Assert.Contains("主人公死亡", Last(r).Text);
+        Assert.Contains("用户问到的剧情照常展开讨论", r.Provider.Requests[0].Instructions);
+        Assert.DoesNotContain("current_question_detail_allowed", r.Provider.Requests[0].Instructions);
     }
 
     [Theory]
     [InlineData("outside")]
     [InlineData("unlinked")]
     [InlineData("ambiguous")]
-    public async Task ControlsLibraryStatusRequiresReliableCurrentWorkIdentity(string scenario)
+    public async Task GentleSpoilerModeAllowsPlotDiscussionWithNoUniqueLibraryMatch(string scenario)
     {
         await using var r = new Rig(); var played = Entry() with { Status = "completed" };
         r.Library = scenario switch
@@ -143,38 +144,42 @@ public sealed partial class PlaygroundCoreTests
         var id = await r.Ready(new(Library: true), spoiler: PlaygroundSpoilerMode.LibraryStatus);
         r.Provider.Reply = _ => Answer("《魔女的夜宴》的真相是主人公死亡。");
         await r.Service.SendAsync(id, "讨论《魔女的夜宴》的真相。");
-        Assert.DoesNotContain("主人公死亡", Last(r).Text);
+        Assert.Contains("主人公死亡", Last(r).Text);
     }
 
     [Theory]
     [InlineData(false, true)]
     [InlineData(true, false)]
-    public async Task ControlsLibraryStatusNeverReadsUnconsentedLibrary(bool libraryPermission, bool savedContext)
+    public async Task GentleSpoilerModeNeverReadsUnconsentedLibrary(bool libraryPermission, bool savedContext)
     {
         await using var r = new Rig(); r.Library = new([Entry() with { Status = "completed" }], LibraryRecovery.Main);
         var id = await r.Ready(new(Library: libraryPermission), spoiler: PlaygroundSpoilerMode.LibraryStatus);
         await r.Service.UpdateConversationAsync(id, ControlsOptions(r, id) with { UseSavedContext = savedContext });
         r.Provider.Reply = _ => Answer("《魔女的夜宴》的真相是主人公死亡。");
         await r.Service.SendAsync(id, "讨论《魔女的夜宴》的真相。");
-        Assert.Equal(0, r.LibraryReads); Assert.DoesNotContain("主人公死亡", Last(r).Text);
+        Assert.Equal(0, r.LibraryReads);
+        Assert.Contains("主人公死亡", Last(r).Text);
+        Assert.DoesNotContain(r.Provider.Requests.Single().Tools, tool => tool.Name == "get_work");
     }
 
     [Fact]
-    public async Task ControlsLibraryStatusSeparatesPlayedUnplayedAndOutsideSentences()
+    public async Task GentleSpoilerModeKeepsRequestedComparisonAcrossWorks()
     {
         await using var r = new Rig(); r.Library = new([Entry() with { Status = "completed" }, AnotherControlsWork()], LibraryRecovery.Main);
         var id = await r.Ready(new(Library: true), spoiler: PlaygroundSpoilerMode.LibraryStatus);
         r.Provider.Reply = _ => Answer("《魔女的夜宴》的结局包含PLAYED-PLOT。\n《另一作品》的结局包含UNPLAYED-PLOT。\n《库外作品》的结局包含OUTSIDE-PLOT。\n两者的音乐值得比较。");
-        await r.Service.SendAsync(id, "比较《魔女的夜宴》与《另一作品》的叙事和音乐。");
-        Assert.Contains("PLAYED-PLOT", Last(r).Text); Assert.DoesNotContain("UNPLAYED-PLOT", Last(r).Text);
-        Assert.DoesNotContain("OUTSIDE-PLOT", Last(r).Text); Assert.Contains("音乐值得比较", Last(r).Text);
+        await r.Service.SendAsync(id, "比较《魔女的夜宴》《另一作品》和《库外作品》的结局与配乐。");
+        Assert.Contains("PLAYED-PLOT", Last(r).Text);
+        Assert.Contains("UNPLAYED-PLOT", Last(r).Text);
+        Assert.Contains("OUTSIDE-PLOT", Last(r).Text);
+        Assert.Contains("音乐值得比较", Last(r).Text);
     }
 
     [Theory]
-    [InlineData("status")]
-    [InlineData("remove")]
-    [InlineData("relink")]
-    public async Task ControlsLibraryChangesRemovePriorPlotHistoryAndMemoryOnNextTurn(string change)
+    [InlineData("status", true)]
+    [InlineData("remove", false)]
+    [InlineData("relink", false)]
+    public async Task GentleSpoilerHistoryFollowsWorkIdentityRatherThanCompletionStatus(string change, bool includeHistory)
     {
         await using var r = new Rig(); var entry = Entry() with { Status = "completed" }; r.Library = new([entry], LibraryRecovery.Main);
         var id = await r.Ready(spoiler: PlaygroundSpoilerMode.LibraryStatus);
@@ -190,25 +195,36 @@ public sealed partial class PlaygroundCoreTests
         r.Provider.Reply = _ => Answer("可以一般讨论音乐。");
         await r.Service.SendAsync(id, "我以前为什么喜欢《魔女的夜宴》？");
         string sent = string.Join("\n", r.Provider.Requests.Last().Messages.Select(message => message.Text));
-        Assert.DoesNotContain("USER-PLOT-CANARY", sent); Assert.DoesNotContain("ASSISTANT-PLOT-CANARY", sent);
+        Assert.Equal(includeHistory, sent.Contains("USER-PLOT-CANARY", StringComparison.Ordinal));
+        Assert.Equal(includeHistory, sent.Contains("ASSISTANT-PLOT-CANARY", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task ControlsLibraryStatusBuffersAndRejectsLatePlotWhenStatusChanges()
+    public async Task GentleSpoilerModeStreamsAndDoesNotCancelForACompletionStatusChange()
     {
         var provider = new Provider { Block = true, IgnoreCancellation = true, Reply = _ => Answer("《魔女的夜宴》的结局LATE-PLOT-CANARY。") };
         await using var r = new Rig(provider); r.Library = new([Entry() with { Status = "completed" }], LibraryRecovery.Main);
         var id = await r.Ready(new(Library: true), spoiler: PlaygroundSpoilerMode.LibraryStatus);
-        var send = r.Service.SendAsync(id, "讨论《魔女的夜宴》。"); await provider.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.Empty(Last(r).Text); r.Library = new([Entry() with { Status = "planned" }], LibraryRecovery.Main);
-        provider.Release.TrySetResult(); await send;
-        Assert.NotEqual(PlaygroundMessageStatus.Complete, Last(r).Status); Assert.DoesNotContain("LATE-PLOT-CANARY", Last(r).Text);
+        var deltas = new List<string>();
+        r.Service.Changed += change =>
+        {
+            if (change.Kind == "delta" && Last(r).Status == PlaygroundMessageStatus.Generating)
+                deltas.Add(Last(r).Text);
+        };
+        var send = r.Service.SendAsync(id, "讨论《魔女的夜宴》的结局。");
+        await provider.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        r.Library = new([Entry() with { Status = "planned" }], LibraryRecovery.Main);
+        provider.Release.TrySetResult();
+        await send;
+        Assert.Contains(deltas, delta => delta.Contains("LATE-PLOT-CANARY", StringComparison.Ordinal));
+        Assert.Equal(PlaygroundMessageStatus.Complete, Last(r).Status);
+        Assert.Contains("LATE-PLOT-CANARY", Last(r).Text);
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ControlsGetWorkNotesAndDescriptionRespectPlayedScope(bool played)
+    public async Task GentleSpoilerModeAdmitsAuthorizedNotesAndDescription(bool played)
     {
         await using var r = new Rig(); var entry = Entry() with { Status = played ? "completed" : "planned", Notes = "最终章NOTE-PLOT-CANARY。",
             Metadata = Entry().Metadata! with { Description = "结局DESCRIPTION-PLOT-CANARY。" } };
@@ -217,9 +233,30 @@ public sealed partial class PlaygroundCoreTests
         r.Provider.Reply = request => ToolAnswer(request, "get_work", new { work_key = PlaygroundService.WorkKeyFor(entry) }, "读取完成。");
         await r.Service.SendAsync(id, "读取《魔女的夜宴》的记录。");
         string result = Assert.Single(r.Provider.Requests.Last().ToolResults).Text;
-        Assert.Equal(played, result.Contains("NOTE-PLOT-CANARY", StringComparison.Ordinal));
-        Assert.Equal(played, result.Contains("DESCRIPTION-PLOT-CANARY", StringComparison.Ordinal));
+        Assert.Contains("NOTE-PLOT-CANARY", result);
+        Assert.Contains("DESCRIPTION-PLOT-CANARY", result);
         Assert.DoesNotContain("LEGACY-PROGRESS-CANARY", result);
+    }
+
+    [Fact]
+    public async Task GentleSpoilerModeCanSearchAndDiscussARequestedEndingWithAnImage()
+    {
+        await using var r = new Rig(new Provider { ImageInputSupported = true });
+        var id = await r.Ready(new(), spoiler: PlaygroundSpoilerMode.LibraryStatus);
+        await r.Service.UpdateConversationAsync(id, ControlsOptions(r, id) with { Search = PlaygroundSearchMode.Smart });
+        r.Provider.Research = new("核实的结局细节 [[web_1]]", r.Provider.Research.Sources);
+        r.Provider.Reply = request => ToolAnswer(request, "public_search", new { }, "结局细节与此前场景有关 [[web_1]]");
+
+        var frame = Pixel("读到这里.png");
+        await r.Service.SendAsync(id, "请核实并解释《合成作品》的结局。", [frame]);
+
+        var search = Assert.Single(r.Provider.Searches);
+        Assert.True(search.AvoidUnrequestedSpoilers);
+        Assert.Contains("结局", search.Query);
+        Assert.DoesNotContain(frame.Name, search.Query);
+        Assert.Contains(r.Provider.Requests[0].Messages.SelectMany(message => message.Attachments), attachment => attachment.Name == frame.Name);
+        Assert.Contains("核实的结局细节", Assert.Single(r.Provider.Requests.Last().ToolResults).Text);
+        Assert.Contains("结局细节与此前场景有关", Last(r).Text);
     }
 
     [Theory]

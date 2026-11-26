@@ -15,16 +15,16 @@ internal static class PlaygroundSse
 {
     // Read decoded characters rather than lines: ReadLineAsync can allocate an
     // unbounded malicious line before its caller can enforce a length limit.
-    public static async IAsyncEnumerable<PlaygroundSsePacket> ReadAsync(Stream stream,
+    public static async IAsyncEnumerable<PlaygroundSsePacket> ReadAsync(TextReader reader, ReadOnlyMemory<char> prefix,
         [EnumeratorCancellation] CancellationToken cancellation)
     {
-        using var reader = new StreamReader(stream, new UTF8Encoding(false, true), false, 4096, leaveOpen: true);
         var line = new StringBuilder(); var data = new StringBuilder(); string eventName = "";
         var buffer = new char[4096]; bool previousCr = false, hasData = false, first = true; long total = 0;
-        while (true)
+        prefix.CopyTo(buffer);
+        int count = prefix.Length;
+        if (count == 0) count = await reader.ReadAsync(buffer.AsMemory(), cancellation).ConfigureAwait(false);
+        while (count != 0)
         {
-            int count = await reader.ReadAsync(buffer.AsMemory(), cancellation).ConfigureAwait(false);
-            if (count == 0) break;
             if ((total += count) > 8 * 1024 * 1024) throw new InvalidDataException("SSE size limit");
             for (int i = 0; i < count; i++)
             {
@@ -53,6 +53,7 @@ internal static class PlaygroundSse
                 }
                 else { previousCr = false; line.Append(c); if (line.Length > 2 * 1024 * 1024) throw new InvalidDataException("SSE line limit"); }
             }
+            count = await reader.ReadAsync(buffer.AsMemory(), cancellation).ConfigureAwait(false);
         }
         // SSE dispatch requires a blank line. A truncated final frame is not a
         // completed response, even if its partial JSON happens to parse.
@@ -62,6 +63,11 @@ internal static class PlaygroundSse
 
 internal sealed partial class NativePlaygroundProvider
 {
+    private const string ClientRequestHeader = "X-Client-Request-Id";
+    private const int HttpErrorLimit = 16 * 1024;
+    private static readonly UTF8Encoding ResponseEncoding = new(false, true);
+    private static readonly string[] SseFieldPrefixes = ["data:", "event:", "id:", "retry:"];
+
     private async Task<HttpResponseMessage> RequestAsync(string endpoint, string relative, HttpMethod method,
         JsonNode? body, CancellationToken cancellation, string? accountId = null)
     {
@@ -84,8 +90,11 @@ internal sealed partial class NativePlaygroundProvider
         if (Kind == PlaygroundProviderKind.Gemini) request.Headers.Add("x-goog-api-key", secret);
         else request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret);
         if (Kind == PlaygroundProviderKind.Claude) request.Headers.Add("anthropic-version", ClaudeVersion);
-        if (body?["stream"] is JsonValue streaming && streaming.TryGetValue<bool>(out bool isStream) && isStream) request.Headers.Accept.Add(new("text/event-stream"));
-        request.Headers.Accept.Add(new("application/json"));
+        bool wantsEvents = Boolean(body?["stream"]);
+        bool requiresEvents = Kind == PlaygroundProviderKind.ChatGPT && wantsEvents;
+        if (wantsEvents) request.Headers.Accept.Add(new("text/event-stream"));
+        if (requiresEvents) request.Headers.Add(ClientRequestHeader, Guid.NewGuid().ToString("N"));
+        else request.Headers.Accept.Add(new("application/json"));
         if (body is not null) request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
         HttpResponseMessage response;
         try { response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation).ConfigureAwait(false); }
@@ -95,15 +104,19 @@ internal sealed partial class NativePlaygroundProvider
         finally { secret = null; request.Headers.Authorization = null; request.Headers.Remove("x-goog-api-key"); }
         if (response.RequestMessage?.RequestUri is { } actual && (actual.Scheme != uri.Scheme || actual.Host != uri.Host || actual.Port != uri.Port))
         { response.Dispose(); throw new PlaygroundProviderException(new(PlaygroundFailureKind.AccessDenied, "已拒绝服务商请求的跨站重定向。")); }
-        if (!response.IsSuccessStatusCode)
+        string? mediaType = response.Content.Headers.ContentType?.MediaType;
+        if (!response.IsSuccessStatusCode || (requiresEvents && mediaType is not null && !IsEventStream(response)))
         {
-            int status = (int)response.StatusCode;
-            int? retry = response.Headers.RetryAfter?.Delta is { } wait ? (int)Math.Clamp(wait.TotalSeconds, 0, 3600) : null;
-            string code;
-            try { code = await ErrorCode(response, cancellation).ConfigureAwait(false); }
-            finally { response.Dispose(); }
-            if (Kind == PlaygroundProviderKind.ChatGPT) throw new PlaygroundProviderException(ChatGptFailure(code, status, retry));
-            throw HttpFailure(status, retry, StructuredErrorKind(code));
+            using (response)
+            {
+                int status = (int)response.StatusCode;
+                int? retry = response.Headers.RetryAfter?.Delta is { } wait ? (int)Math.Clamp(wait.TotalSeconds, 0, 3600) : null;
+                var error = !response.IsSuccessStatusCode || IsJsonMediaType(mediaType)
+                    ? await ReadHttpError(response, cancellation).ConfigureAwait(false) : default;
+                if (Kind == PlaygroundProviderKind.ChatGPT)
+                    throw new PlaygroundProviderException(ChatGptHttpFailure(response, mediaType, error, status, retry));
+                throw HttpFailure(status, retry, StructuredErrorKind(error.Code ?? ""));
+            }
         }
         // No automatic POST retry: the server may already have accepted/billed it.
         return response;
@@ -130,22 +143,116 @@ internal sealed partial class NativePlaygroundProvider
         };
         return new(new(kind, text, kind != PlaygroundFailureKind.Quota && (status is 408 or 429 or >= 500), status, retry));
     }
-    private static async Task<string> ErrorCode(HttpResponseMessage response, CancellationToken cancellation)
+    private static bool IsEventStream(HttpResponseMessage response) =>
+        string.Equals(response.Content.Headers.ContentType?.MediaType, "text/event-stream", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsJsonMediaType(string? mediaType) =>
+        string.Equals(mediaType, "application/json", StringComparison.OrdinalIgnoreCase)
+        || mediaType?.EndsWith("+json", StringComparison.OrdinalIgnoreCase) == true;
+
+    private enum HeaderlessBody { Events, Json, Html, Unknown }
+
+    private async IAsyncEnumerable<PlaygroundSsePacket> ReadResponseSseAsync(HttpResponseMessage response,
+        [EnumeratorCancellation] CancellationToken cancellation)
     {
-        // Inspect only allowlisted structured error codes. Server prose, URLs,
-        // response bodies and credentials never enter the resulting exception.
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
+        using var reader = new StreamReader(stream, ResponseEncoding, false, 4096, leaveOpen: true);
+        ReadOnlyMemory<char> prefix = default;
+
+        if (Kind == PlaygroundProviderKind.ChatGPT && response.Content.Headers.ContentType?.MediaType is null)
+        {
+            // Inspect only enough of the decoded body to identify its framing.
+            // Replay those characters before reading further from the same reader.
+            var probe = new char[512];
+            int length = 0;
+            HeaderlessBody? shape = null;
+            while (length < probe.Length && shape is null)
+            {
+                int read = await reader.ReadAsync(probe.AsMemory(length), cancellation).ConfigureAwait(false);
+                if (read == 0) break;
+                length += read;
+                shape = ClassifyHeaderlessBody(probe.AsSpan(0, length));
+            }
+            prefix = probe.AsMemory(0, length);
+
+            if (shape is not HeaderlessBody.Events)
+            {
+                var detail = shape == HeaderlessBody.Json
+                    ? await ReadHttpError(reader, prefix, cancellation).ConfigureAwait(false) : default;
+                string format = detail.Format ?? (shape switch
+                {
+                    HeaderlessBody.Json => "JSON",
+                    HeaderlessBody.Html => "网页",
+                    _ => WithoutBom(prefix.Span).Trim().IsEmpty && length < probe.Length ? "空响应" : "未知正文格式"
+                });
+                throw ChatGptStreamFailure(response, format, detail);
+            }
+        }
+
+        await foreach (var packet in PlaygroundSse.ReadAsync(reader, prefix, cancellation).ConfigureAwait(false))
+            yield return packet;
+    }
+
+    private static HeaderlessBody? ClassifyHeaderlessBody(ReadOnlySpan<char> prefix)
+    {
+        prefix = WithoutBom(prefix).TrimStart();
+        if (prefix.IsEmpty) return null;
+        if (prefix[0] == ':') return HeaderlessBody.Events;
+        if (prefix[0] is '{' or '[') return HeaderlessBody.Json;
+        if (prefix[0] == '<') return HeaderlessBody.Html;
+        foreach (string field in SseFieldPrefixes)
+        {
+            if (prefix.StartsWith(field, StringComparison.Ordinal)) return HeaderlessBody.Events;
+            if (field.AsSpan().StartsWith(prefix, StringComparison.Ordinal)) return null;
+        }
+        return HeaderlessBody.Unknown;
+    }
+
+    private static ReadOnlySpan<char> WithoutBom(ReadOnlySpan<char> value) =>
+        !value.IsEmpty && value[0] == '\ufeff' ? value[1..] : value;
+
+    private static PlaygroundProviderException ChatGptStreamFailure(HttpResponseMessage response, string format,
+        ProviderHttpError detail = default) => new(ChatGptHttpFailure(response,
+            response.Content.Headers.ContentType?.MediaType, detail with { Format = format }, (int)response.StatusCode, null));
+
+    private readonly record struct ProviderHttpError(string? Code, string? Parameter, string? Format);
+
+    private static async Task<ProviderHttpError> ReadHttpError(HttpResponseMessage response, CancellationToken cancellation)
+    {
+        // Retain only the envelope shape and explicitly mapped fields in diagnostics.
         try
         {
             await using var stream = await response.Content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
-            byte[] buffer = new byte[16385]; int length = 0;
-            while (length < buffer.Length)
-            { int count = await stream.ReadAsync(buffer.AsMemory(length), cancellation).ConfigureAwait(false); if (count == 0) break; length += count; }
-            if (length > 16384) return "";
-            var error = JsonNode.Parse(buffer.AsSpan(0, length), documentOptions: new() { MaxDepth = 16 })?["error"];
-            return StructuredErrorCode(error);
+            using var reader = new StreamReader(stream, ResponseEncoding, false, 4096, leaveOpen: true);
+            return await ReadHttpError(reader, default, cancellation).ConfigureAwait(false);
         }
         catch (OperationCanceledException) { throw; }
-        catch (Exception error) when (error is JsonException or InvalidOperationException or IOException) { return ""; }
+        catch (Exception error) when (error is InvalidOperationException or IOException or ArgumentException) { return default; }
+    }
+
+    private static async Task<ProviderHttpError> ReadHttpError(TextReader reader, ReadOnlyMemory<char> prefix,
+        CancellationToken cancellation)
+    {
+        try
+        {
+            var buffer = new char[HttpErrorLimit + 1];
+            prefix.CopyTo(buffer);
+            int length = prefix.Length;
+            while (length < buffer.Length)
+            {
+                int count = await reader.ReadAsync(buffer.AsMemory(length), cancellation).ConfigureAwait(false);
+                if (count == 0) break;
+                length += count;
+            }
+            if (length > HttpErrorLimit || ResponseEncoding.GetByteCount(buffer.AsSpan(0, length)) > HttpErrorLimit) return default;
+            var envelope = JsonNode.Parse(WithoutBom(buffer.AsSpan(0, length)).ToString(),
+                documentOptions: new() { MaxDepth = 16 }) as JsonObject;
+            if (envelope?["error"] is JsonObject error)
+                return new(StructuredErrorCode(error), String(error["param"]), "JSON 错误");
+            return envelope?.ContainsKey("detail") == true ? new(null, null, "JSON 接入错误") : default;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception error) when (error is JsonException or InvalidOperationException or IOException or ArgumentException) { return default; }
     }
     private static string StructuredErrorCode(JsonNode? error) => error is JsonObject ? String(error["code"], String(error["type"])) : "";
     private static PlaygroundFailureKind? StructuredErrorKind(JsonNode? error) => StructuredErrorKind(StructuredErrorCode(error));
@@ -161,7 +268,10 @@ internal sealed partial class NativePlaygroundProvider
             _ => null
         };
     }
-    private static PlaygroundFailure ChatGptFailure(string code, int? status = null, int? retry = null) => code switch
+    private static PlaygroundFailure ChatGptFailure(string code) =>
+        ChatGptPlanFailure(code, null, null) ?? ChatGptHttpFallback(503, null, StructuredErrorKind(code));
+
+    private static PlaygroundFailure? ChatGptPlanFailure(string code, int? status, int? retry) => code switch
     {
         "subscription_sharing_usage_limit_exceeded" => new(PlaygroundFailureKind.Quota,
             ChatGptSignInPolicy.UsageLimitMessage, false, status, retry),
@@ -174,9 +284,51 @@ internal sealed partial class NativePlaygroundProvider
         "subscription_sharing_invalid_user" => new(PlaygroundFailureKind.Authentication, "ChatGPT 账号授权已失效，请重新登录此连接。", false, status),
         "subscription_sharing_unsupported_capability" or "subscription_sharing_route_not_supported" => new(PlaygroundFailureKind.Unsupported,
             "ChatGPT 额度连接不支持本次模型或能力，请更换模型或调整设置。", false, status),
-        _ => status == 401 ? new(PlaygroundFailureKind.Authentication, "ChatGPT 登录已失效，请重新登录此账号。", false, status)
-            : HttpFailure(status ?? 503, retry, StructuredErrorKind(code)).Failure
+        _ => null
     };
+
+    private static PlaygroundFailure ChatGptHttpFallback(int status, int? retry, PlaygroundFailureKind? detail)
+    {
+        var failure = HttpFailure(status, retry, detail).Failure;
+        return failure.Kind == PlaygroundFailureKind.Authentication
+            ? failure with { Message = "ChatGPT 拒绝了此连接的授权，请在「连接与授权」中检查所选账号。" }
+            : failure;
+    }
+
+    private static PlaygroundFailure ChatGptHttpFailure(HttpResponseMessage response, string? mediaType,
+        ProviderHttpError error, int status, int? retry)
+    {
+        string code = error.Code ?? "";
+        var planFailure = ChatGptPlanFailure(code, status, retry);
+        var detail = StructuredErrorKind(code);
+        var failure = planFailure ?? (response.IsSuccessStatusCode && detail is null
+            ? new PlaygroundFailure(PlaygroundFailureKind.InvalidResponse, "ChatGPT 额度请求没有返回可读取的回复流。", false, status)
+            : ChatGptHttpFallback(status, retry, detail));
+
+        string format = error.Format ?? (IsJsonMediaType(mediaType) ? "JSON" : mediaType?.ToLowerInvariant() switch
+            {
+                "text/html" or "application/xhtml+xml" => "网页",
+                "text/plain" => "纯文本",
+                "text/event-stream" => "事件流",
+                null => "无内容类型",
+                _ => "其他格式"
+            });
+        List<string> diagnostics = [$"HTTP {status}", format];
+        if (planFailure is not null || detail is not null) diagnostics.Add(code);
+        string? field = error.Parameter?.Split(['.', '['], 2)[0];
+        if (field is "model" or "input" or "tools" or "reasoning" or "service_tier" or "include" or "instructions" or "stream" or "store")
+            diagnostics.Add($"参数 {field}");
+        if (response.Headers.TryGetValues("x-request-id", out var ids)
+            && ids.FirstOrDefault() is { Length: > 4 and <= 80 } requestId
+            && requestId.StartsWith("req_", StringComparison.Ordinal)
+            && requestId.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-'))
+            diagnostics.Add($"请求编号 {requestId}");
+        else if (response.RequestMessage?.Headers.TryGetValues(ClientRequestHeader, out var clientIds) == true
+            && clientIds.FirstOrDefault() is { } clientId && Guid.TryParseExact(clientId, "N", out _))
+            diagnostics.Add($"客户端请求编号 {clientId}");
+        return failure with { Message = $"{failure.Message}（{string.Join(" · ", diagnostics)}）" };
+    }
+
     private static async Task<JsonNode> ReadJsonAsync(HttpResponseMessage response, CancellationToken cancellation)
     {
         await using var stream = await response.Content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);

@@ -42,6 +42,7 @@ public sealed partial class PlaygroundCoreTests
         public Func<PlaygroundProviderRequest, IEnumerable<PlaygroundProviderEvent>> Reply = _ => [new(PlaygroundProviderEventKind.Text) { Text = "合成回复" }, new(PlaygroundProviderEventKind.Completed) { StopReason = "end_turn" }];
         public PlaygroundResearchResult Research = new("合成官方资料", [new("web_1", PlaygroundSourceKind.Web, "官方资料") { Url = "https://example.org/source" }]);
         public TaskCompletionSource Started = new(TaskCreationOptions.RunContinuationsAsynchronously), Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource? ContinueAfterText;
         public bool Block, IgnoreCancellation, ImageInputSupported; public bool SearchSupported = true, ToolsSupported = true;
         public PlaygroundCapabilities Capabilities(string model, string endpoint) => new(true, true, ToolsSupported, SearchSupported) { ReasoningEfforts = ["low", "high"], ImageInput = ImageInputSupported };
         public Task<ImmutableArray<PlaygroundModel>> ListModelsAsync(string endpoint, CancellationToken cancellation) => Task.FromResult(ImmutableArray.Create(new PlaygroundModel("fixture", "Fixture", Capabilities("fixture", endpoint))));
@@ -49,7 +50,13 @@ public sealed partial class PlaygroundCoreTests
         {
             Requests.Add(request); Started.TrySetResult();
             if (Block) { if (IgnoreCancellation) await Release.Task; else await Release.Task.WaitAsync(cancellation); }
-            foreach (var item in Reply(request)) { if (!IgnoreCancellation) cancellation.ThrowIfCancellationRequested(); yield return item; }
+            foreach (var item in Reply(request))
+            {
+                if (!IgnoreCancellation) cancellation.ThrowIfCancellationRequested();
+                yield return item;
+                if (item.Kind == PlaygroundProviderEventKind.Text && ContinueAfterText is { } continuation)
+                    await continuation.Task.WaitAsync(cancellation);
+            }
         }
         public Task<PlaygroundResearchResult> SearchAsync(PlaygroundPublicSearchRequest request, CancellationToken cancellation)
         { cancellation.ThrowIfCancellationRequested(); Searches.Add(request); return Task.FromResult(Research); }
@@ -247,12 +254,39 @@ public sealed partial class PlaygroundCoreTests
         await r.Service.UpdateConversationAsync(id, o with { Provider = openai.Kind, Endpoint = openai.DefaultEndpoint, Search = PlaygroundSearchMode.Off });
         await r.Service.SendAsync(id, "继续讨论。取回之前全部内容。"); Assert.DoesNotContain("GOOGLE-GROUNDED-CANARY", Wire(openai)); Assert.Null(openai.Requests.Single().Continuation);
     }
-    [Fact] public async Task StrictModeBuffersAndDoesNotSearchPlotOrExposeSourceTitles()
+    [Theory]
+    [InlineData(PlaygroundSpoilerMode.Full)]
+    [InlineData(PlaygroundSpoilerMode.LibraryStatus)]
+    [InlineData(PlaygroundSpoilerMode.Strict)]
+    [InlineData(PlaygroundSpoilerMode.Progress)]
+    public async Task AllSpoilerModesStreamFirstTextBeforeCompletion(PlaygroundSpoilerMode mode)
     {
-        var p = new Provider { Block = true }; await using var r = new Rig(p); var id = await r.Ready(spoiler: PlaygroundSpoilerMode.Strict);
-        var o = r.Service.Snapshot.Conversations.Single(c => c.Id == id).Options; await r.Service.UpdateConversationAsync(id, o with { Search = PlaygroundSearchMode.Smart });
-        var send = r.Service.SendAsync(id, "请搜索《魔女的夜宴》的结局真相。"); await p.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.Empty(Last(r).Text); Assert.Empty(p.Searches); p.Release.TrySetResult(); await send; Assert.Equal(PlaygroundMessageStatus.Complete, Last(r).Status);
+        const string first = "先说结局的真相。", rest = "再分析人物的选择。";
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var provider = new Provider { ContinueAfterText = release, Reply = _ =>
+        [
+            new(PlaygroundProviderEventKind.Text) { Text = first },
+            new(PlaygroundProviderEventKind.Text) { Text = rest },
+            new(PlaygroundProviderEventKind.Completed) { StopReason = "end_turn" }
+        ] };
+        await using var r = new Rig(provider);
+        var id = await r.Ready(spoiler: mode);
+        var firstPreview = new TaskCompletionSource<PlaygroundMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        r.Service.Changed += change => { if (change.Kind == "delta") firstPreview.TrySetResult(Last(r)); };
+        var send = r.Service.SendAsync(id, "请讨论具体结局。");
+        try
+        {
+            var preview = await firstPreview.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(first, preview.Text);
+            Assert.Equal(PlaygroundMessageStatus.Generating, preview.Status);
+            Assert.False(send.IsCompleted);
+        }
+        finally { release.TrySetResult(); }
+        await send;
+        Assert.Equal(PlaygroundMessageStatus.Complete, Last(r).Status);
+        Assert.Equal(first + rest, Last(r).Text);
+        Assert.Equal(mode != PlaygroundSpoilerMode.Full, provider.Requests.Single().Instructions.Contains(
+            "避免主动揭示用户没有问到的关键反转和结局", StringComparison.Ordinal));
     }
     [Fact] public async Task NamespacedIdentityBindingDoesNotSurviveDifferentResourceOrCatalogAssociation()
     {
@@ -355,7 +389,7 @@ public sealed partial class PlaygroundCoreTests
         Assert.Equal(new string('字', 2000), Last(r).Text); Assert.InRange(deltas, 1, 1999); Assert.Equal(PlaygroundMessageStatus.Complete, Last(r).Status);
     }
     [Theory] [InlineData(PlaygroundSpoilerMode.Strict)] [InlineData(PlaygroundSpoilerMode.Progress)]
-    public async Task NonFullModesOmitUnannotatedHistoricalProseRatherThanRelyOnSpoilerKeywords(PlaygroundSpoilerMode mode)
+    public async Task SpoilerPromptsKeepAuthorizedHistoryAndPreferences(PlaygroundSpoilerMode mode)
     {
         await using var r = new Rig(); var id = await r.Ready();
         const string unsafePreference = "我喜欢慢节奏。戴帽子的女孩其实是主角的姐姐，SPOILER-FREEFORM-CANARY。";
@@ -366,9 +400,8 @@ public sealed partial class PlaygroundCoreTests
             .Add(PlaygroundService.WorkKeyFor(Entry()), "第一章") });
         await r.Service.SendAsync(id, "我以前喜欢什么？");
         var request = r.Provider.Requests.Last(); var sent = string.Join("\n", request.Messages.Select(m => m.Text));
-        Assert.DoesNotContain("SPOILER-FREEFORM-CANARY", sent); Assert.DoesNotContain("UNANNOTATED-CHAT-CANARY", sent);
-        Assert.Contains("钢琴音乐", sent); Assert.Contains("safe_preference", sent);
-        Assert.DoesNotContain(Last(r).Sources, s => s.Quote?.Contains("SPOILER-FREEFORM-CANARY") == true);
+        Assert.Contains("SPOILER-FREEFORM-CANARY", sent); Assert.Contains("UNANNOTATED-CHAT-CANARY", sent);
+        Assert.Contains("钢琴音乐", sent);
     }
     [Fact] public async Task MakingSpoilerBoundaryStricterCancelsAlreadyStartedFullRound()
     {
@@ -605,15 +638,15 @@ public sealed partial class PlaygroundCoreTests
         Assert.Empty(r.Provider.Requests); Assert.Empty(r.Provider.Searches); Assert.Equal(PlaygroundMessageStatus.Failed, Last(r).Status); Assert.Contains("字符预算", Last(r).Error);
     }
     [Theory] [InlineData(PlaygroundSpoilerMode.Strict)] [InlineData(PlaygroundSpoilerMode.Progress)]
-    public async Task NonFullModesDoNotReplayOldAttachmentsOrTheirUnannotatedAnswers(PlaygroundSpoilerMode mode)
+    public async Task SpoilerPromptsKeepAuthorizedManualAttachmentsAndTheirAnswers(PlaygroundSpoilerMode mode)
     {
         await using var r = new Rig(); var id = await r.Ready();
         r.Provider.Reply = _ => Answer("ATTACHMENT-DERIVED-ANSWER-CANARY"); await r.Service.SendAsync(id, "请阅读资料。", [new("story.txt", "OLD-ATTACHMENT-SPOILER-CANARY")]);
         var options = r.Service.Snapshot.Conversations.Single(c => c.Id == id).Options; await r.Service.UpdateConversationAsync(id, options with { Spoiler = mode });
         r.Provider.Reply = _ => Answer("当前讨论"); await r.Service.SendAsync(id, "继续一般讨论。");
         string context = string.Join("\n", r.Provider.Requests.Last().Messages.Select(m => m.Text));
-        Assert.DoesNotContain("OLD-ATTACHMENT-SPOILER-CANARY", context); Assert.DoesNotContain("ATTACHMENT-DERIVED-ANSWER-CANARY", context);
-        Assert.DoesNotContain(Last(r).Sources, source => source.Kind == PlaygroundSourceKind.Attachment);
+        Assert.Contains("OLD-ATTACHMENT-SPOILER-CANARY", context); Assert.Contains("ATTACHMENT-DERIVED-ANSWER-CANARY", context);
+        Assert.Contains(Last(r).Sources, source => source.Kind == PlaygroundSourceKind.Attachment);
     }
     [Fact] public async Task ImageSnapshotsUseNativeUserBlocksAndStayFixedAcrossLocalToolRounds()
     {

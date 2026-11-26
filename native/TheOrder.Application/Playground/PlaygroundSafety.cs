@@ -40,8 +40,6 @@ public sealed partial class PlaygroundService
     private static string Bounded(string value, int max = 1200) => value.Length <= max ? value : value[..max] + "…";
     private static string Redacted(string value, int max = 1600) => Bounded(PrivatePath.Replace(value, "[本地路径已省略]"), max);
     private static string Hash(string value) => "sha256:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
-    private static bool PlotText(string text) => new[] { "结局", "結局", "真相", "死亡", "死了", "凶手", "幕后", "黑幕", "剧透", "劇透", "背叛", "end1", "ending", "spoiler", "culprit", "dies", "死亡", "ネタバレ", "犯人", "黒幕" }
-        .Any(t => text.Contains(t, StringComparison.OrdinalIgnoreCase));
     private static bool PrivateOpinion(string text) => new[] { "密码", "密钥", "api key", "身份证", "银行卡", "住址", "手机号", "宗教", "种族", "病历", "诊断", "password", "sk-", "c:\\", "d:\\" }
         .Any(t => text.Contains(t, StringComparison.OrdinalIgnoreCase));
     private static void Validate(PlaygroundSettings s)

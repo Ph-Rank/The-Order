@@ -198,7 +198,7 @@ public sealed partial class PlaygroundService : IAsyncDisposable
             }
             if (finalAdmission is { } run)
             {
-                bool libraryCurrent = run.Conversation.Options.Spoiler != PlaygroundSpoilerMode.LibraryStatus && run.PlaytimeRankingStamp is null || LibraryCurrent(run);
+                bool libraryCurrent = run.PlaytimeRankingStamp is null || LibraryCurrent(run);
                 bool current; lock (gate) current = libraryCurrent && active == run && generation == run.Generation && !run.Cancel.IsCancellationRequested && !closing && !disposed;
                 if (!current)
                 {

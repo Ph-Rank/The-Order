@@ -212,6 +212,7 @@ public sealed record PlaygroundPublicSearchRequest(Guid ConversationId, Guid Tur
 {
     public string? ChatGptAccountId { get; init; }
     public string? ReasoningEffort { get; init; } = "high";
+    public bool AvoidUnrequestedSpoilers { get; init; }
 }
 public sealed record PlaygroundPublicFetchRequest(Guid ConversationId, Guid TurnId, PlaygroundProviderKind Provider,
     string Endpoint, string Model, string Url)

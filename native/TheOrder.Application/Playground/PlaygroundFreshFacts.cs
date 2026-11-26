@@ -16,14 +16,13 @@ public sealed partial class PlaygroundService
         var keys = new List<string>();
         foreach (var entry in current.Entries.Where(e => Aliases(e).Any(a => AliasIn(run.Question, a))))
             if (!keys.Contains(WorkKeyFor(entry), StringComparer.Ordinal)) keys.Add(WorkKeyFor(entry));
-        if (run.Conversation.Options.Spoiler == PlaygroundSpoilerMode.Full)
-            foreach (var message in snapshot.Messages.Where(m => m.ConversationId == run.Conversation.Id
-                && m.Id != run.UserId && m.Id != run.AssistantId).Reverse().Take(20))
-            {
-                if (!admission.Allows(message)) continue;
-                foreach (var source in message.Sources.Where(s => s.Kind == PlaygroundSourceKind.LocalRecord && s.WorkKey is not null))
-                    if (!keys.Contains(source.WorkKey!, StringComparer.Ordinal)) { keys.Add(source.WorkKey!); DependOn(run, message.Id); }
-            }
+        foreach (var message in snapshot.Messages.Where(m => m.ConversationId == run.Conversation.Id
+            && m.Id != run.UserId && m.Id != run.AssistantId).Reverse().Take(20))
+        {
+            if (!admission.Allows(message)) continue;
+            foreach (var source in message.Sources.Where(s => s.Kind == PlaygroundSourceKind.LocalRecord && s.WorkKey is not null))
+                if (!keys.Contains(source.WorkKey!, StringComparer.Ordinal)) { keys.Add(source.WorkKey!); DependOn(run, message.Id); }
+        }
         var selected = new List<LibraryEntry>(); var views = new List<object>();
         int maximum = Math.Min(20000, run.Settings.MaximumContextCharacters / 3);
         foreach (var key in keys.Take(6))

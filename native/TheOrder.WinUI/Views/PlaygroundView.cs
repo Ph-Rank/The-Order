@@ -79,7 +79,6 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
     private readonly DispatcherTimer searchTimer = new() { Interval = TimeSpan.FromMilliseconds(150) };
     private readonly Dictionary<Guid, PlaygroundConversationOptions> drafts = [];
     private readonly Dictionary<Guid, string> textDrafts = [];
-    private readonly Dictionary<Guid, bool> activeSpoilers = [];
     private readonly List<Border> visualDividers = [];
     private bool? shownStop;
     private bool inputFocused;
@@ -458,9 +457,8 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
         for (int i = 0; i < desired.Length; i++)
         {
             var message = desired[i]; var existing = messageRows.FirstOrDefault(x => x.Message.Id == message.Id);
-            bool strict = message.Status == PlaygroundMessageStatus.Generating && activeSpoilers.GetValueOrDefault(message.ConversationId, current?.Options.Spoiler != PlaygroundSpoilerMode.Full);
-            if (existing is null) { existing = new(message, strict, BrowserDataDirectory, OpenSourceAsync, RetryAsync); messageRows.Insert(Math.Min(i, messageRows.Count), existing); rowsChanged = true; }
-            else { int at = messageRows.IndexOf(existing); if (at != i) { messageRows.Move(at, i); rowsChanged = true; } rowsChanged |= existing.Message != message || existing.Strict != strict; existing.Update(message, strict); }
+            if (existing is null) { existing = new(message, BrowserDataDirectory, OpenSourceAsync, RetryAsync); messageRows.Insert(Math.Min(i, messageRows.Count), existing); rowsChanged = true; }
+            else { int at = messageRows.IndexOf(existing); if (at != i) { messageRows.Move(at, i); rowsChanged = true; } rowsChanged |= existing.Message != message; existing.Update(message); }
         }
         bool latestChanged = messageFollow.SetLatest(desired.LastOrDefault()?.Id);
         if (rowsChanged || latestChanged || pendingLatestRealization) QueueFollowLatest(latestChanged || pendingLatestRealization);
@@ -572,7 +570,6 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
             if (Current is null && await CreateAsync(false, preserveComposer: true) is null) return;
             var current = Current ?? throw new InvalidOperationException();
             await SaveOptionsAsync(current.Id, options);
-            activeSpoilers[current.Id] = options.Spoiler != PlaygroundSpoilerMode.Full;
             if (scrollIntent?.ConversationId != current.Id) scrollIntent = messageFollow.CaptureIntent();
             pendingSubmission = new(current.Id, text, files, service.Snapshot.Messages.Where(x => x.ConversationId == current.Id && x.Role == "user").Select(x => x.Id).ToHashSet(), scrollIntent);
             var pending = service.SendAsync(current.Id, text, files.Select(x => x.Snapshot).ToImmutableArray(), CancellationToken.None); Refresh();
@@ -602,7 +599,7 @@ public sealed partial class PlaygroundView : UserControl, IDisposable
         if (service.IsGenerating || sending) return;
         sending = true; UpdateActions();
         pendingRetry = new(conversation, service.Snapshot.Messages.Where(x => x.ConversationId == conversation && x.Role == "assistant").Select(x => x.Id).ToHashSet(), messageFollow.CaptureIntent());
-        try { activeSpoilers[conversation] = Current?.Options.Spoiler != PlaygroundSpoilerMode.Full; var pending = service.RetryAsync(conversation, CancellationToken.None); Refresh(); await pending; }
+        try { var pending = service.RetryAsync(conversation, CancellationToken.None); Refresh(); await pending; }
         catch (OperationCanceledException) { }
         catch (PlaygroundProviderException error) { ShowError(error.Failure.Message); }
         catch { ShowError("重试未能完成；未自动重复发送，请检查配置后再试。"); }

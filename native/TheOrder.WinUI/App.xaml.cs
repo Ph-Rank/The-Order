@@ -147,7 +147,10 @@ public partial class App : Microsoft.UI.Xaml.Application
                     // No session or library was opened when page initialization failed.
                     // Such a failure must not trap the user behind the Ready guard.
                     if (owner.Window.StartupHasFailed && !owner.Sessions.Ready && owner.Sessions.Library is null) return true;
-                    if (await owner.Sessions.PrepareExitAsync()) return true;
+                    bool saved = update is null
+                        ? await owner.Sessions.PrepareManualExitAsync()
+                        : await owner.Sessions.PrepareExitAsync();
+                    if (saved) return true;
                     owner.Window.ShowLifecycleError(owner.Sessions.Error ?? UiText.Get("退出已取消，请重试。")); return false;
                 }, () => owner.DisposeAsync().AsTask(), () =>
                 {

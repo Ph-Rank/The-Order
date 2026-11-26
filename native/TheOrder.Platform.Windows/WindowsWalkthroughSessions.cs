@@ -30,7 +30,7 @@ public sealed partial class WindowsWalkthroughSessions(OfflineLibraryClient libr
     private string ChatKey(string gameId)
     {
         var entry = library.CurrentSnapshot!.Entries.First(e => e.Id == gameId);
-        return "game:" + gameId + ":" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(TheOrder.Application.Playground.PlaygroundService.WorkKeyFor(entry))));
+        return TheOrder.Application.Playground.PlaygroundService.GameOverlayKeyFor(entry);
     }
     public void SetAppearance(bool light, int dpi)
     {

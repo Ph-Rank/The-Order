@@ -37,16 +37,14 @@ internal sealed partial class NativePlaygroundProvider
         JsonArray items = InitialItems(request); JsonObject body = BuildRequest(request, items, true);
         var round = new ProviderRound(this, request);
         using var response = await RequestAsync(request.Endpoint, GenerationPath, HttpMethod.Post, body, cancellation, request.ChatGptAccountId).ConfigureAwait(false);
-        if (response.Content.Headers.ContentType?.MediaType?.Equals("text/event-stream", StringComparison.OrdinalIgnoreCase) != true)
+        if (Kind != PlaygroundProviderKind.ChatGPT && !IsEventStream(response))
         {
-            if (Kind == PlaygroundProviderKind.ChatGPT) throw Invalid("ChatGPT 额度接口没有返回所需的事件流；未重试或切换计费方式。");
             var json = await ReadJsonAsync(response, cancellation).ConfigureAwait(false);
             foreach (var ev in round.Final(json)) yield return ev;
         }
         else
         {
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
-            await foreach (var packet in PlaygroundSse.ReadAsync(stream, cancellation).ConfigureAwait(false))
+            await foreach (var packet in ReadResponseSseAsync(response, cancellation).ConfigureAwait(false))
             {
                 if (packet.Data == "[DONE]") continue; // Responses/Claude/Gemini still need their typed terminal.
                 JsonNode json = JsonNode.Parse(packet.Data, documentOptions: new() { MaxDepth = 48 }) ?? throw Invalid();
@@ -56,7 +54,9 @@ internal sealed partial class NativePlaygroundProvider
         }
         cancellation.ThrowIfCancellationRequested();
         foreach (var ev in round.CompleteLegacyGeminiStream()) yield return ev;
-        if (!round.Terminal) throw Invalid("回复流在终态事件前中断，半截回复不会标为完成。");
+        if (!round.Terminal)
+            throw Kind == PlaygroundProviderKind.ChatGPT ? ChatGptStreamFailure(response, "回复流提前结束")
+                : Invalid("回复流在终态事件前中断，半截回复不会标为完成。");
         if (round.Failure is { } failure)
         {
             // A rejected/truncated server turn can still carry billed usage.
@@ -283,7 +283,12 @@ internal sealed partial class NativePlaygroundProvider
             else if (type == "response.refusal.delta") Refused = true;
             else if (type.StartsWith("response.web_search_call.", StringComparison.Ordinal)) { HostedSearch = true; yield return Activity(); }
             else if (type is "response.completed" or "response.incomplete")
-            { foreach (var ev in Final(json["response"] ?? throw Invalid())) yield return ev; }
+            {
+                var result = json["response"] ?? throw Invalid();
+                if (owner.Kind == PlaygroundProviderKind.ChatGPT && String(result["status"]) != type["response.".Length..])
+                    throw Invalid("回复结束事件与响应状态不一致。");
+                foreach (var ev in Final(result)) yield return ev;
+            }
         }
         public IEnumerable<PlaygroundProviderEvent> CompleteLegacyGeminiStream()
         {

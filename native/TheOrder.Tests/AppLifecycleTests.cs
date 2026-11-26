@@ -41,6 +41,70 @@ public sealed class AppLifecycleTests
         Assert.Equal(seconds, rig.Stored.Seconds); Assert.Equal(paused, rig.Native.UserPaused);
         Assert.Equal(SessionTracking.CurrentProcessOnly, rig.Engine.Snapshot.Tracking);
     }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task ManualExitSettlesConfirmedTimeAndDoesNotResumeOnReopen(bool paused)
+    {
+        await using var rig = new SessionTestRig();
+        await rig.Start();
+        await rig.Engine.SampleAsync();
+        await rig.Advance(8);
+        if (paused) await rig.Engine.PauseAsync();
+        rig.Clock.Advance(2);
+
+        await using var host = Host(rig);
+        Assert.True(await host.PrepareManualExitAsync());
+        var expected = paused ? 8 : 10;
+        var final = rig.Stored;
+        Assert.Equal(expected, final.Seconds);
+        Assert.Equal(SessionLifecycle.Incomplete, final.Native!.Lifecycle);
+        Assert.Equal(SessionReason.ManagerExit, final.Native.Reason);
+        Assert.Equal(rig.Clock.Utc, final.Native.AccountingCutoffAtUtc);
+        Assert.Null(final.Native.RecoveryToken);
+        Assert.Null(final.Native.EndedAtUtc);
+        Assert.Equal(SessionTiming.Stopped, host.Session!.Timing);
+        var writes = rig.Disk.Writes;
+        Assert.True(await host.PrepareManualExitAsync());
+        Assert.Equal(writes, rig.Disk.Writes);
+        Assert.Equal(LaunchOutcome.Closed, (await host.LaunchAsync("g")).Outcome);
+        await host.DisposeAsync();
+        Assert.Equal(ProcessTrackingState.RunningConfirmed, rig.Platform.Processes[71].State);
+
+        rig.Clock.Advance(3600);
+        await rig.Reopen();
+        await rig.Engine.SampleAsync();
+        Assert.Null(rig.Engine.Snapshot.Session);
+        Assert.Equal(final, rig.Stored);
+        Assert.Equal(1000 + expected, rig.Library.Snapshot.Entries[0].TotalPlaySeconds);
+        Assert.Equal(6, rig.Library.Snapshot.Entries[0].PlayCount);
+    }
+
+    [Fact]
+    public async Task ManualExitRetriesTheSameCutoffAfterSaveFailure()
+    {
+        await using var rig = new SessionTestRig();
+        await rig.Start();
+        await rig.Engine.SampleAsync();
+        await rig.Advance(8);
+        await using var host = Host(rig);
+
+        var previous = rig.Stored;
+        rig.Disk.Fail = true;
+        Assert.False(await host.PrepareManualExitAsync());
+        Assert.False(host.Closing);
+        Assert.Equal(previous, rig.Stored);
+        var pending = host.Session!.Session!;
+        Assert.Equal(SessionReason.ManagerExit, pending.Native!.Reason);
+        rig.Clock.Advance(15);
+        rig.Disk.Fail = false;
+
+        Assert.True(await host.PrepareManualExitAsync());
+        Assert.Equal(pending.Seconds, rig.Stored.Seconds);
+        Assert.Equal(pending.Native.AccountingCutoffAtUtc, rig.Native.AccountingCutoffAtUtc);
+        Assert.Equal(6, rig.Library.Snapshot.Entries[0].PlayCount);
+        Assert.Equal(ProcessTrackingState.RunningConfirmed, rig.Platform.Processes[71].State);
+    }
+
     [Fact]
     public async Task FailedSaveCancelsExitAndRetryDrainsWithoutKill()
     {

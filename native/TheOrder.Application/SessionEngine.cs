@@ -180,30 +180,44 @@ public sealed class SessionEngine : IAsyncDisposable
         Finish(r, SessionReason.UserStoppedObservation); await SaveAsync(r).ConfigureAwait(false);
     });
 
-    // A future application lifecycle host must inspect the returned value before actually exiting.
-    public async Task<bool> CheckpointForExitAsync(SessionReason reason = SessionReason.ManagerExit)
+    public Task<bool> CheckpointForExitAsync(SessionReason reason = SessionReason.ManagerExit)
+        => CheckpointForExitAsync(reason, stopTiming: false);
+
+    internal async Task<bool> CheckpointForExitAsync(SessionReason reason, bool stopTiming)
     {
         if (reason is not (SessionReason.ManagerExit or SessionReason.SystemShutdown)) throw new ArgumentOutOfRangeException(nameof(reason));
         Task<LaunchStatus>? pending;
         lock (gate) { closing = true; pending = launching; }
-        if (pending is not null) await pending.ConfigureAwait(false);
-        await DrainAsync().ConfigureAwait(false);
-        await Submit(async () =>
+        bool saved = false;
+        try
         {
-            if (active is not { } r) return;
-            if (!r.Native.IsTerminal)
+            if (pending is not null) await pending.ConfigureAwait(false);
+            await DrainAsync().ConfigureAwait(false);
+            await Submit(async () =>
             {
-                Freeze(r); SyncDuration(r); r.Tracking = SessionTracking.Detached;
-                Set(r, r.Native with { Lifecycle = r.Native.RecoveryToken is null ? SessionLifecycle.Incomplete : SessionLifecycle.RecoveryPending,
-                    Reason = r.Native.RecoveryToken is null ? SessionReason.RecoveryUnavailable : reason });
-            }
-            // Terminal in memory may still be pending. Save compares against the last
-            // acknowledged candidate; retry persistence without repeating the transition.
-            await SaveAsync(r).ConfigureAwait(false);
-        }).ConfigureAwait(false);
-        var success = Snapshot.Error is null;
-        if (!success) { lock (gate) closing = false; }
-        return success;
+                if (stopTiming) await SampleCoreAsync().ConfigureAwait(false);
+                if (active is not { } r) return;
+                if (!r.Native.IsTerminal)
+                {
+                    r.Tracking = SessionTracking.Detached;
+                    if (stopTiming) Finish(r, reason);
+                    else
+                    {
+                        Freeze(r); SyncDuration(r);
+                        Set(r, r.Native with { Lifecycle = r.Native.RecoveryToken is null ? SessionLifecycle.Incomplete : SessionLifecycle.RecoveryPending,
+                            Reason = r.Native.RecoveryToken is null ? SessionReason.RecoveryUnavailable : reason });
+                    }
+                }
+                // Retry a failed save with the same terminal cutoff.
+                await SaveAsync(r).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+            return saved = Snapshot.Error is null;
+        }
+        finally
+        {
+            if (!saved)
+                lock (gate) { if (disposal is null) closing = false; }
+        }
     }
 
     private Task Submit(Func<Task> work)

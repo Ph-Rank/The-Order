@@ -40,6 +40,29 @@ public sealed class SessionRecordingMinimumTests
         else Assert.Equal(historic.StartedAt, final.LastPlayedAt);
     }
 
+    [Theory]
+    [InlineData(299, false)]
+    [InlineData(300, true)]
+    public async Task ManualExitSettlesOnlySessionsThatReachedTheMinimum(int seconds, bool recorded)
+    {
+        await using var rig = new SessionTestRig(requireRecordingMinimum: true);
+        await rig.Start();
+        await Accrue(rig, seconds - 1);
+        await rig.Engine.SampleAsync();
+        rig.Clock.Advance(1);
+        await using var host = new AppSessionHost(() => Task.FromResult<SessionEngine?>(rig.Engine), () => rig.Library.Snapshot);
+
+        Assert.True(await host.PrepareManualExitAsync());
+        var entry = Assert.Single(rig.Library.Snapshot.Entries);
+        Assert.Equal(recorded ? 6 : 5, entry.PlayCount);
+        Assert.Equal(1000 + (recorded ? seconds : 0), entry.TotalPlaySeconds);
+        if (recorded)
+            Assert.Equal(SessionReason.ManagerExit, Assert.Single(entry.RecordedSessions).Native!.Reason);
+        else
+            Assert.Empty(entry.Sessions);
+        Assert.Equal(ProcessTrackingState.RunningConfirmed, rig.Platform.Processes[71].State);
+    }
+
     [Fact]
     public async Task PendingCheckpointRecoversAndPauseTimeDoesNotQualify()
     {

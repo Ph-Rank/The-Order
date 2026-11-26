@@ -86,9 +86,6 @@ public sealed partial class PlaygroundService
             if (message.Status != PlaygroundMessageStatus.Complete || message.Retention != PlaygroundRetention.Portable || suppressed.Contains(message.Id)) return false;
             if (run.Conversation.Options.Search == PlaygroundSearchMode.Off && (message.Sources.Any(source => source.Kind == PlaygroundSourceKind.Web)
                 || message.Usage?.Searches is > 0 || message.Usage?.Fetches is > 0)) return false;
-            if (run.Conversation.Options.Spoiler == PlaygroundSpoilerMode.LibraryStatus && !owner.NarrativeHistoryAllowed(run, message)
-                && (message.Attachments.Length != 0 || SafePreferenceFor(new(Guid.Empty, message.Text, message.ConversationId, message.Id,
-                    message.CreatedAt, message.CreatedAt)) is null)) return false;
             if (message.ConversationId != run.Conversation.Id && (!owner.Can(run, "history")
                 || state.Conversations.Any(c => c.Id == message.ConversationId && c.Temporary))) return false;
             foreach (var source in message.Sources)

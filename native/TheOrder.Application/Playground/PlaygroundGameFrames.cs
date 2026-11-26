@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text.RegularExpressions;
+using TheOrder.Domain;
 
 namespace TheOrder.Application.Playground;
 
@@ -15,6 +16,21 @@ public static class PlaygroundGameFrames
 
 public sealed partial class PlaygroundService
 {
+    internal static string GameOverlayKeyFor(LibraryEntry entry) =>
+        $"game:{entry.Id}:{Hash(WorkKeyFor(entry))["sha256:".Length..]}";
+
+    private string? ResolveGameTitle(Run run)
+    {
+        if (run.Conversation.Options.GameOverlayKey is not { } key || !key.StartsWith("game:", StringComparison.Ordinal))
+            return null;
+        var matches = ReadLibrary(run)?.Entries
+            .Where(entry => entry.Metadata is not null && key.StartsWith($"game:{entry.Id}:", StringComparison.Ordinal)
+                && key == GameOverlayKeyFor(entry)).Take(2).ToArray();
+        if (matches is not { Length: 1 } || matches[0].Metadata is not { } metadata)
+            return null;
+        return PublicCatalogTitle(metadata);
+    }
+
     private const string GameQuoteTool = "search_game_quote";
     private bool GameQuoteAvailable(Run run) => SearchAvailable(run)
         && run.Attachments.Any(a => a.IsGameFrame && IsImageAttachment(a))
@@ -34,7 +50,7 @@ public sealed partial class PlaygroundService
         run.GameQuotePayloads[quote] = Result("not_available", notice: "本句已尝试核实，未自动重复付费请求。");
         try
         {
-            run.SafePublicQuestion = "查证公开作品台词的引用出处及一手来源。只核对此短句，不扩展后续剧情：" + quote;
+            run.SafePublicQuestion = "查证这句公开作品台词的原文出处及一手来源。检索范围是下面一句：" + quote;
             run.PublicSearchAttempted = false; run.PublicSearchPayload = null;
             return run.GameQuotePayloads[quote] = await PublicSearch(run).ConfigureAwait(false);
         }

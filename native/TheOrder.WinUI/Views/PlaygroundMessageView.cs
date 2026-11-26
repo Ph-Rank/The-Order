@@ -8,19 +8,18 @@ using TheOrder.Presentation;
 
 namespace TheOrder.WinUI.Views;
 
-internal sealed class PlaygroundMessageItem(PlaygroundMessage message, bool strict, string? browserDirectory,
+internal sealed class PlaygroundMessageItem(PlaygroundMessage message, string? browserDirectory,
     Func<PlaygroundSource, Task> openSource, Func<Guid, Task> retry) : INotifyPropertyChanged
 {
     public PlaygroundMessage Message { get; private set; } = message;
-    public bool Strict { get; private set; } = strict;
     public string? BrowserDirectory { get; } = browserDirectory;
     public Func<PlaygroundSource, Task> OpenSource { get; } = openSource;
     public Func<Guid, Task> Retry { get; } = retry;
     public event PropertyChangedEventHandler? PropertyChanged;
-    public void Update(PlaygroundMessage value, bool strictMode)
+    public void Update(PlaygroundMessage value)
     {
-        if (Message == value && Strict == strictMode) return;
-        Message = value; Strict = strictMode; PropertyChanged?.Invoke(this, new(nameof(Message)));
+        if (Message == value) return;
+        Message = value; PropertyChanged?.Invoke(this, new(nameof(Message)));
     }
 }
 
@@ -55,7 +54,7 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
     private PlaygroundSearchSuggestionsView? suggestions;
     private string streamed = "";
     private int committed;
-    private bool wasStrict, sourcesOpen;
+    private bool sourcesOpen;
     private bool? userLayout;
     private bool themePaintQueued;
     internal int StaticRenders { get; private set; }
@@ -64,7 +63,7 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
         suggestions = suggestions?.State, externalResourcesBlocked = suggestions?.BlockedRequests ?? 0,
         citationLinks = body.Children.OfType<PlaygroundMarkdownView>().Concat(stream.Children.OfType<PlaygroundMarkdownView>()).Sum(x => x.RenderedCitations),
         citationNumbers = citations.Entries.Where(x => x.Number is not null).Select(x => new { id = x.Source.Id, number = x.Number }).ToArray(),
-        bodyWidth = body.ActualWidth, bodyHeight = body.ActualHeight, strict = item?.Strict == true,
+        bodyWidth = body.ActualWidth, bodyHeight = body.ActualHeight,
         actualTheme = ActualTheme.ToString(), paletteTheme = PlaygroundAppearance.ThemeFor(this).ToString(),
         foregroundColor = PlaygroundAppearance.ColorOf(Foreground), bubbleColor = PlaygroundAppearance.ColorOf(contentSurface.Background) };
     public PlaygroundMessageView()
@@ -101,12 +100,11 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
         if (item is null) return;
         var message = item.Message;
         bool generating = message.Status == PlaygroundMessageStatus.Generating;
-        if (previous == message && wasStrict == item.Strict) return;
+        if (previous == message) return;
         bool changedMessage = previous?.Id != message.Id;
-        bool strictChanged = wasStrict != item.Strict;
         bool sourcesChanged = previous?.Sources != message.Sources;
         if (changedMessage || sourcesChanged) citations = new(message.Sources);
-        if (generating && (changedMessage || sourcesChanged || strictChanged))
+        if (generating && (changedMessage || sourcesChanged))
         { body.Children.Clear(); stream.Children.Clear(); streamed = ""; committed = 0; }
         bool user = message.Role == "user";
         SetRoleLayout(user);
@@ -120,7 +118,7 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
                 fileLinks.Children.Add(preview);
             }
         }
-        bool showBody = message.Text.Length > 0 || generating && !item.Strict;
+        bool showBody = message.Text.Length > 0;
         body.Visibility = showBody ? Visibility.Visible : Visibility.Collapsed;
         contentSurface.Visibility = showBody || !message.Attachments.IsDefaultOrEmpty ? Visibility.Visible : Visibility.Collapsed;
         heading.HorizontalAlignment = actions.HorizontalAlignment = user ? HorizontalAlignment.Right : HorizontalAlignment.Left;
@@ -133,7 +131,7 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
         ToolTipService.SetToolTip(contentSurface, user ? "你的消息 · " + message.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm") : null);
         AutomationProperties.SetName(this, (user ? "用户消息" : "助手回复") + "，" + StatusLabel(message.Status) + (user ? "，" + message.CreatedAt.ToLocalTime().ToString("HH:mm") : ""));
         phase.Text = generating
-            ? item.Strict ? "正在准备回复…" : message.Activities.LastOrDefault() ?? "正在回复…"
+            ? message.Activities.LastOrDefault() ?? "正在回复…"
             : message.Status == PlaygroundMessageStatus.Complete
                 ? CompletionNotice(message)
                 : StatusLabel(message.Status) + (string.IsNullOrWhiteSpace(message.Error) ? "；已接收内容未作为完整回复。" : " · " + message.Error);
@@ -144,27 +142,19 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
             && message.Error?.Contains(ChatGptSignInPolicy.UsageLimitMessage, StringComparison.Ordinal) == true;
         manageChatGptUsage.Visibility = chatGptLimit ? Visibility.Visible : Visibility.Collapsed;
         if (chatGptLimit) retry.Visibility = Visibility.Collapsed;
-        copy.IsEnabled = message.Text.Length > 0 && !(generating && item.Strict);
-        if (generating && item.Strict)
-        {
-            if (changedMessage || strictChanged || body.Children.Count != 0) { body.Children.Clear(); stream.Children.Clear(); streamed = ""; committed = 0; }
-        }
-        else if (generating)
+        copy.IsEnabled = message.Text.Length > 0;
+        if (generating)
         {
             if (body.Children.Count == 0) { stream.Children.Add(tail); body.Children.Add(stream); }
             Stream(message.Text);
         }
-        else if (changedMessage || previous?.Status == PlaygroundMessageStatus.Generating || previous?.Text != message.Text || strictChanged || sourcesChanged)
+        else if (changedMessage || previous?.Status == PlaygroundMessageStatus.Generating || previous?.Text != message.Text || sourcesChanged)
         {
             body.Children.Clear(); stream.Children.Clear(); streamed = ""; committed = 0;
             citations = new(message.Sources);
             if (message.Text.Length > 0) body.Children.Add(Markdown(message.Text));
             StaticRenders++;
         }
-        if (!user && !changedMessage && previous?.Status == PlaygroundMessageStatus.Generating
-            && (previous.Text.Length == 0 || item.Strict && !generating)
-            && message.Text.Length > 0 && (!item.Strict || !generating))
-            InteractionMotion.RevealContent(body, .74f);
         if (!generating && !string.IsNullOrWhiteSpace(message.SearchSuggestionsHtml) && message.Retention == PlaygroundRetention.SessionOnly)
         {
             if (suggestions is null || previous?.SearchSuggestionsHtml != message.SearchSuggestionsHtml)
@@ -214,7 +204,7 @@ public sealed class PlaygroundMessageView : UserControl, IDisposable
                 sources.Children.Clear(); sources.Children.Add(list);
             }
         }
-        wasStrict = item.Strict; previous = message;
+        previous = message;
     }
     private void SetRoleLayout(bool user)
     {

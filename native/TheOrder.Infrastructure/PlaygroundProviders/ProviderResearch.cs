@@ -27,7 +27,12 @@ internal sealed partial class NativePlaygroundProvider
         {
             if (Kind == PlaygroundProviderKind.DeepSeek) return await DeepSeekSearch(request, endpoint, cancellation).ConfigureAwait(false);
             var input = new PlaygroundProviderRequest(request.ConversationId, request.TurnId, Kind, endpoint, request.Model,
-                "Research only this public question. Search original and official sources where available, including Japanese sources for Japanese works. Cite sources actually returned. Do not invent verification or links. Do not access personal data. Respond in the user's language.",
+                "Research only this public question. Search original and official sources where available, including Japanese sources for Japanese works. "
+                + "Cite sources actually returned. Do not invent verification or links. Do not access personal data. Respond in the user's language. "
+                + "Follow the question's requested plot scope. Lead with the requested conclusion. Use sources for evidence and let the question determine the framing. "
+                + "Give concrete evidence for key conclusions and any requested comparisons. Distinguish what the sources establish from interpretation. Base statements about the player's progress only on information in the question."
+                + (request.AvoidUnrequestedSpoilers
+                    ? " Avoid volunteering major twists or endings the user did not ask about. Discuss requested plot details directly." : ""),
                 [new("user", request.Query)])
             { Phase = PlaygroundPhase.PublicResearch, ReasoningEffort = request.ReasoningEffort, ChatGptAccountId = request.ChatGptAccountId,
                 MaximumOutputTokens = Math.Clamp(request.MaximumOutputTokens, 64, 65536), MaximumToolCalls = request.MaximumSearches };
@@ -39,15 +44,16 @@ internal sealed partial class NativePlaygroundProvider
             var round = new ProviderRound(this, input);
             if (Kind == PlaygroundProviderKind.ChatGPT)
             {
-                if (response.Content.Headers.ContentType?.MediaType?.Equals("text/event-stream", StringComparison.OrdinalIgnoreCase) != true)
-                    throw Invalid("ChatGPT 检索没有返回所需的事件流。");
-                await using var stream = await response.Content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
-                await foreach (var packet in PlaygroundSse.ReadAsync(stream, cancellation).ConfigureAwait(false))
-                { if (packet.Data == "[DONE]") continue; foreach (var ignored in round.Apply(JsonNode.Parse(packet.Data) ?? throw Invalid())) { }
+                await foreach (var packet in ReadResponseSseAsync(response, cancellation).ConfigureAwait(false))
+                { if (packet.Data == "[DONE]") continue;
+                    var json = JsonNode.Parse(packet.Data, documentOptions: new() { MaxDepth = 48 }) ?? throw Invalid();
+                    foreach (var ignored in round.Apply(json)) { }
                     if (round.Terminal) break; }
             }
             else { var json = await ReadJsonAsync(response, cancellation).ConfigureAwait(false); foreach (var ignored in round.Final(json)) { } }
             if (round.Failure is { } failure) throw new PlaygroundProviderException(failure);
+            if (Kind == PlaygroundProviderKind.ChatGPT && !round.Terminal)
+                throw ChatGptStreamFailure(response, "回复流提前结束");
             if (!round.Terminal || round.StopReason is "max_tokens" or "pause_turn") throw Invalid("公开检索回复未完整结束；没有将其标记为已核实。");
             if (!round.HostedSearch) throw new PlaygroundProviderException(new(PlaygroundFailureKind.Unsupported, "服务商没有执行实际搜索；未将模型自身回答冒充联网结果。"));
             if (!round.ToolCalls().IsEmpty) throw Invalid("公开检索不允许调用本地工具。");

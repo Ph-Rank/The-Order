@@ -34,8 +34,7 @@ public sealed partial class PlaygroundService
     private LibrarySnapshot? ReadLibrary(Run run)
     {
         if (!Can(run, "library")) return null;
-        if (!run.LibraryCaptured) { var value = library(); EnsureCurrent(run); run.LibrarySnapshot = value; run.LibraryCaptured = true;
-            if (run.Conversation.Options.Spoiler == PlaygroundSpoilerMode.LibraryStatus) run.SpoilerLibraryStamp = SpoilerLibraryIdentity(value); }
+        if (!run.LibraryCaptured) { var value = library(); EnsureCurrent(run); run.LibrarySnapshot = value; run.LibraryCaptured = true; }
         return run.LibrarySnapshot;
     }
     private bool ValidMemoryWork(Run run, PlaygroundMemory memory) => memory.WorkKey is null
@@ -65,13 +64,13 @@ public sealed partial class PlaygroundService
             Add("recent_play", "按最近游玩日期返回少量作品及本次已确认会话；不是全库排名，不能用它判断累计时长前几名。", limit);
             Add("rank_playtime", "程序对完整当前书架按累计记录时长降序排序后分页。含有效人工修正、旧导入与久未游玩的记录；查询最长/最多/时长排名用此工具，不用最近游玩样本自行排序。", limit + ",\"offset\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100000}");
             Add("search_library", "用标题、别名查找作品。返回稳定 work_key；同名结果不可自动合并。", query + "," + limit, "\"query\"");
-            Add("get_work", "按 search_library 返回的 work_key 读取当前状态、评分和可信目录标识。笔记在严格模式下省略。", "\"work_key\":{\"type\":\"string\",\"maxLength\":1024}", "\"work_key\"");
+            Add("get_work", "按 search_library 返回的 work_key 读取当前允许查看的作品资料，包括状态、评分和可信目录标识。", "\"work_key\":{\"type\":\"string\",\"maxLength\":1024}", "\"work_key\"");
             Add("play_history", "查询 UTC 时间范围内的真实会话及单列的手动时长修正；跨范围会话不估计区间秒数。",
                 "\"from\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"},\"offset\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":5000}," + limit, "\"from\",\"to\"");
         }
         if (Can(run, "history"))
         {
-            Add("search_history", "检索 Playground 已保存的用户原话，不代表覆盖前的书架笔记历史。结果可能因遗忘或剧透边界省略。", query + "," + limit, "\"query\"");
+            Add("search_history", "在获准读取的 Playground 历史对话中检索用户原话。", query + "," + limit, "\"query\"");
             Add("read_chat_excerpt", "读取本 Profile 某条历史消息及必要前后文；被遗忘、临时和不允许保存的来源不可读。", "\"message_id\":{\"type\":\"string\"}", "\"message_id\"");
         }
         if (Can(run, "memory")) Add("get_preferences", "读取相关、启用的有来源偏好。明确原话、用户编辑和系统推测必须区分。", query + "," + limit);
@@ -121,12 +120,12 @@ public sealed partial class PlaygroundService
                 case "get_work":
                     Activity(run, "读取作品记录"); string key = Argument(args, "work_key", 1024); var work = ReadLibrary(run)?.Entries.FirstOrDefault(e => WorkKeyFor(e) == key);
                     result = work is null ? Result("unknown_work") : Result("ok", new { record = Record(run, work),
-                        notes = NarrativeRecordAllowed(run, work) ? Redacted(SpoilerSafeText(run, work.Notes, false, out _, [WorkKeyFor(work)])) : null,
+                        notes = Redacted(work.Notes),
                         notesNotice = "仅为当前笔记；没有常规编辑历史，原始表达时间未知。", notesReadAt = clock(),
                         metadata = work.Metadata is not { } m ? null : new { m.Id, title = Bounded(m.Title, 240), originalTitle = Bounded(m.OriginalTitle, 240),
                             aliases = m.Aliases.Take(20).Select(x => Bounded(x, 160)), developers = m.Developers.Take(10), m.ReleaseDate, m.FetchedAt,
                             references = m.References.Take(20).Select(x => new { x.Source, x.Id }),
-                            description = NarrativeRecordAllowed(run, work) ? Redacted(SpoilerSafeText(run, m.Description, false, out _, [WorkKeyFor(work)]), 2000) : null } }); break;
+                            description = Redacted(m.Description, 2000) } }); break;
                 case "play_history": result = History(run, args); break;
                 case "search_history":
                     Activity(run, "查找历史讨论"); result = ChatSearch(run, Argument(args, "query", 200), Count(args, "limit", 6, 10)); break;
@@ -163,7 +162,6 @@ public sealed partial class PlaygroundService
                 "completed" => "“玩过”不证明已通关、全路线或 CG 回收完成；没有用户明确进度时，剧情进度仍未知。",
                 _ => "书架状态不代表剧情进度；以用户明确填写的进度为准。"
             },
-            narrativeDiscussionAllowed = NarrativeRecordAllowed(run, e),
             personalRating = e.PersonalRating, recordedPlaySeconds = e.TotalPlaySeconds == 0 && e.RecordedSessions.IsEmpty && e.ManualPlaytime.IsEmpty ? (long?)null : e.EffectivePlaySeconds,
             playtimeNotice = "累计记录时长，包含人工调整；不代表剧情进度。", e.LastPlayedAt,
             storyProgress = run.Conversation.Options.Spoiler is PlaygroundSpoilerMode.Progress or PlaygroundSpoilerMode.Full
@@ -192,14 +190,9 @@ public sealed partial class PlaygroundService
         return Result(data.Length == 0 && adjustments.Length == 0 ? "empty" : "ok", new { sessions = data, manualAdjustments = adjustments,
             nextOffset = sessions.Length > limit ? (int?)(offset + limit) : null, from, to, timeZone = "UTC" });
     }
-    private bool AllowedHistory(Run run, PlaygroundState s, PlaygroundMessage message, MessageAdmission admission)
-    {
-        if (message.Id == run.UserId || message.Retention != PlaygroundRetention.Portable || message.Status != PlaygroundMessageStatus.Complete
-            || s.Conversations.Any(c => c.Id == message.ConversationId && c.Temporary) || !admission.Allows(message)) return false;
-        // Historical plot fragments have no reliable per-scene progress annotation.
-        // Keywords and free-form chapter labels cannot establish narrative safety.
-        return NarrativeHistoryAllowed(run, message);
-    }
+    private static bool AllowedHistory(Run run, PlaygroundState s, PlaygroundMessage message, MessageAdmission admission)
+        => message.Id != run.UserId && message.Retention == PlaygroundRetention.Portable && message.Status == PlaygroundMessageStatus.Complete
+            && !s.Conversations.Any(c => c.Id == message.ConversationId && c.Temporary) && admission.Allows(message);
     private IEnumerable<string> Queries(Run run, string query)
     {
         yield return query;
@@ -219,7 +212,7 @@ public sealed partial class PlaygroundService
         var s = Snapshot; var variants = Queries(run, query).ToArray(); var admission = new MessageAdmission(this, run, s);
         var hits = s.Messages.Where(m => m.Role == "user" && AllowedHistory(run, s, m, admission)).Select(m => (Message: m, Score: variants.Max(q => Match(m.Text, q))))
             .Where(x => x.Score > 0).OrderByDescending(x => x.Score).ThenByDescending(x => x.Message.CreatedAt).Take(limit).Select(x => ChatRecord(run, x.Message)).ToArray();
-        return Result(hits.Length == 0 ? "empty_or_omitted" : "ok", hits, "范围仅为实际保存的 Playground 原话，遗忘、临时和剧情边界可能使部分片段不可用。");
+        return Result(hits.Length == 0 ? "empty_or_omitted" : "ok", hits, "依据历史资料授权及当前会话的可用范围检索已保存的 Playground 原话。");
     }
     private object ChatRecord(Run run, PlaygroundMessage message)
     {
@@ -232,24 +225,23 @@ public sealed partial class PlaygroundService
     private string ChatExcerpt(Run run, Guid id)
     {
         var s = Snapshot; var target = s.Messages.FirstOrDefault(m => m.Id == id); var admission = new MessageAdmission(this, run, s);
-        if (target is null || !AllowedHistory(run, s, target, admission)) return Result("not_available", notice: "片段不存在，或受遗忘、临时及剧透边界限制。");
+        if (target is null || !AllowedHistory(run, s, target, admission)) return Result("not_available", notice: "片段在当前对话设置下无法读取。");
         var conversation = s.Messages.Where(m => m.ConversationId == target.ConversationId).ToArray(); int at = Array.FindIndex(conversation, m => m.Id == id);
         return Result("ok", conversation.Skip(Math.Max(0, at - 1)).Take(3).Where(m => AllowedHistory(run, s, m, admission)).Select(m => ChatRecord(run, m)).ToArray());
     }
     private string Preferences(Run run, string query, int limit)
     {
         var s = Snapshot; var variants = Queries(run, query).ToArray();
-        bool full = run.Conversation.Options.Spoiler == PlaygroundSpoilerMode.Full;
         var memories = s.Memories.Where(m => !m.Disabled && m.SupersededBy is null && ValidMemoryWork(run, m)
-            && !s.Suppressions.Any(x => x.MessageIds.Contains(m.MessageId)) && (full || NarrativeMemoryAllowed(run, m) || SafePreferenceFor(m) is not null))
+            && !s.Suppressions.Any(x => x.MessageIds.Contains(m.MessageId)))
             .Select(m => (Memory: m, Score: variants.Max(q => Match(m.Text, q)))).Where(x => string.IsNullOrWhiteSpace(query) || x.Score > 0)
             .OrderByDescending(x => x.Memory.Kind == "user-edited").ThenByDescending(x => x.Memory.UpdatedAt).ThenByDescending(x => x.Score).Take(limit).Select(x =>
             {
-                var m = x.Memory; bool detail = full || NarrativeMemoryAllowed(run, m); string id = "memory_" + m.Id.ToString("N");
+                var m = x.Memory; string id = "memory_" + m.Id.ToString("N");
                 LocalSource(run, new(id, PlaygroundSourceKind.Memory, m.Kind == "inferred" ? "有证据的推测" : "已记录的用户观点")
                     { TargetId = m.Id.ToString("N"), MessageId = m.MessageId.ToString("N"), WorkKey = m.WorkKey, At = m.UpdatedAt, Quote = Redacted(m.Text, 1000) });
-                return new { sourceId = id, memoryId = m.Id, text = detail ? Redacted(m.Text) : SafePreferenceFor(m)!.Text, kind = m.Kind,
-                    safePreference = detail ? null : SafePreferenceFor(m), quote = Redacted(detail ? m.OriginalQuote ?? m.Text : SafePreferenceFor(m)!.Text),
+                return new { sourceId = id, memoryId = m.Id, text = Redacted(m.Text), kind = m.Kind,
+                    quote = Redacted(m.OriginalQuote ?? m.Text),
                     m.ConversationId, m.MessageId, m.CreatedAt, m.UpdatedAt, m.WorkKey };
             }).ToArray();
         return Result(memories.Length == 0 ? "empty_or_omitted" : "ok", memories);

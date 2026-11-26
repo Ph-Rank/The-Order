@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using TheOrder.Domain;
 
 namespace TheOrder.Application.Playground;
@@ -14,11 +16,29 @@ public sealed partial class PlaygroundService
         bool LibraryWasNull, PlaygroundActiveSession? ActiveSession, ImmutableArray<Guid> MessageIds, PlaygroundConversationTape Tape);
 
     private bool TapeEligible(Run run, PlaygroundState snapshot) => run.Conversation.Options.Provider == PlaygroundProviderKind.Gemini
-        && run.Conversation.Options.Spoiler == PlaygroundSpoilerMode.Full
         && run.Conversation.Options.Search != PlaygroundSearchMode.Off
         && snapshot.Messages.Where(m => m.ConversationId == run.Conversation.Id).Take(513).Count() <= 512
         && !run.Attachments.Any(IsImageAttachment)
         && !snapshot.Messages.Where(m => m.ConversationId == run.Conversation.Id).Any(m => m.Attachments.Any(IsImageAttachment));
+
+    private static bool NativeWebState(string data)
+    {
+        try { return HasWeb(JsonNode.Parse(data, documentOptions: new() { MaxDepth = 48 })); }
+        // The continuation contract is opaque for test/custom providers. Known
+        // native adapters validate their own JSON envelope before any request.
+        catch (JsonException) { return false; }
+        static bool HasWeb(JsonNode? value)
+        {
+            if (value is JsonArray array) return array.Any(HasWeb);
+            if (value is not JsonObject item) return false;
+            string type = item["type"]?.GetValueKind() == JsonValueKind.String ? item["type"]!.GetValue<string>() : "";
+            string name = item["name"]?.GetValueKind() == JsonValueKind.String ? item["name"]!.GetValue<string>() : "";
+            if (type is "web_search_call" or "google_search_call" or "google_search_result" or "web_search_tool_result"
+                || (type is "function_call" or "tool_use" or "server_tool_use") && (name is "public_search" or "public_fetch" or "web_search")) return true;
+            return item.Any(field => HasWeb(field.Value));
+        }
+    }
+
     private static bool SameActivity(PlaygroundActiveSession? a, PlaygroundActiveSession? b)
         => a?.GameId == b?.GameId && a?.Status == b?.Status && a?.ConfirmedSeconds == b?.ConfirmedSeconds;
     private bool LibraryCurrent(Run run)
@@ -27,10 +47,7 @@ public sealed partial class PlaygroundService
         var current = library();
         if (ReferenceEquals(current, run.LibrarySnapshot)) return true;
         if (run.PlaytimeRankingStamp is not null && run.PlaytimeRankingStamp != PlaytimeRankingIdentity(current)) return false;
-        if (run.PlaytimeRankingStamp is not null && run.Conversation.Options.Provider != PlaygroundProviderKind.Gemini
-            && run.Conversation.Options.Spoiler != PlaygroundSpoilerMode.LibraryStatus) return true;
-        return run.Conversation.Options.Spoiler == PlaygroundSpoilerMode.LibraryStatus && run.LibraryCaptured
-            && run.SpoilerLibraryStamp == SpoilerLibraryIdentity(current);
+        return run.PlaytimeRankingStamp is not null && run.Conversation.Options.Provider != PlaygroundProviderKind.Gemini;
     }
     private void PrepareConversationTape(Run run, PlaygroundState captured, bool retry)
     {
@@ -57,8 +74,7 @@ public sealed partial class PlaygroundService
     }
     private void EnsureConversationScope(Run run)
     {
-        if (run.Conversation.Options.Provider != PlaygroundProviderKind.Gemini && run.Conversation.Options.Spoiler != PlaygroundSpoilerMode.LibraryStatus
-            && run.PlaytimeRankingStamp is null) return;
+        if (run.Conversation.Options.Provider != PlaygroundProviderKind.Gemini && run.PlaytimeRankingStamp is null) return;
         if (!LibraryCurrent(run))
         {
             lock (gate) nativeTape = null;

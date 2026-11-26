@@ -106,7 +106,7 @@ public sealed partial class PlaygroundCoreTests
     [Theory]
     [InlineData(PlaygroundSearchMode.Off, PlaygroundSpoilerMode.Full, "请联网核实《魔女的夜宴》的发行资料。")]
     [InlineData(PlaygroundSearchMode.Smart, PlaygroundSpoilerMode.Full, "我以前给《魔女的夜宴》打了什么评分？")]
-    [InlineData(PlaygroundSearchMode.Smart, PlaygroundSpoilerMode.Strict, "请搜索《魔女的夜宴》的结局真相。")]
+    [InlineData(PlaygroundSearchMode.Smart, PlaygroundSpoilerMode.Strict, "请搜索我在《魔女的夜宴》的本地游戏笔记。")]
     public async Task NativePublicSearchAndFetchAreBothAbsentOutsideCurrentPublicScope(PlaygroundSearchMode mode, PlaygroundSpoilerMode spoiler, string question)
     {
         await using var r = new NativeSearchRig(PlaygroundProviderKind.DeepSeek); var id = await r.Ready(new(true, true, true, false), mode, spoiler);
